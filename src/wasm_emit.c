@@ -73,6 +73,30 @@ size_t wasm_encode_sleb128(uint8_t *out, int32_t val) {
     return count;
 }
 
+size_t wasm_encode_sleb128_i64(uint8_t *out, int64_t val) {
+    size_t count = 0;
+    int more = 1;
+    uint64_t u = (uint64_t)val;
+    while (more) {
+        uint8_t byte = (uint8_t)(u & 0x7FULL);
+        int sign_bit = (byte & 0x40) != 0;
+        /* Portable 64-bit arithmetic right shift by 7 bits */
+        if (u & 0x8000000000000000ULL) {
+            u = (u >> 7) | 0xFE00000000000000ULL;
+        } else {
+            u = (u >> 7);
+        }
+        if ((u == 0ULL && !sign_bit) || (u == 0xFFFFFFFFFFFFFFFFULL && sign_bit)) {
+            more = 0;
+        } else {
+            byte |= 0x80;
+        }
+        if (out) out[count] = byte;
+        count++;
+    }
+    return count;
+}
+
 void wasm_buf_append_uleb128(WASMBuffer *buf, uint32_t val) {
     uint8_t tmp[16];
     size_t len = wasm_encode_uleb128(tmp, val);
@@ -82,6 +106,12 @@ void wasm_buf_append_uleb128(WASMBuffer *buf, uint32_t val) {
 void wasm_buf_append_sleb128(WASMBuffer *buf, int32_t val) {
     uint8_t tmp[16];
     size_t len = wasm_encode_sleb128(tmp, val);
+    wasm_buf_append_bytes(buf, tmp, len);
+}
+
+void wasm_buf_append_sleb128_i64(WASMBuffer *buf, int64_t val) {
+    uint8_t tmp[16];
+    size_t len = wasm_encode_sleb128_i64(tmp, val);
     wasm_buf_append_bytes(buf, tmp, len);
 }
 

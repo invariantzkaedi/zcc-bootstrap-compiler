@@ -18,9 +18,24 @@ typedef struct {
 
 static uint8_t wasm_valtype_from_ctype(Type *type) {
     if (!type) return WASM_TYPE_I32;
-    if (type->kind == TY_FLOAT) return WASM_TYPE_F32;
-    if (type->kind == TY_DOUBLE || type->kind == TY_LONGDOUBLE) return WASM_TYPE_F64;
-    return WASM_TYPE_I32;
+    switch (type->kind) {
+        case TY_FLOAT:
+            return WASM_TYPE_F32;
+        case TY_DOUBLE:
+        case TY_LONGDOUBLE:
+            return WASM_TYPE_F64;
+        case TY_LONG:
+        case TY_ULONG:
+            return (type->size == 8) ? WASM_TYPE_I64 : WASM_TYPE_I32;
+        case TY_LONGLONG:
+        case TY_ULONGLONG:
+            return WASM_TYPE_I64;
+        case TY_PTR:
+        case TY_ARRAY:
+            return WASM_TYPE_I32; /* wasm32 pointers */
+        default:
+            return WASM_TYPE_I32;
+    }
 }
 
 static uint8_t wasm_node_valtype(Node *n) {
@@ -28,6 +43,20 @@ static uint8_t wasm_node_valtype(Node *n) {
     if (n->kind == ND_FLIT) {
         if (n->type && n->type->kind == TY_FLOAT) return WASM_TYPE_F32;
         return WASM_TYPE_F64;
+    }
+    switch (n->kind) {
+        case ND_EQ:
+        case ND_NE:
+        case ND_LT:
+        case ND_LE:
+        case ND_GT:
+        case ND_GE:
+        case ND_LNOT:
+        case ND_LAND:
+        case ND_LOR:
+            return WASM_TYPE_I32;
+        default:
+            break;
     }
     if (n->type) {
         return wasm_valtype_from_ctype(n->type);
@@ -38,16 +67,31 @@ static uint8_t wasm_node_valtype(Node *n) {
 static uint8_t wasm_promoted_valtype(uint8_t vt1, uint8_t vt2) {
     if (vt1 == WASM_TYPE_F64 || vt2 == WASM_TYPE_F64) return WASM_TYPE_F64;
     if (vt1 == WASM_TYPE_F32 || vt2 == WASM_TYPE_F32) return WASM_TYPE_F32;
+    if (vt1 == WASM_TYPE_I64 || vt2 == WASM_TYPE_I64) return WASM_TYPE_I64;
     return WASM_TYPE_I32;
+}
+
+static int wasm_type_is_unsigned_or_ptr(Type *type) {
+    if (!type) return 0;
+    if (is_pointer(type) || type->kind == TY_ARRAY) return 1;
+    return is_unsigned_type(type);
 }
 
 static void wasm_emit_numeric_conversion(WASMBuffer *buf, uint8_t src_vt, uint8_t dst_vt, int is_unsigned) {
     if (src_vt == dst_vt) return;
 
-    if (src_vt == WASM_TYPE_I32 && dst_vt == WASM_TYPE_F32) {
+    if (src_vt == WASM_TYPE_I32 && dst_vt == WASM_TYPE_I64) {
+        wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_I64_EXTEND_I32_U : WASM_OP_I64_EXTEND_I32_S);
+    } else if (src_vt == WASM_TYPE_I64 && dst_vt == WASM_TYPE_I32) {
+        wasm_buf_append_u8(buf, WASM_OP_I32_WRAP_I64);
+    } else if (src_vt == WASM_TYPE_I32 && dst_vt == WASM_TYPE_F32) {
         wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_F32_CONVERT_I32_U : WASM_OP_F32_CONVERT_I32_S);
     } else if (src_vt == WASM_TYPE_I32 && dst_vt == WASM_TYPE_F64) {
         wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_F64_CONVERT_I32_U : WASM_OP_F64_CONVERT_I32_S);
+    } else if (src_vt == WASM_TYPE_I64 && dst_vt == WASM_TYPE_F32) {
+        wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_F32_CONVERT_I64_U : WASM_OP_F32_CONVERT_I64_S);
+    } else if (src_vt == WASM_TYPE_I64 && dst_vt == WASM_TYPE_F64) {
+        wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_F64_CONVERT_I64_U : WASM_OP_F64_CONVERT_I64_S);
     } else if (src_vt == WASM_TYPE_F32 && dst_vt == WASM_TYPE_F64) {
         wasm_buf_append_u8(buf, WASM_OP_F64_PROMOTE_F32);
     } else if (src_vt == WASM_TYPE_F64 && dst_vt == WASM_TYPE_F32) {
@@ -56,6 +100,38 @@ static void wasm_emit_numeric_conversion(WASMBuffer *buf, uint8_t src_vt, uint8_
         wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_I32_TRUNC_F32_U : WASM_OP_I32_TRUNC_F32_S);
     } else if (src_vt == WASM_TYPE_F64 && dst_vt == WASM_TYPE_I32) {
         wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_I32_TRUNC_F64_U : WASM_OP_I32_TRUNC_F64_S);
+    } else if (src_vt == WASM_TYPE_F32 && dst_vt == WASM_TYPE_I64) {
+        wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_I64_TRUNC_F32_U : WASM_OP_I64_TRUNC_F32_S);
+    } else if (src_vt == WASM_TYPE_F64 && dst_vt == WASM_TYPE_I64) {
+        wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_I64_TRUNC_F64_U : WASM_OP_I64_TRUNC_F64_S);
+    }
+}
+
+static void wasm_emit_type_conversion(WASMBuffer *buf, uint8_t src_vt, Type *src_type, uint8_t dst_vt, Type *dst_type) {
+    if (src_vt == dst_vt) return;
+    int is_uns = (src_vt == WASM_TYPE_F32 || src_vt == WASM_TYPE_F64)
+        ? wasm_type_is_unsigned_or_ptr(dst_type)
+        : wasm_type_is_unsigned_or_ptr(src_type);
+    wasm_emit_numeric_conversion(buf, src_vt, dst_vt, is_uns);
+}
+
+static void wasm_emit_to_bool_i32(WASMBuffer *buf, uint8_t vt) {
+    if (vt == WASM_TYPE_I64) {
+        wasm_buf_append_u8(buf, WASM_OP_I64_CONST);
+        wasm_buf_append_sleb128_i64(buf, 0);
+        wasm_buf_append_u8(buf, WASM_OP_I64_NE);
+    } else if (vt == WASM_TYPE_F32) {
+        wasm_buf_append_u8(buf, WASM_OP_F32_CONST);
+        wasm_buf_append_f32(buf, 0.0f);
+        wasm_buf_append_u8(buf, WASM_OP_F32_NE);
+    } else if (vt == WASM_TYPE_F64) {
+        wasm_buf_append_u8(buf, WASM_OP_F64_CONST);
+        wasm_buf_append_f64(buf, 0.0);
+        wasm_buf_append_u8(buf, WASM_OP_F64_NE);
+    } else {
+        wasm_buf_append_u8(buf, WASM_OP_I32_CONST);
+        wasm_buf_append_sleb128(buf, 0);
+        wasm_buf_append_u8(buf, WASM_OP_I32_NE);
     }
 }
 
@@ -119,6 +195,16 @@ static void wasm_emit_typed_load(WASMBuffer *buf, Type *type, uint32_t offset) {
         wasm_emit_memarg_safe(buf, 3, offset);
         return;
     }
+    if (wasm_valtype_from_ctype(type) == WASM_TYPE_I64) {
+        wasm_buf_append_u8(buf, WASM_OP_I64_LOAD);
+        wasm_emit_memarg_safe(buf, 3, offset);
+        return;
+    }
+    if (type && is_pointer(type)) {
+        wasm_buf_append_u8(buf, WASM_OP_I32_LOAD);
+        wasm_emit_memarg_safe(buf, 2, offset);
+        return;
+    }
     int sz = type ? type_size(type) : 4;
     int is_uns = type ? is_unsigned_type(type) : 0;
     if (sz == 1) {
@@ -144,6 +230,16 @@ static void wasm_emit_typed_store(WASMBuffer *buf, Type *type, uint32_t offset) 
         wasm_emit_memarg_safe(buf, 3, offset);
         return;
     }
+    if (wasm_valtype_from_ctype(type) == WASM_TYPE_I64) {
+        wasm_buf_append_u8(buf, WASM_OP_I64_STORE);
+        wasm_emit_memarg_safe(buf, 3, offset);
+        return;
+    }
+    if (type && is_pointer(type)) {
+        wasm_buf_append_u8(buf, WASM_OP_I32_STORE);
+        wasm_emit_memarg_safe(buf, 2, offset);
+        return;
+    }
     int sz = type ? type_size(type) : 4;
     if (sz == 1) {
         wasm_buf_append_u8(buf, WASM_OP_I32_STORE8);
@@ -159,7 +255,9 @@ static void wasm_emit_typed_store(WASMBuffer *buf, Type *type, uint32_t offset) 
 
 static int wasm_node_has_side_effects(Node *n) {
     if (!n) return 0;
-    if (n->kind == ND_ASSIGN || n->kind == ND_COMPOUND_ASSIGN || n->kind == ND_CALL) return 1;
+    if (n->kind == ND_ASSIGN || n->kind == ND_COMPOUND_ASSIGN || n->kind == ND_CALL ||
+        n->kind == ND_PRE_INC || n->kind == ND_PRE_DEC ||
+        n->kind == ND_POST_INC || n->kind == ND_POST_DEC) return 1;
     if (n->lhs && wasm_node_has_side_effects(n->lhs)) return 1;
     if (n->rhs && wasm_node_has_side_effects(n->rhs)) return 1;
     return 0;
@@ -268,8 +366,13 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
 
     switch (node->kind) {
         case ND_NUM:
-            wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
-            wasm_buf_append_sleb128(&fn->body, (int32_t)node->int_val);
+            if (wasm_node_valtype(node) == WASM_TYPE_I64) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
+                wasm_buf_append_sleb128_i64(&fn->body, (int64_t)node->int_val);
+            } else {
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                wasm_buf_append_sleb128(&fn->body, (int32_t)node->int_val);
+            }
             break;
 
         case ND_STR: {
@@ -329,6 +432,9 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     if (idx >= 0) {
                         wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                         wasm_buf_append_uleb128(&fn->body, (uint32_t)idx);
+                    } else if (wasm_node_valtype(node) == WASM_TYPE_I64) {
+                        wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
+                        wasm_buf_append_sleb128_i64(&fn->body, 0);
                     } else {
                         wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
                         wasm_buf_append_sleb128(&fn->body, 0);
@@ -366,6 +472,8 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
         case ND_ASSIGN: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
 
             if (node->lhs && node->lhs->kind == ND_VAR) {
                 const char *vname = node->lhs->sym ? node->lhs->sym->name : node->lhs->name;
@@ -373,7 +481,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                 if (entry && !entry->is_memory) {
                     /* Direct local register assignment with numeric conversion */
                     wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-                    wasm_emit_numeric_conversion(&fn->body, rhs_vt, entry->val_type, is_unsigned_type(node->lhs->type));
+                    wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, entry->val_type, lhs_type);
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
                     wasm_buf_append_uleb128(&fn->body, entry->local_idx);
                     break;
@@ -383,14 +491,14 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
             /* Memory Lvalue Store: [addr, val] */
             wasm_lower_addr(cc, mod, fn, lmap, gmap, node->lhs);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, lhs_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, lhs_vt, lhs_type);
 
             if (lhs_vt == WASM_TYPE_F32) {
                 if (lmap->tmp_f32_idx >= 0) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_f32_idx);
                 }
-                wasm_emit_typed_store(&fn->body, node->lhs ? node->lhs->type : NULL, 0);
+                wasm_emit_typed_store(&fn->body, lhs_type, 0);
                 if (lmap->tmp_f32_idx >= 0) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_f32_idx);
@@ -400,17 +508,27 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_f64_idx);
                 }
-                wasm_emit_typed_store(&fn->body, node->lhs ? node->lhs->type : NULL, 0);
+                wasm_emit_typed_store(&fn->body, lhs_type, 0);
                 if (lmap->tmp_f64_idx >= 0) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_f64_idx);
+                }
+            } else if (lhs_vt == WASM_TYPE_I64) {
+                if (lmap->tmp_i64_idx >= 0) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
+                }
+                wasm_emit_typed_store(&fn->body, lhs_type, 0);
+                if (lmap->tmp_i64_idx >= 0) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
                 }
             } else {
                 if (lmap->tmp_val_idx >= 0) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
                 }
-                wasm_emit_typed_store(&fn->body, node->lhs ? node->lhs->type : NULL, 0);
+                wasm_emit_typed_store(&fn->body, lhs_type, 0);
                 if (lmap->tmp_val_idx >= 0) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
@@ -422,7 +540,13 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
         case ND_COMPOUND_ASSIGN: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
-            uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
+            int is_shift_op = (node->compound_op == ND_SHL || node->compound_op == ND_SHR);
+            uint8_t common_vt = is_shift_op ? lhs_vt : wasm_promoted_valtype(lhs_vt, rhs_vt);
+            int is_uns = is_shift_op
+                ? wasm_type_is_unsigned_or_ptr(lhs_type)
+                : (is_pointer(lhs_type) || wasm_type_is_unsigned_or_ptr(rhs_type));
 
             if (node->lhs && node->lhs->kind == ND_VAR) {
                 const char *vname = node->lhs->sym ? node->lhs->sym->name : node->lhs->name;
@@ -431,9 +555,9 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     /* Register compound assignment */
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                     wasm_buf_append_uleb128(&fn->body, entry->local_idx);
-                    wasm_emit_numeric_conversion(&fn->body, entry->val_type, common_vt, is_unsigned_type(node->lhs->type));
+                    wasm_emit_type_conversion(&fn->body, entry->val_type, lhs_type, common_vt, lhs_type);
                     wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-                    wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+                    wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, common_vt, lhs_type);
 
                     if (common_vt == WASM_TYPE_F32) {
                         switch (node->compound_op) {
@@ -451,22 +575,36 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                             case ND_DIV: case ND_FDIV: wasm_buf_append_u8(&fn->body, WASM_OP_F64_DIV); break;
                             default: wasm_buf_append_u8(&fn->body, WASM_OP_F64_ADD); break;
                         }
+                    } else if (common_vt == WASM_TYPE_I64) {
+                        switch (node->compound_op) {
+                            case ND_ADD: wasm_buf_append_u8(&fn->body, WASM_OP_I64_ADD); break;
+                            case ND_SUB: wasm_buf_append_u8(&fn->body, WASM_OP_I64_SUB); break;
+                            case ND_MUL: wasm_buf_append_u8(&fn->body, WASM_OP_I64_MUL); break;
+                            case ND_DIV: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_DIV_U : WASM_OP_I64_DIV_S); break;
+                            case ND_MOD: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_REM_U : WASM_OP_I64_REM_S); break;
+                            case ND_BAND: wasm_buf_append_u8(&fn->body, WASM_OP_I64_AND); break;
+                            case ND_BOR: wasm_buf_append_u8(&fn->body, WASM_OP_I64_OR); break;
+                            case ND_BXOR: wasm_buf_append_u8(&fn->body, WASM_OP_I64_XOR); break;
+                            case ND_SHL: wasm_buf_append_u8(&fn->body, WASM_OP_I64_SHL); break;
+                            case ND_SHR: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_SHR_U : WASM_OP_I64_SHR_S); break;
+                            default: wasm_buf_append_u8(&fn->body, WASM_OP_I64_ADD); break;
+                        }
                     } else {
                         switch (node->compound_op) {
                             case ND_ADD: wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD); break;
                             case ND_SUB: wasm_buf_append_u8(&fn->body, WASM_OP_I32_SUB); break;
                             case ND_MUL: wasm_buf_append_u8(&fn->body, WASM_OP_I32_MUL); break;
-                            case ND_DIV: wasm_buf_append_u8(&fn->body, WASM_OP_I32_DIV_S); break;
-                            case ND_MOD: wasm_buf_append_u8(&fn->body, WASM_OP_I32_REM_S); break;
+                            case ND_DIV: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_DIV_U : WASM_OP_I32_DIV_S); break;
+                            case ND_MOD: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_REM_U : WASM_OP_I32_REM_S); break;
                             case ND_BAND: wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND); break;
                             case ND_BOR: wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR); break;
                             case ND_BXOR: wasm_buf_append_u8(&fn->body, WASM_OP_I32_XOR); break;
                             case ND_SHL: wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHL); break;
-                            case ND_SHR: wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_S); break;
+                            case ND_SHR: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_SHR_U : WASM_OP_I32_SHR_S); break;
                             default: wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD); break;
                         }
                     }
-                    wasm_emit_numeric_conversion(&fn->body, common_vt, entry->val_type, is_unsigned_type(node->lhs->type));
+                    wasm_emit_type_conversion(&fn->body, common_vt, lhs_type, entry->val_type, lhs_type);
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
                     wasm_buf_append_uleb128(&fn->body, entry->local_idx);
                     break;
@@ -481,10 +619,10 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                 wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                 wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_addr_idx);
             }
-            wasm_emit_typed_load(&fn->body, node->lhs ? node->lhs->type : NULL, 0);
-            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_typed_load(&fn->body, lhs_type, 0);
+            wasm_emit_type_conversion(&fn->body, lhs_vt, lhs_type, common_vt, lhs_type);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, common_vt, lhs_type);
 
             if (common_vt == WASM_TYPE_F32) {
                 switch (node->compound_op) {
@@ -502,22 +640,36 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     case ND_DIV: case ND_FDIV: wasm_buf_append_u8(&fn->body, WASM_OP_F64_DIV); break;
                     default: wasm_buf_append_u8(&fn->body, WASM_OP_F64_ADD); break;
                 }
+            } else if (common_vt == WASM_TYPE_I64) {
+                switch (node->compound_op) {
+                    case ND_ADD: wasm_buf_append_u8(&fn->body, WASM_OP_I64_ADD); break;
+                    case ND_SUB: wasm_buf_append_u8(&fn->body, WASM_OP_I64_SUB); break;
+                    case ND_MUL: wasm_buf_append_u8(&fn->body, WASM_OP_I64_MUL); break;
+                    case ND_DIV: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_DIV_U : WASM_OP_I64_DIV_S); break;
+                    case ND_MOD: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_REM_U : WASM_OP_I64_REM_S); break;
+                    case ND_BAND: wasm_buf_append_u8(&fn->body, WASM_OP_I64_AND); break;
+                    case ND_BOR: wasm_buf_append_u8(&fn->body, WASM_OP_I64_OR); break;
+                    case ND_BXOR: wasm_buf_append_u8(&fn->body, WASM_OP_I64_XOR); break;
+                    case ND_SHL: wasm_buf_append_u8(&fn->body, WASM_OP_I64_SHL); break;
+                    case ND_SHR: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_SHR_U : WASM_OP_I64_SHR_S); break;
+                    default: wasm_buf_append_u8(&fn->body, WASM_OP_I64_ADD); break;
+                }
             } else {
                 switch (node->compound_op) {
                     case ND_ADD: wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD); break;
                     case ND_SUB: wasm_buf_append_u8(&fn->body, WASM_OP_I32_SUB); break;
                     case ND_MUL: wasm_buf_append_u8(&fn->body, WASM_OP_I32_MUL); break;
-                    case ND_DIV: wasm_buf_append_u8(&fn->body, WASM_OP_I32_DIV_S); break;
-                    case ND_MOD: wasm_buf_append_u8(&fn->body, WASM_OP_I32_REM_S); break;
+                    case ND_DIV: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_DIV_U : WASM_OP_I32_DIV_S); break;
+                    case ND_MOD: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_REM_U : WASM_OP_I32_REM_S); break;
                     case ND_BAND: wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND); break;
                     case ND_BOR: wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR); break;
                     case ND_BXOR: wasm_buf_append_u8(&fn->body, WASM_OP_I32_XOR); break;
                     case ND_SHL: wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHL); break;
-                    case ND_SHR: wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_S); break;
+                    case ND_SHR: wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_SHR_U : WASM_OP_I32_SHR_S); break;
                     default: wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD); break;
                 }
             }
-            wasm_emit_numeric_conversion(&fn->body, common_vt, lhs_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_type_conversion(&fn->body, common_vt, lhs_type, lhs_vt, lhs_type);
 
             if (lhs_vt == WASM_TYPE_F32) {
                 if (lmap->tmp_f32_idx >= 0 && lmap->tmp_addr_idx >= 0) {
@@ -528,7 +680,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_f32_idx);
                 }
-                wasm_emit_typed_store(&fn->body, node->lhs ? node->lhs->type : NULL, 0);
+                wasm_emit_typed_store(&fn->body, lhs_type, 0);
                 if (lmap->tmp_f32_idx >= 0) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_f32_idx);
@@ -542,10 +694,24 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_f64_idx);
                 }
-                wasm_emit_typed_store(&fn->body, node->lhs ? node->lhs->type : NULL, 0);
+                wasm_emit_typed_store(&fn->body, lhs_type, 0);
                 if (lmap->tmp_f64_idx >= 0) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_f64_idx);
+                }
+            } else if (lhs_vt == WASM_TYPE_I64) {
+                if (lmap->tmp_i64_idx >= 0 && lmap->tmp_addr_idx >= 0) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_addr_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
+                }
+                wasm_emit_typed_store(&fn->body, lhs_type, 0);
+                if (lmap->tmp_i64_idx >= 0) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
                 }
             } else {
                 if (lmap->tmp_val_idx >= 0 && lmap->tmp_addr_idx >= 0) {
@@ -556,7 +722,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
                 }
-                wasm_emit_typed_store(&fn->body, node->lhs ? node->lhs->type : NULL, 0);
+                wasm_emit_typed_store(&fn->body, lhs_type, 0);
                 if (lmap->tmp_val_idx >= 0) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
@@ -569,37 +735,44 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
         case ND_FADD: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
-            uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
 
-            if (common_vt == WASM_TYPE_I32) {
-                int esz_l = (node->lhs && node->lhs->type) ? wasm_ptr_elem_size(node->lhs->type) : 1;
-                int esz_r = (node->rhs && node->rhs->type) ? wasm_ptr_elem_size(node->rhs->type) : 1;
-                if (node->lhs && node->lhs->type && (is_pointer(node->lhs->type) || node->lhs->type->kind == TY_ARRAY) && esz_l > 1) {
-                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+            if (lhs_type && (is_pointer(lhs_type) || lhs_type->kind == TY_ARRAY)) {
+                int esz_l = wasm_ptr_elem_size(lhs_type);
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+                wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, WASM_TYPE_I32, cc->ty_int);
+                if (esz_l > 1) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
                     wasm_buf_append_sleb128(&fn->body, esz_l);
                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_MUL);
-                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD);
-                    break;
-                } else if (node->rhs && node->rhs->type && (is_pointer(node->rhs->type) || node->rhs->type->kind == TY_ARRAY) && esz_r > 1) {
-                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+                }
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD);
+                break;
+            } else if (rhs_type && (is_pointer(rhs_type) || rhs_type->kind == TY_ARRAY)) {
+                int esz_r = wasm_ptr_elem_size(rhs_type);
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+                wasm_emit_type_conversion(&fn->body, lhs_vt, lhs_type, WASM_TYPE_I32, cc->ty_int);
+                if (esz_r > 1) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
                     wasm_buf_append_sleb128(&fn->body, esz_r);
                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_MUL);
-                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD);
-                    break;
                 }
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD);
+                break;
             }
 
+            uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_type_conversion(&fn->body, lhs_vt, lhs_type, common_vt, node->type);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, common_vt, node->type);
 
             if (common_vt == WASM_TYPE_F32) wasm_buf_append_u8(&fn->body, WASM_OP_F32_ADD);
             else if (common_vt == WASM_TYPE_F64) wasm_buf_append_u8(&fn->body, WASM_OP_F64_ADD);
+            else if (common_vt == WASM_TYPE_I64) wasm_buf_append_u8(&fn->body, WASM_OP_I64_ADD);
             else wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD);
             break;
         }
@@ -608,40 +781,48 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
         case ND_FSUB: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
-            uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
 
-            if (common_vt == WASM_TYPE_I32) {
-                int esz_l = (node->lhs && node->lhs->type) ? wasm_ptr_elem_size(node->lhs->type) : 1;
-                if (node->lhs && node->lhs->type && (is_pointer(node->lhs->type) || node->lhs->type->kind == TY_ARRAY) &&
-                    node->rhs && node->rhs->type && (is_pointer(node->rhs->type) || node->rhs->type->kind == TY_ARRAY)) {
-                    /* Pointer difference: (p1 - p2) / sizeof(*p) */
-                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SUB);
-                    if (esz_l > 1) {
-                        wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
-                        wasm_buf_append_sleb128(&fn->body, esz_l);
-                        wasm_buf_append_u8(&fn->body, WASM_OP_I32_DIV_S);
-                    }
-                    break;
-                } else if (node->lhs && node->lhs->type && (is_pointer(node->lhs->type) || node->lhs->type->kind == TY_ARRAY) && esz_l > 1) {
-                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+            if (lhs_type && (is_pointer(lhs_type) || lhs_type->kind == TY_ARRAY) &&
+                rhs_type && (is_pointer(rhs_type) || rhs_type->kind == TY_ARRAY)) {
+                /* Pointer difference: (p1 - p2) / sizeof(*p) */
+                int esz_l = wasm_ptr_elem_size(lhs_type);
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_SUB);
+                if (esz_l > 1) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, esz_l);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_DIV_S);
+                }
+                if (wasm_node_valtype(node) == WASM_TYPE_I64) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_S);
+                }
+                break;
+            } else if (lhs_type && (is_pointer(lhs_type) || lhs_type->kind == TY_ARRAY)) {
+                int esz_l = wasm_ptr_elem_size(lhs_type);
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+                wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, WASM_TYPE_I32, cc->ty_int);
+                if (esz_l > 1) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
                     wasm_buf_append_sleb128(&fn->body, esz_l);
                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_MUL);
-                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SUB);
-                    break;
                 }
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_SUB);
+                break;
             }
 
+            uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_type_conversion(&fn->body, lhs_vt, lhs_type, common_vt, node->type);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, common_vt, node->type);
 
             if (common_vt == WASM_TYPE_F32) wasm_buf_append_u8(&fn->body, WASM_OP_F32_SUB);
             else if (common_vt == WASM_TYPE_F64) wasm_buf_append_u8(&fn->body, WASM_OP_F64_SUB);
+            else if (common_vt == WASM_TYPE_I64) wasm_buf_append_u8(&fn->body, WASM_OP_I64_SUB);
             else wasm_buf_append_u8(&fn->body, WASM_OP_I32_SUB);
             break;
         }
@@ -650,15 +831,18 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
         case ND_FMUL: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
             uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
 
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_type_conversion(&fn->body, lhs_vt, lhs_type, common_vt, node->type);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, common_vt, node->type);
 
             if (common_vt == WASM_TYPE_F32) wasm_buf_append_u8(&fn->body, WASM_OP_F32_MUL);
             else if (common_vt == WASM_TYPE_F64) wasm_buf_append_u8(&fn->body, WASM_OP_F64_MUL);
+            else if (common_vt == WASM_TYPE_I64) wasm_buf_append_u8(&fn->body, WASM_OP_I64_MUL);
             else wasm_buf_append_u8(&fn->body, WASM_OP_I32_MUL);
             break;
         }
@@ -667,77 +851,143 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
         case ND_FDIV: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
             uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+            int is_uns = wasm_type_is_unsigned_or_ptr(node->type) ||
+                         wasm_type_is_unsigned_or_ptr(lhs_type) ||
+                         wasm_type_is_unsigned_or_ptr(rhs_type);
 
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_type_conversion(&fn->body, lhs_vt, lhs_type, common_vt, node->type);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, common_vt, node->type);
 
             if (common_vt == WASM_TYPE_F32) wasm_buf_append_u8(&fn->body, WASM_OP_F32_DIV);
             else if (common_vt == WASM_TYPE_F64) wasm_buf_append_u8(&fn->body, WASM_OP_F64_DIV);
-            else {
-                if (node->lhs && node->lhs->type && is_unsigned_type(node->lhs->type)) {
-                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_DIV_S);
-                } else {
-                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_DIV_S);
-                }
+            else if (common_vt == WASM_TYPE_I64) {
+                wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_DIV_U : WASM_OP_I64_DIV_S);
+            } else {
+                wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_DIV_U : WASM_OP_I32_DIV_S);
             }
             break;
         }
 
-        case ND_MOD:
-            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_buf_append_u8(&fn->body, WASM_OP_I32_REM_S);
-            break;
+        case ND_MOD: {
+            uint8_t lhs_vt = wasm_node_valtype(node->lhs);
+            uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
+            uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+            int is_uns = wasm_type_is_unsigned_or_ptr(node->type) ||
+                         wasm_type_is_unsigned_or_ptr(lhs_type) ||
+                         wasm_type_is_unsigned_or_ptr(rhs_type);
 
-        case ND_BAND:
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+            wasm_emit_type_conversion(&fn->body, lhs_vt, lhs_type, common_vt, node->type);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
-            break;
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, common_vt, node->type);
 
-        case ND_BOR:
-            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);
-            break;
-
-        case ND_BXOR:
-            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_buf_append_u8(&fn->body, WASM_OP_I32_XOR);
-            break;
-
-        case ND_SHL:
-            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHL);
-            break;
-
-        case ND_SHR:
-            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            if (node->lhs && node->lhs->type && is_unsigned_type(node->lhs->type)) {
-                wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U);
+            if (common_vt == WASM_TYPE_I64) {
+                wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_REM_U : WASM_OP_I64_REM_S);
             } else {
-                wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_S);
+                wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_REM_U : WASM_OP_I32_REM_S);
             }
             break;
+        }
+
+        case ND_BAND: {
+            uint8_t lhs_vt = wasm_node_valtype(node->lhs);
+            uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
+            uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+            wasm_emit_type_conversion(&fn->body, lhs_vt, lhs_type, common_vt, node->type);
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, common_vt, node->type);
+            wasm_buf_append_u8(&fn->body, common_vt == WASM_TYPE_I64 ? WASM_OP_I64_AND : WASM_OP_I32_AND);
+            break;
+        }
+
+        case ND_BOR: {
+            uint8_t lhs_vt = wasm_node_valtype(node->lhs);
+            uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
+            uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+            wasm_emit_type_conversion(&fn->body, lhs_vt, lhs_type, common_vt, node->type);
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, common_vt, node->type);
+            wasm_buf_append_u8(&fn->body, common_vt == WASM_TYPE_I64 ? WASM_OP_I64_OR : WASM_OP_I32_OR);
+            break;
+        }
+
+        case ND_BXOR: {
+            uint8_t lhs_vt = wasm_node_valtype(node->lhs);
+            uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
+            uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+            wasm_emit_type_conversion(&fn->body, lhs_vt, lhs_type, common_vt, node->type);
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, common_vt, node->type);
+            wasm_buf_append_u8(&fn->body, common_vt == WASM_TYPE_I64 ? WASM_OP_I64_XOR : WASM_OP_I32_XOR);
+            break;
+        }
+
+        case ND_SHL: {
+            uint8_t lhs_vt = wasm_node_valtype(node->lhs);
+            uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
+
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, lhs_vt, lhs_type);
+            wasm_buf_append_u8(&fn->body, lhs_vt == WASM_TYPE_I64 ? WASM_OP_I64_SHL : WASM_OP_I32_SHL);
+            break;
+        }
+
+        case ND_SHR: {
+            uint8_t lhs_vt = wasm_node_valtype(node->lhs);
+            uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
+            int is_uns = wasm_type_is_unsigned_or_ptr(lhs_type) || wasm_type_is_unsigned_or_ptr(node->type);
+
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, lhs_vt, lhs_type);
+            if (lhs_vt == WASM_TYPE_I64) {
+                wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_SHR_U : WASM_OP_I64_SHR_S);
+            } else {
+                wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_SHR_U : WASM_OP_I32_SHR_S);
+            }
+            break;
+        }
 
         case ND_EQ: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
             uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+            int cmp_uns = wasm_type_is_unsigned_or_ptr(lhs_type) || wasm_type_is_unsigned_or_ptr(rhs_type);
 
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, cmp_uns || wasm_type_is_unsigned_or_ptr(lhs_type));
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, cmp_uns || wasm_type_is_unsigned_or_ptr(rhs_type));
 
             if (common_vt == WASM_TYPE_F32) wasm_buf_append_u8(&fn->body, WASM_OP_F32_EQ);
             else if (common_vt == WASM_TYPE_F64) wasm_buf_append_u8(&fn->body, WASM_OP_F64_EQ);
+            else if (common_vt == WASM_TYPE_I64) wasm_buf_append_u8(&fn->body, WASM_OP_I64_EQ);
             else wasm_buf_append_u8(&fn->body, WASM_OP_I32_EQ);
             break;
         }
@@ -745,15 +995,19 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
         case ND_NE: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
             uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+            int cmp_uns = wasm_type_is_unsigned_or_ptr(lhs_type) || wasm_type_is_unsigned_or_ptr(rhs_type);
 
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, cmp_uns || wasm_type_is_unsigned_or_ptr(lhs_type));
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, cmp_uns || wasm_type_is_unsigned_or_ptr(rhs_type));
 
             if (common_vt == WASM_TYPE_F32) wasm_buf_append_u8(&fn->body, WASM_OP_F32_NE);
             else if (common_vt == WASM_TYPE_F64) wasm_buf_append_u8(&fn->body, WASM_OP_F64_NE);
+            else if (common_vt == WASM_TYPE_I64) wasm_buf_append_u8(&fn->body, WASM_OP_I64_NE);
             else wasm_buf_append_u8(&fn->body, WASM_OP_I32_NE);
             break;
         }
@@ -761,71 +1015,116 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
         case ND_LT: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
             uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+            int is_uns = wasm_type_is_unsigned_or_ptr(lhs_type) || wasm_type_is_unsigned_or_ptr(rhs_type);
 
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_uns || wasm_type_is_unsigned_or_ptr(lhs_type));
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_uns || wasm_type_is_unsigned_or_ptr(rhs_type));
 
             if (common_vt == WASM_TYPE_F32) wasm_buf_append_u8(&fn->body, WASM_OP_F32_LT);
             else if (common_vt == WASM_TYPE_F64) wasm_buf_append_u8(&fn->body, WASM_OP_F64_LT);
-            else wasm_buf_append_u8(&fn->body, WASM_OP_I32_LT_S);
+            else if (common_vt == WASM_TYPE_I64) wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_LT_U : WASM_OP_I64_LT_S);
+            else wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_LT_U : WASM_OP_I32_LT_S);
             break;
         }
 
         case ND_LE: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
             uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+            int is_uns = wasm_type_is_unsigned_or_ptr(lhs_type) || wasm_type_is_unsigned_or_ptr(rhs_type);
 
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_uns || wasm_type_is_unsigned_or_ptr(lhs_type));
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_uns || wasm_type_is_unsigned_or_ptr(rhs_type));
 
             if (common_vt == WASM_TYPE_F32) wasm_buf_append_u8(&fn->body, WASM_OP_F32_LE);
             else if (common_vt == WASM_TYPE_F64) wasm_buf_append_u8(&fn->body, WASM_OP_F64_LE);
-            else wasm_buf_append_u8(&fn->body, WASM_OP_I32_LE_S);
+            else if (common_vt == WASM_TYPE_I64) wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_LE_U : WASM_OP_I64_LE_S);
+            else wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_LE_U : WASM_OP_I32_LE_S);
             break;
         }
 
         case ND_GT: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
             uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+            int is_uns = wasm_type_is_unsigned_or_ptr(lhs_type) || wasm_type_is_unsigned_or_ptr(rhs_type);
 
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_uns || wasm_type_is_unsigned_or_ptr(lhs_type));
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_uns || wasm_type_is_unsigned_or_ptr(rhs_type));
 
             if (common_vt == WASM_TYPE_F32) wasm_buf_append_u8(&fn->body, WASM_OP_F32_GT);
             else if (common_vt == WASM_TYPE_F64) wasm_buf_append_u8(&fn->body, WASM_OP_F64_GT);
-            else wasm_buf_append_u8(&fn->body, WASM_OP_I32_GT_S);
+            else if (common_vt == WASM_TYPE_I64) wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_GT_U : WASM_OP_I64_GT_S);
+            else wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_GT_U : WASM_OP_I32_GT_S);
             break;
         }
 
         case ND_GE: {
             uint8_t lhs_vt = wasm_node_valtype(node->lhs);
             uint8_t rhs_vt = wasm_node_valtype(node->rhs);
+            Type *lhs_type = node->lhs ? node->lhs->type : NULL;
+            Type *rhs_type = node->rhs ? node->rhs->type : NULL;
             uint8_t common_vt = wasm_promoted_valtype(lhs_vt, rhs_vt);
+            int is_uns = wasm_type_is_unsigned_or_ptr(lhs_type) || wasm_type_is_unsigned_or_ptr(rhs_type);
 
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_unsigned_type(node->lhs->type));
+            wasm_emit_numeric_conversion(&fn->body, lhs_vt, common_vt, is_uns || wasm_type_is_unsigned_or_ptr(lhs_type));
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_unsigned_type(node->rhs->type));
+            wasm_emit_numeric_conversion(&fn->body, rhs_vt, common_vt, is_uns || wasm_type_is_unsigned_or_ptr(rhs_type));
 
             if (common_vt == WASM_TYPE_F32) wasm_buf_append_u8(&fn->body, WASM_OP_F32_GE);
             else if (common_vt == WASM_TYPE_F64) wasm_buf_append_u8(&fn->body, WASM_OP_F64_GE);
-            else wasm_buf_append_u8(&fn->body, WASM_OP_I32_GE_S);
+            else if (common_vt == WASM_TYPE_I64) wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I64_GE_U : WASM_OP_I64_GE_S);
+            else wasm_buf_append_u8(&fn->body, is_uns ? WASM_OP_I32_GE_U : WASM_OP_I32_GE_S);
             break;
         }
 
-        case ND_LNOT:
+        case ND_LNOT: {
+            uint8_t vt = wasm_node_valtype(node->lhs);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_buf_append_u8(&fn->body, WASM_OP_I32_EQZ);
+            if (vt == WASM_TYPE_I64) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_I64_EQZ);
+            } else if (vt == WASM_TYPE_F32) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_F32_CONST);
+                wasm_buf_append_f32(&fn->body, 0.0f);
+                wasm_buf_append_u8(&fn->body, WASM_OP_F32_EQ);
+            } else if (vt == WASM_TYPE_F64) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_F64_CONST);
+                wasm_buf_append_f64(&fn->body, 0.0);
+                wasm_buf_append_u8(&fn->body, WASM_OP_F64_EQ);
+            } else {
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_EQZ);
+            }
             break;
+        }
+
+        case ND_BNOT: {
+            uint8_t vt = wasm_node_valtype(node->lhs);
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+            if (vt == WASM_TYPE_I64) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
+                wasm_buf_append_sleb128_i64(&fn->body, -1);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I64_XOR);
+            } else {
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                wasm_buf_append_sleb128(&fn->body, -1);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_XOR);
+            }
+            break;
+        }
 
         case ND_NEG: {
             uint8_t vt = wasm_node_valtype(node->lhs);
@@ -835,6 +1134,11 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
             } else if (vt == WASM_TYPE_F64) {
                 wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
                 wasm_buf_append_u8(&fn->body, WASM_OP_F64_NEG);
+            } else if (vt == WASM_TYPE_I64) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
+                wasm_buf_append_sleb128_i64(&fn->body, 0);
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I64_SUB);
             } else {
                 wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
                 wasm_buf_append_sleb128(&fn->body, 0);
@@ -844,11 +1148,153 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
             break;
         }
 
-        case ND_CAST: {
-            uint8_t src_vt = wasm_node_valtype(node->lhs);
-            uint8_t dst_vt = wasm_valtype_from_ctype(node->type ? node->type : node->cast_type);
+        case ND_PRE_INC:
+        case ND_PRE_DEC:
+        case ND_POST_INC:
+        case ND_POST_DEC: {
+            int is_inc = (node->kind == ND_PRE_INC || node->kind == ND_POST_INC);
+            int is_post = (node->kind == ND_POST_INC || node->kind == ND_POST_DEC);
+            uint8_t vt = wasm_node_valtype(node->lhs);
+            Type *ltype = node->lhs ? node->lhs->type : NULL;
+            int step = (ltype && (is_pointer(ltype) || ltype->kind == TY_ARRAY)) ? wasm_ptr_elem_size(ltype) : 1;
+
+            if (node->lhs && node->lhs->kind == ND_VAR) {
+                const char *vname = node->lhs->sym ? node->lhs->sym->name : node->lhs->name;
+                WasmLocalEntry *entry = wasm_local_find_entry(lmap, vname);
+                if (entry && !entry->is_memory) {
+                    if (is_post) {
+                        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                        wasm_buf_append_uleb128(&fn->body, entry->local_idx);
+                    }
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, entry->local_idx);
+                    if (entry->val_type == WASM_TYPE_I64) {
+                        wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
+                        wasm_buf_append_sleb128_i64(&fn->body, (int64_t)step);
+                        wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_I64_ADD : WASM_OP_I64_SUB);
+                    } else if (entry->val_type == WASM_TYPE_F32) {
+                        wasm_buf_append_u8(&fn->body, WASM_OP_F32_CONST);
+                        wasm_buf_append_f32(&fn->body, 1.0f);
+                        wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_F32_ADD : WASM_OP_F32_SUB);
+                    } else if (entry->val_type == WASM_TYPE_F64) {
+                        wasm_buf_append_u8(&fn->body, WASM_OP_F64_CONST);
+                        wasm_buf_append_f64(&fn->body, 1.0);
+                        wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_F64_ADD : WASM_OP_F64_SUB);
+                    } else {
+                        wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                        wasm_buf_append_sleb128(&fn->body, step);
+                        wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_I32_ADD : WASM_OP_I32_SUB);
+                    }
+                    if (is_post) {
+                        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                        wasm_buf_append_uleb128(&fn->body, entry->local_idx);
+                    } else {
+                        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
+                        wasm_buf_append_uleb128(&fn->body, entry->local_idx);
+                    }
+                    break;
+                }
+            }
+
+            /* Memory lvalue increment/decrement */
+            int tmp_idx = (vt == WASM_TYPE_I64) ? lmap->tmp_i64_idx
+                        : (vt == WASM_TYPE_F32) ? lmap->tmp_f32_idx
+                        : (vt == WASM_TYPE_F64) ? lmap->tmp_f64_idx
+                        : lmap->tmp_val_idx;
+            wasm_lower_addr(cc, mod, fn, lmap, gmap, node->lhs);
+            if (lmap->tmp_addr_idx >= 0) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_addr_idx);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_addr_idx);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_addr_idx);
+            }
+            wasm_emit_typed_load(&fn->body, ltype, 0);
+            if (is_post && tmp_idx >= 0) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)tmp_idx);
+            }
+            if (vt == WASM_TYPE_I64) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
+                wasm_buf_append_sleb128_i64(&fn->body, (int64_t)step);
+                wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_I64_ADD : WASM_OP_I64_SUB);
+            } else if (vt == WASM_TYPE_F32) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_F32_CONST);
+                wasm_buf_append_f32(&fn->body, 1.0f);
+                wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_F32_ADD : WASM_OP_F32_SUB);
+            } else if (vt == WASM_TYPE_F64) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_F64_CONST);
+                wasm_buf_append_f64(&fn->body, 1.0);
+                wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_F64_ADD : WASM_OP_F64_SUB);
+            } else {
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                wasm_buf_append_sleb128(&fn->body, step);
+                wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_I32_ADD : WASM_OP_I32_SUB);
+            }
+            if (!is_post && tmp_idx >= 0) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)tmp_idx);
+                wasm_emit_typed_store(&fn->body, ltype, 0);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)tmp_idx);
+            } else if (is_post && tmp_idx >= 0) {
+                wasm_emit_typed_store(&fn->body, ltype, 0);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)tmp_idx);
+            }
+            break;
+        }
+
+        case ND_LAND: {
+            uint8_t l_vt = wasm_node_valtype(node->lhs);
+            uint8_t r_vt = wasm_node_valtype(node->rhs);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_numeric_conversion(&fn->body, src_vt, dst_vt, is_unsigned_type(node->type ? node->type : node->cast_type));
+            wasm_emit_to_bool_i32(&fn->body, l_vt);
+            wasm_buf_append_u8(&fn->body, WASM_OP_IF);
+            wasm_buf_append_u8(&fn->body, WASM_TYPE_I32);
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+            wasm_emit_to_bool_i32(&fn->body, r_vt);
+            wasm_buf_append_u8(&fn->body, WASM_OP_ELSE);
+            wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+            wasm_buf_append_sleb128(&fn->body, 0);
+            wasm_buf_append_u8(&fn->body, WASM_OP_END);
+            break;
+        }
+
+        case ND_LOR: {
+            uint8_t l_vt = wasm_node_valtype(node->lhs);
+            uint8_t r_vt = wasm_node_valtype(node->rhs);
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+            wasm_emit_to_bool_i32(&fn->body, l_vt);
+            wasm_buf_append_u8(&fn->body, WASM_OP_IF);
+            wasm_buf_append_u8(&fn->body, WASM_TYPE_I32);
+            wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+            wasm_buf_append_sleb128(&fn->body, 1);
+            wasm_buf_append_u8(&fn->body, WASM_OP_ELSE);
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+            wasm_emit_to_bool_i32(&fn->body, r_vt);
+            wasm_buf_append_u8(&fn->body, WASM_OP_END);
+            break;
+        }
+
+        case ND_COMMA_EXPR:
+            if (node->lhs) {
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+                wasm_buf_append_u8(&fn->body, WASM_OP_DROP);
+            }
+            if (node->rhs) {
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
+            }
+            break;
+
+        case ND_CAST: {
+            Type *src_type = node->lhs ? node->lhs->type : NULL;
+            Type *dst_type = node->type ? node->type : node->cast_type;
+            uint8_t src_vt = wasm_node_valtype(node->lhs);
+            uint8_t dst_vt = wasm_valtype_from_ctype(dst_type);
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
+            wasm_emit_type_conversion(&fn->body, src_vt, src_type, dst_vt, dst_type);
             break;
         }
 
@@ -868,7 +1314,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     }
                     if (tidx >= 0 && a < mod->types[tidx].num_params) {
                         uint8_t param_vt = mod->types[tidx].params[a];
-                        wasm_emit_numeric_conversion(&fn->body, arg_vt, param_vt, is_unsigned_type(node->args[a]->type));
+                        wasm_emit_type_conversion(&fn->body, arg_vt, node->args[a]->type, param_vt, node->args[a]->type);
                     }
                 }
             }
@@ -877,6 +1323,19 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                 /* Direct static function call using absolute function index */
                 wasm_buf_append_u8(&fn->body, WASM_OP_CALL);
                 wasm_buf_append_uleb128(&fn->body, (uint32_t)callee_idx);
+                {
+                    int tidx = -1;
+                    if (callee_idx < mod->num_imports) {
+                        tidx = mod->imports[callee_idx].type_idx;
+                    } else if (callee_idx - mod->num_imports < mod->num_funcs) {
+                        tidx = mod->funcs[callee_idx - mod->num_imports].type_idx;
+                    }
+                    if (tidx >= 0 && mod->types[tidx].num_results > 0) {
+                        uint8_t ret_vt = mod->types[tidx].results[0];
+                        uint8_t expr_vt = wasm_node_valtype(node);
+                        wasm_emit_type_conversion(&fn->body, ret_vt, NULL, expr_vt, node->type);
+                    }
+                }
             } else {
                 /* Indirect function pointer call */
                 if (node->lhs) {
@@ -932,14 +1391,8 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
             /* Evaluate condition (must be i32 boolean) */
             uint8_t cond_vt = wasm_node_valtype(node->cond);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->cond);
-            if (cond_vt == WASM_TYPE_F32) {
-                wasm_buf_append_u8(&fn->body, WASM_OP_F32_CONST);
-                wasm_buf_append_f32(&fn->body, 0.0f);
-                wasm_buf_append_u8(&fn->body, WASM_OP_F32_NE);
-            } else if (cond_vt == WASM_TYPE_F64) {
-                wasm_buf_append_u8(&fn->body, WASM_OP_F64_CONST);
-                wasm_buf_append_f64(&fn->body, 0.0);
-                wasm_buf_append_u8(&fn->body, WASM_OP_F64_NE);
+            if (cond_vt != WASM_TYPE_I32) {
+                wasm_emit_to_bool_i32(&fn->body, cond_vt);
             }
 
             /* WASM if block producing target_vt value */
@@ -948,7 +1401,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
 
             if (node->then_body) {
                 wasm_lower_expr(cc, mod, fn, lmap, gmap, node->then_body);
-                wasm_emit_numeric_conversion(&fn->body, then_vt, target_vt, is_unsigned_type(node->then_body->type));
+                wasm_emit_type_conversion(&fn->body, then_vt, node->then_body->type, target_vt, node->type);
             } else {
                 if (target_vt == WASM_TYPE_F32) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_F32_CONST);
@@ -956,6 +1409,9 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                 } else if (target_vt == WASM_TYPE_F64) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_F64_CONST);
                     wasm_buf_append_f64(&fn->body, 0.0);
+                } else if (target_vt == WASM_TYPE_I64) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
+                    wasm_buf_append_sleb128_i64(&fn->body, 0);
                 } else {
                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
                     wasm_buf_append_sleb128(&fn->body, 0);
@@ -966,7 +1422,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
 
             if (node->else_body) {
                 wasm_lower_expr(cc, mod, fn, lmap, gmap, node->else_body);
-                wasm_emit_numeric_conversion(&fn->body, else_vt, target_vt, is_unsigned_type(node->else_body->type));
+                wasm_emit_type_conversion(&fn->body, else_vt, node->else_body->type, target_vt, node->type);
             } else {
                 if (target_vt == WASM_TYPE_F32) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_F32_CONST);
@@ -974,6 +1430,9 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                 } else if (target_vt == WASM_TYPE_F64) {
                     wasm_buf_append_u8(&fn->body, WASM_OP_F64_CONST);
                     wasm_buf_append_f64(&fn->body, 0.0);
+                } else if (target_vt == WASM_TYPE_I64) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
+                    wasm_buf_append_sleb128_i64(&fn->body, 0);
                 } else {
                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
                     wasm_buf_append_sleb128(&fn->body, 0);
@@ -991,6 +1450,43 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
     }
 }
 
+static int wasm_stmt_block_depth = 0;
+static int wasm_cur_break_depth = -1;
+static int wasm_cur_cont_depth = -1;
+
+typedef struct {
+    char name[128];
+    int flat_idx;
+} WasmSwitchLabel;
+
+static void wasm_flatten_switch_body(Node *stmt, Node **flat_stmts, int *num_flat, int max_flat,
+                                     WasmSwitchLabel *labels, int *num_labels, int max_labels) {
+    if (!stmt) return;
+    if (stmt->kind == ND_BLOCK) {
+        int i;
+        for (i = 0; i < stmt->num_stmts; i++) {
+            wasm_flatten_switch_body(stmt->stmts[i], flat_stmts, num_flat, max_flat, labels, num_labels, max_labels);
+        }
+        return;
+    }
+    while (stmt && stmt->kind == ND_LABEL) {
+        if (*num_labels < max_labels) {
+            strncpy(labels[*num_labels].name, stmt->label_name, sizeof(labels[*num_labels].name) - 1);
+            labels[*num_labels].name[sizeof(labels[*num_labels].name) - 1] = '\0';
+            labels[*num_labels].flat_idx = *num_flat;
+            (*num_labels)++;
+        }
+        stmt = stmt->lhs;
+    }
+    if (stmt) {
+        if (stmt->kind == ND_BLOCK) {
+            wasm_flatten_switch_body(stmt, flat_stmts, num_flat, max_flat, labels, num_labels, max_labels);
+        } else if (*num_flat < max_flat) {
+            flat_stmts[(*num_flat)++] = stmt;
+        }
+    }
+}
+
 /* Statement Lowering */
 static void wasm_lower_stmt(Compiler *cc, const WasmModule *mod, WasmFunction *fn, WasmLocalMap *lmap, WasmGlobalMap *gmap, Node *node, Type *ret_type) {
     if (!node || !fn) return;
@@ -999,6 +1495,26 @@ static void wasm_lower_stmt(Compiler *cc, const WasmModule *mod, WasmFunction *f
         case ND_VAR:
         case ND_NOP:
             /* Declarations without initializers produce no runtime bytecode */
+            break;
+
+        case ND_LABEL:
+            if (node->lhs) {
+                wasm_lower_stmt(cc, mod, fn, lmap, gmap, node->lhs, ret_type);
+            }
+            break;
+
+        case ND_BREAK:
+            if (wasm_cur_break_depth >= 0 && wasm_stmt_block_depth > wasm_cur_break_depth) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_BR);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)(wasm_stmt_block_depth - 1 - wasm_cur_break_depth));
+            }
+            break;
+
+        case ND_CONTINUE:
+            if (wasm_cur_cont_depth >= 0 && wasm_stmt_block_depth > wasm_cur_cont_depth) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_BR);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)(wasm_stmt_block_depth - 1 - wasm_cur_cont_depth));
+            }
             break;
 
         case ND_ASSIGN:
@@ -1032,7 +1548,7 @@ static void wasm_lower_stmt(Compiler *cc, const WasmModule *mod, WasmFunction *f
                 uint8_t expr_vt = wasm_node_valtype(node->lhs);
                 uint8_t func_ret_vt = wasm_valtype_from_ctype(ret_type);
                 wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-                wasm_emit_numeric_conversion(&fn->body, expr_vt, func_ret_vt, is_unsigned_type(ret_type));
+                wasm_emit_type_conversion(&fn->body, expr_vt, node->lhs->type, func_ret_vt, ret_type);
 
                 /* Epilogue: restore stack pointer if frame allocated */
                 if (lmap->frame_size > 0 && lmap->fp_local_idx >= 0) {
@@ -1060,6 +1576,18 @@ static void wasm_lower_stmt(Compiler *cc, const WasmModule *mod, WasmFunction *f
                         wasm_buf_append_uleb128(&fn->body, 0);
                         wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
                         wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_f64_idx);
+                    } else if (func_ret_vt == WASM_TYPE_I64 && lmap->tmp_i64_idx >= 0) {
+                        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                        wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
+                        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                        wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->fp_local_idx);
+                        wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                        wasm_buf_append_sleb128(&fn->body, lmap->frame_size);
+                        wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD);
+                        wasm_buf_append_u8(&fn->body, WASM_OP_GLOBAL_SET);
+                        wasm_buf_append_uleb128(&fn->body, 0);
+                        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                        wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
                     } else if (lmap->tmp_val_idx >= 0) {
                         wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
                         wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
@@ -1091,28 +1619,51 @@ static void wasm_lower_stmt(Compiler *cc, const WasmModule *mod, WasmFunction *f
         case ND_IF: {
             Node *then_node = node->then_body ? node->then_body : node->body;
             Node *else_node = node->else_body;
+            uint8_t cond_vt = wasm_node_valtype(node->cond);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->cond);
+            if (cond_vt != WASM_TYPE_I32) {
+                wasm_emit_to_bool_i32(&fn->body, cond_vt);
+            }
             wasm_buf_append_u8(&fn->body, WASM_OP_IF);
             wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+            wasm_stmt_block_depth++;
             if (then_node) wasm_lower_stmt(cc, mod, fn, lmap, gmap, then_node, ret_type);
             if (else_node) {
                 wasm_buf_append_u8(&fn->body, WASM_OP_ELSE);
                 wasm_lower_stmt(cc, mod, fn, lmap, gmap, else_node, ret_type);
             }
+            wasm_stmt_block_depth--;
             wasm_buf_append_u8(&fn->body, WASM_OP_END);
             break;
         }
 
         case ND_WHILE: {
             Node *loop_body = node->body ? node->body : node->then_body;
+            int prev_break = wasm_cur_break_depth;
+            int prev_cont = wasm_cur_cont_depth;
             wasm_buf_append_u8(&fn->body, WASM_OP_BLOCK);
             wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+            wasm_cur_break_depth = wasm_stmt_block_depth++;
             wasm_buf_append_u8(&fn->body, WASM_OP_LOOP);
             wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+            wasm_cur_cont_depth = wasm_stmt_block_depth++;
 
             if (node->cond) {
+                uint8_t cond_vt = wasm_node_valtype(node->cond);
                 wasm_lower_expr(cc, mod, fn, lmap, gmap, node->cond);
-                wasm_buf_append_u8(&fn->body, WASM_OP_I32_EQZ);
+                if (cond_vt == WASM_TYPE_I64) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EQZ);
+                } else if (cond_vt == WASM_TYPE_F32) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_F32_CONST);
+                    wasm_buf_append_f32(&fn->body, 0.0f);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_F32_EQ);
+                } else if (cond_vt == WASM_TYPE_F64) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_F64_CONST);
+                    wasm_buf_append_f64(&fn->body, 0.0);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_F64_EQ);
+                } else {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_EQZ);
+                }
                 wasm_buf_append_u8(&fn->body, WASM_OP_BR_IF);
                 wasm_buf_append_uleb128(&fn->body, 1); /* Break to outer block */
             }
@@ -1123,6 +1674,48 @@ static void wasm_lower_stmt(Compiler *cc, const WasmModule *mod, WasmFunction *f
 
             wasm_buf_append_u8(&fn->body, WASM_OP_BR);
             wasm_buf_append_uleb128(&fn->body, 0); /* Loop back */
+            wasm_stmt_block_depth -= 2;
+            wasm_cur_break_depth = prev_break;
+            wasm_cur_cont_depth = prev_cont;
+            wasm_buf_append_u8(&fn->body, WASM_OP_END);
+            wasm_buf_append_u8(&fn->body, WASM_OP_END);
+            break;
+        }
+
+        case ND_DO_WHILE: {
+            Node *loop_body = node->body ? node->body : node->then_body;
+            int prev_break = wasm_cur_break_depth;
+            int prev_cont = wasm_cur_cont_depth;
+            wasm_buf_append_u8(&fn->body, WASM_OP_BLOCK);
+            wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+            wasm_cur_break_depth = wasm_stmt_block_depth++;
+            wasm_buf_append_u8(&fn->body, WASM_OP_LOOP);
+            wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+            wasm_stmt_block_depth++;
+            wasm_buf_append_u8(&fn->body, WASM_OP_BLOCK);
+            wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+            wasm_cur_cont_depth = wasm_stmt_block_depth++;
+
+            if (loop_body) {
+                wasm_lower_stmt(cc, mod, fn, lmap, gmap, loop_body, ret_type);
+            }
+
+            wasm_stmt_block_depth--;
+            wasm_buf_append_u8(&fn->body, WASM_OP_END);
+
+            if (node->cond) {
+                uint8_t cond_vt = wasm_node_valtype(node->cond);
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->cond);
+                if (cond_vt != WASM_TYPE_I32) {
+                    wasm_emit_to_bool_i32(&fn->body, cond_vt);
+                }
+                wasm_buf_append_u8(&fn->body, WASM_OP_BR_IF);
+                wasm_buf_append_uleb128(&fn->body, 0); /* Loop back if cond true */
+            }
+
+            wasm_stmt_block_depth -= 2;
+            wasm_cur_break_depth = prev_break;
+            wasm_cur_cont_depth = prev_cont;
             wasm_buf_append_u8(&fn->body, WASM_OP_END);
             wasm_buf_append_u8(&fn->body, WASM_OP_END);
             break;
@@ -1130,25 +1723,49 @@ static void wasm_lower_stmt(Compiler *cc, const WasmModule *mod, WasmFunction *f
 
         case ND_FOR: {
             Node *loop_body = node->body ? node->body : node->then_body;
+            int prev_break = wasm_cur_break_depth;
+            int prev_cont = wasm_cur_cont_depth;
             if (node->init) {
                 wasm_lower_expr(cc, mod, fn, lmap, gmap, node->init);
                 wasm_buf_append_u8(&fn->body, WASM_OP_DROP);
             }
             wasm_buf_append_u8(&fn->body, WASM_OP_BLOCK);
             wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+            wasm_cur_break_depth = wasm_stmt_block_depth++;
             wasm_buf_append_u8(&fn->body, WASM_OP_LOOP);
             wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+            wasm_stmt_block_depth++;
 
             if (node->cond) {
+                uint8_t cond_vt = wasm_node_valtype(node->cond);
                 wasm_lower_expr(cc, mod, fn, lmap, gmap, node->cond);
-                wasm_buf_append_u8(&fn->body, WASM_OP_I32_EQZ);
+                if (cond_vt == WASM_TYPE_I64) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EQZ);
+                } else if (cond_vt == WASM_TYPE_F32) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_F32_CONST);
+                    wasm_buf_append_f32(&fn->body, 0.0f);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_F32_EQ);
+                } else if (cond_vt == WASM_TYPE_F64) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_F64_CONST);
+                    wasm_buf_append_f64(&fn->body, 0.0);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_F64_EQ);
+                } else {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_EQZ);
+                }
                 wasm_buf_append_u8(&fn->body, WASM_OP_BR_IF);
                 wasm_buf_append_uleb128(&fn->body, 1);
             }
 
+            wasm_buf_append_u8(&fn->body, WASM_OP_BLOCK);
+            wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+            wasm_cur_cont_depth = wasm_stmt_block_depth++;
+
             if (loop_body) {
                 wasm_lower_stmt(cc, mod, fn, lmap, gmap, loop_body, ret_type);
             }
+
+            wasm_stmt_block_depth--;
+            wasm_buf_append_u8(&fn->body, WASM_OP_END);
 
             if (node->inc) {
                 wasm_lower_expr(cc, mod, fn, lmap, gmap, node->inc);
@@ -1157,7 +1774,121 @@ static void wasm_lower_stmt(Compiler *cc, const WasmModule *mod, WasmFunction *f
 
             wasm_buf_append_u8(&fn->body, WASM_OP_BR);
             wasm_buf_append_uleb128(&fn->body, 0);
+            wasm_stmt_block_depth -= 2;
+            wasm_cur_break_depth = prev_break;
+            wasm_cur_cont_depth = prev_cont;
             wasm_buf_append_u8(&fn->body, WASM_OP_END);
+            wasm_buf_append_u8(&fn->body, WASM_OP_END);
+            break;
+        }
+
+        case ND_SWITCH: {
+            Node *flat_stmts[512];
+            WasmSwitchLabel labels[256];
+            int num_flat = 0;
+            int num_labels = 0;
+            wasm_flatten_switch_body(node->body, flat_stmts, &num_flat, 512, labels, &num_labels, 256);
+
+            int grp_starts[256];
+            int num_grps = 0;
+            int li;
+            for (li = 0; li < num_labels; li++) {
+                int fidx = labels[li].flat_idx;
+                if (num_grps == 0 || grp_starts[num_grps - 1] != fidx) {
+                    grp_starts[num_grps++] = fidx;
+                }
+            }
+
+            int prev_break = wasm_cur_break_depth;
+            wasm_buf_append_u8(&fn->body, WASM_OP_BLOCK);
+            wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+            wasm_cur_break_depth = wasm_stmt_block_depth++;
+
+            int gi;
+            for (gi = 0; gi < num_grps; gi++) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_BLOCK);
+                wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+                wasm_stmt_block_depth++;
+            }
+
+            /* Evaluate controlling expression and store in tmp_i64_idx */
+            uint8_t cond_vt = wasm_node_valtype(node->cond);
+            wasm_lower_expr(cc, mod, fn, lmap, gmap, node->cond);
+            wasm_emit_type_conversion(&fn->body, cond_vt, node->cond ? node->cond->type : NULL, WASM_TYPE_I64, node->cond ? node->cond->type : NULL);
+            wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+            wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
+
+            int ci;
+            for (ci = 0; ci < node->num_cases; ci++) {
+                Node *cnode = node->cases[ci];
+                if (!cnode || !cnode->case_body) continue;
+                const char *cname = cnode->case_body->label_name;
+                int target_grp = -1;
+                for (li = 0; li < num_labels; li++) {
+                    if (strcmp(labels[li].name, cname) == 0) {
+                        int g;
+                        for (g = 0; g < num_grps; g++) {
+                            if (grp_starts[g] == labels[li].flat_idx) {
+                                target_grp = g;
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+                if (target_grp >= 0) {
+                    int64_t cval = (int64_t)cnode->case_val;
+                    if (cond_vt == WASM_TYPE_I32) {
+                        if (node->cond && wasm_type_is_unsigned_or_ptr(node->cond->type)) {
+                            cval = (int64_t)(uint64_t)(uint32_t)cval;
+                        } else {
+                            cval = (int64_t)(int32_t)cval;
+                        }
+                    }
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
+                    wasm_buf_append_sleb128_i64(&fn->body, cval);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EQ);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_BR_IF);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)target_grp);
+                }
+            }
+
+            /* Branch to default case or break out of switch */
+            int def_grp = num_grps; /* default to break block if no default: label */
+            if (node->default_case && node->default_case->case_body) {
+                const char *dname = node->default_case->case_body->label_name;
+                for (li = 0; li < num_labels; li++) {
+                    if (strcmp(labels[li].name, dname) == 0) {
+                        int g;
+                        for (g = 0; g < num_grps; g++) {
+                            if (grp_starts[g] == labels[li].flat_idx) {
+                                def_grp = g;
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            wasm_buf_append_u8(&fn->body, WASM_OP_BR);
+            wasm_buf_append_uleb128(&fn->body, (uint32_t)def_grp);
+
+            /* Emit each group of statements in order */
+            for (gi = 0; gi < num_grps; gi++) {
+                wasm_stmt_block_depth--;
+                wasm_buf_append_u8(&fn->body, WASM_OP_END);
+                int start_idx = grp_starts[gi];
+                int end_idx = (gi + 1 < num_grps) ? grp_starts[gi + 1] : num_flat;
+                int si;
+                for (si = start_idx; si < end_idx; si++) {
+                    wasm_lower_stmt(cc, mod, fn, lmap, gmap, flat_stmts[si], ret_type);
+                }
+            }
+
+            wasm_stmt_block_depth--;
+            wasm_cur_break_depth = prev_break;
             wasm_buf_append_u8(&fn->body, WASM_OP_END);
             break;
         }
@@ -1301,7 +2032,8 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
 
         int sz = gvar->type ? type_size(gvar->type) : 4;
         if (sz <= 0) sz = 4;
-        global_static_offset = (global_static_offset + 3) & -4;
+        uint32_t galign = (sz >= 8) ? 8 : 4;
+        global_static_offset = (global_static_offset + (galign - 1)) & ~(galign - 1);
 
         int g_idx = gmap.count++;
         strncpy(gmap.vars[g_idx].name, gname, sizeof(gmap.vars[g_idx].name) - 1);
@@ -1322,9 +2054,9 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
                 }
             } else {
                 int const_ok = 1;
-                int32_t val = (int32_t)eval_const_expr_p4(gvar->initializer, &const_ok);
-                if (!const_ok) val = (int32_t)gvar->initializer->int_val;
-                wasm_module_add_data_segment(&mod, global_static_offset, (const uint8_t *)&val, sz <= 4 ? (size_t)sz : 4);
+                int64_t val = (int64_t)eval_const_expr_p4(gvar->initializer, &const_ok);
+                if (!const_ok) val = (int64_t)gvar->initializer->int_val;
+                wasm_module_add_data_segment(&mod, global_static_offset, (const uint8_t *)&val, sz <= 8 ? (size_t)sz : 8);
             }
         }
         global_static_offset += (uint32_t)sz;
@@ -1338,7 +2070,8 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
             if (gname && gname[0] && !wasm_global_find(&gmap, gname)) {
                 int sz = curr->type ? type_size(curr->type) : 4;
                 if (sz <= 0) sz = 4;
-                global_static_offset = (global_static_offset + 3) & -4;
+                uint32_t galign = (sz >= 8) ? 8 : 4;
+                global_static_offset = (global_static_offset + (galign - 1)) & ~(galign - 1);
 
                 int g_idx = gmap.count++;
                 strncpy(gmap.vars[g_idx].name, gname, sizeof(gmap.vars[g_idx].name) - 1);
@@ -1359,9 +2092,9 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
                         }
                     } else {
                         int const_ok = 1;
-                        int32_t val = (int32_t)eval_const_expr_p4(curr->initializer, &const_ok);
-                        if (!const_ok) val = (int32_t)curr->initializer->int_val;
-                        wasm_module_add_data_segment(&mod, global_static_offset, (const uint8_t *)&val, sz <= 4 ? (size_t)sz : 4);
+                        int64_t val = (int64_t)eval_const_expr_p4(curr->initializer, &const_ok);
+                        if (!const_ok) val = (int64_t)curr->initializer->int_val;
+                        wasm_module_add_data_segment(&mod, global_static_offset, (const uint8_t *)&val, sz <= 8 ? (size_t)sz : 8);
                     }
                 }
                 global_static_offset += (uint32_t)sz;
@@ -1854,6 +2587,7 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
             lmap.fp_local_idx = -1;
             lmap.tmp_addr_idx = -1;
             lmap.tmp_val_idx = -1;
+            lmap.tmp_i64_idx = -1;
             lmap.tmp_f32_idx = -1;
             lmap.tmp_f64_idx = -1;
 
@@ -1887,9 +2621,11 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
             int i;
             for (i = 0; i < lmap.count; i++) {
                 if (lmap.entries[i].is_memory) {
-                    frame_size = (frame_size + 3) & -4;
+                    int esz = lmap.entries[i].size > 0 ? lmap.entries[i].size : 4;
+                    int ealign = (esz >= 8) ? 8 : 4;
+                    frame_size = (frame_size + (ealign - 1)) & ~(ealign - 1);
                     lmap.entries[i].stack_offset = frame_size;
-                    frame_size += lmap.entries[i].size > 0 ? lmap.entries[i].size : 4;
+                    frame_size += esz;
                 } else if (i >= (int)curr->num_params) {
                     lmap.entries[i].local_idx = fn->num_params + fn->num_locals++;
                     fn->local_types[fn->num_locals - 1] = lmap.entries[i].val_type ? lmap.entries[i].val_type : WASM_TYPE_I32;
@@ -1907,6 +2643,8 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
             fn->local_types[fn->num_locals - 1] = WASM_TYPE_I32;
             lmap.tmp_val_idx = (int)(fn->num_params + fn->num_locals++);
             fn->local_types[fn->num_locals - 1] = WASM_TYPE_I32;
+            lmap.tmp_i64_idx = (int)(fn->num_params + fn->num_locals++);
+            fn->local_types[fn->num_locals - 1] = WASM_TYPE_I64;
             lmap.tmp_f32_idx = (int)(fn->num_params + fn->num_locals++);
             fn->local_types[fn->num_locals - 1] = WASM_TYPE_F32;
             lmap.tmp_f64_idx = (int)(fn->num_params + fn->num_locals++);
@@ -1926,6 +2664,9 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
             }
 
             /* Lower the function body statement(s) */
+            wasm_stmt_block_depth = 0;
+            wasm_cur_break_depth = -1;
+            wasm_cur_cont_depth = -1;
             if (curr->body) {
                 wasm_lower_stmt(cc, &mod, fn, &lmap, &gmap, curr->body, ret_type);
             }
@@ -1950,6 +2691,10 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
             } else if (func_ret_vt == WASM_TYPE_F64) {
                 wasm_buf_append_u8(&fn->body, WASM_OP_F64_CONST);
                 wasm_buf_append_f64(&fn->body, 0.0);
+                wasm_buf_append_u8(&fn->body, WASM_OP_RETURN);
+            } else if (func_ret_vt == WASM_TYPE_I64) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
+                wasm_buf_append_sleb128_i64(&fn->body, 0);
                 wasm_buf_append_u8(&fn->body, WASM_OP_RETURN);
             } else {
                 wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);

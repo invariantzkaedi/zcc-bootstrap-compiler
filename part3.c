@@ -1365,7 +1365,7 @@ static long long eval_const_expr_raw(Node *n) {
      *   ND_ADDR(ND_MEMBER)       → n->lhs->member_offset
      *   ND_ADDR(ND_DEREF(x))     → eval(x)  (addr-of-deref cancels out)
      *   ND_DEREF(...)            → eval inner (address through null ptr = offset)
-     /* ND_MEMBER by itself is a runtime lvalue access, NOT a constant.
+     *   ND_MEMBER by itself is a runtime lvalue access, NOT a constant.
       * Only ND_ADDR(ND_MEMBER) from offsetof(T, f) = &(((T*)0)->f) is a constant. */
     if (n->kind == ND_ADDR) {
         if (n->lhs && n->lhs->kind == ND_MEMBER)
@@ -1807,7 +1807,7 @@ Node *parse_primary(Compiler *cc) {
         unsigned long long uval = (unsigned long long)cc->tk_val;
         Type *ty64s = (ZCC_POINTER_WIDTH == 4) ? cc->ty_longlong : cc->ty_long;
         Type *ty64u = (ZCC_POINTER_WIDTH == 4) ? cc->ty_ulonglong : cc->ty_ulong;
-        if (cc->tk_text[1] == 'L') {
+        if (cc->tk_text[1] == 'L' || cc->tk_text[1] == 'Q') {
              if (cc->tk_text[0] == 'U' || uval > 9223372036854775807ULL) {
                  n->type = ty64u;
              } else {

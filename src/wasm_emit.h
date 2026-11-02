@@ -79,12 +79,21 @@ typedef enum {
     WASM_OP_I32_LOAD8_U  = 0x2D,
     WASM_OP_I32_LOAD16_S = 0x2E,
     WASM_OP_I32_LOAD16_U = 0x2F,
+    WASM_OP_I64_LOAD8_S  = 0x30,
+    WASM_OP_I64_LOAD8_U  = 0x31,
+    WASM_OP_I64_LOAD16_S = 0x32,
+    WASM_OP_I64_LOAD16_U = 0x33,
+    WASM_OP_I64_LOAD32_S = 0x34,
+    WASM_OP_I64_LOAD32_U = 0x35,
     WASM_OP_I32_STORE    = 0x36,
     WASM_OP_I64_STORE    = 0x37,
     WASM_OP_F32_STORE    = 0x38,
     WASM_OP_F64_STORE    = 0x39,
     WASM_OP_I32_STORE8   = 0x3A,
     WASM_OP_I32_STORE16  = 0x3B,
+    WASM_OP_I64_STORE8   = 0x3C,
+    WASM_OP_I64_STORE16  = 0x3D,
+    WASM_OP_I64_STORE32  = 0x3E,
     WASM_OP_I32_CONST    = 0x41,
     WASM_OP_I64_CONST    = 0x42,
     WASM_OP_F32_CONST    = 0x43,
@@ -93,9 +102,24 @@ typedef enum {
     WASM_OP_I32_EQ       = 0x46,
     WASM_OP_I32_NE       = 0x47,
     WASM_OP_I32_LT_S     = 0x48,
+    WASM_OP_I32_LT_U     = 0x49,
     WASM_OP_I32_GT_S     = 0x4A,
+    WASM_OP_I32_GT_U     = 0x4B,
     WASM_OP_I32_LE_S     = 0x4C,
+    WASM_OP_I32_LE_U     = 0x4D,
     WASM_OP_I32_GE_S     = 0x4E,
+    WASM_OP_I32_GE_U     = 0x4F,
+    WASM_OP_I64_EQZ      = 0x50,
+    WASM_OP_I64_EQ       = 0x51,
+    WASM_OP_I64_NE       = 0x52,
+    WASM_OP_I64_LT_S     = 0x53,
+    WASM_OP_I64_LT_U     = 0x54,
+    WASM_OP_I64_GT_S     = 0x55,
+    WASM_OP_I64_GT_U     = 0x56,
+    WASM_OP_I64_LE_S     = 0x57,
+    WASM_OP_I64_LE_U     = 0x58,
+    WASM_OP_I64_GE_S     = 0x59,
+    WASM_OP_I64_GE_U     = 0x5A,
     WASM_OP_F32_EQ       = 0x5B,
     WASM_OP_F32_NE       = 0x5C,
     WASM_OP_F32_LT       = 0x5D,
@@ -112,13 +136,28 @@ typedef enum {
     WASM_OP_I32_SUB      = 0x6B,
     WASM_OP_I32_MUL      = 0x6C,
     WASM_OP_I32_DIV_S    = 0x6D,
+    WASM_OP_I32_DIV_U    = 0x6E,
     WASM_OP_I32_REM_S    = 0x6F,
+    WASM_OP_I32_REM_U    = 0x70,
     WASM_OP_I32_AND      = 0x71,
     WASM_OP_I32_OR       = 0x72,
     WASM_OP_I32_XOR      = 0x73,
     WASM_OP_I32_SHL      = 0x74,
     WASM_OP_I32_SHR_S    = 0x75,
     WASM_OP_I32_SHR_U    = 0x76,
+    WASM_OP_I64_ADD      = 0x7C,
+    WASM_OP_I64_SUB      = 0x7D,
+    WASM_OP_I64_MUL      = 0x7E,
+    WASM_OP_I64_DIV_S    = 0x7F,
+    WASM_OP_I64_DIV_U    = 0x80,
+    WASM_OP_I64_REM_S    = 0x81,
+    WASM_OP_I64_REM_U    = 0x82,
+    WASM_OP_I64_AND      = 0x83,
+    WASM_OP_I64_OR       = 0x84,
+    WASM_OP_I64_XOR      = 0x85,
+    WASM_OP_I64_SHL      = 0x86,
+    WASM_OP_I64_SHR_S    = 0x87,
+    WASM_OP_I64_SHR_U    = 0x88,
     WASM_OP_F32_ABS      = 0x8B,
     WASM_OP_F32_NEG      = 0x8C,
     WASM_OP_F32_CEIL     = 0x8D,
@@ -147,10 +186,13 @@ typedef enum {
     WASM_OP_F64_MIN      = 0xA4,
     WASM_OP_F64_MAX      = 0xA5,
     WASM_OP_F64_COPYSIGN = 0xA6,
+    WASM_OP_I32_WRAP_I64    = 0xA7,
     WASM_OP_I32_TRUNC_F32_S = 0xA8,
     WASM_OP_I32_TRUNC_F32_U = 0xA9,
     WASM_OP_I32_TRUNC_F64_S = 0xAA,
     WASM_OP_I32_TRUNC_F64_U = 0xAB,
+    WASM_OP_I64_EXTEND_I32_S = 0xAC,
+    WASM_OP_I64_EXTEND_I32_U = 0xAD,
     WASM_OP_I64_TRUNC_F32_S = 0xAE,
     WASM_OP_I64_TRUNC_F32_U = 0xAF,
     WASM_OP_I64_TRUNC_F64_S = 0xB0,
@@ -213,7 +255,8 @@ typedef struct {
     int frame_size;      /* Total local memory frame size in bytes */
     int fp_local_idx;    /* WASM local index for frame pointer ($fp), -1 if none */
     int tmp_addr_idx;    /* Scratch local for address evaluation */
-    int tmp_val_idx;     /* Scratch local for value evaluation */
+    int tmp_val_idx;     /* Scratch local for i32 value evaluation */
+    int tmp_i64_idx;     /* Scratch local for i64 value evaluation */
     int tmp_f32_idx;     /* Scratch local for f32 evaluation */
     int tmp_f64_idx;     /* Scratch local for f64 evaluation */
 } WasmLocalMap;
@@ -223,7 +266,7 @@ typedef struct {
     char name[64];
     int type_idx;
     uint32_t num_params;
-    uint8_t local_types[32];
+    uint8_t local_types[128];
     uint32_t num_locals;
     WASMBuffer body;
 } WasmFunction;
@@ -281,8 +324,10 @@ void wasm_buf_append_u8(WASMBuffer *buf, uint8_t byte);
 void wasm_buf_append_bytes(WASMBuffer *buf, const uint8_t *bytes, size_t len);
 size_t wasm_encode_uleb128(uint8_t *out, uint32_t val);
 size_t wasm_encode_sleb128(uint8_t *out, int32_t val);
+size_t wasm_encode_sleb128_i64(uint8_t *out, int64_t val);
 void wasm_buf_append_uleb128(WASMBuffer *buf, uint32_t val);
 void wasm_buf_append_sleb128(WASMBuffer *buf, int32_t val);
+void wasm_buf_append_sleb128_i64(WASMBuffer *buf, int64_t val);
 void wasm_buf_append_f32(WASMBuffer *buf, float val);
 void wasm_buf_append_f64(WASMBuffer *buf, double val);
 void wasm_buf_append_memarg(WASMBuffer *buf, uint32_t align, uint32_t offset);

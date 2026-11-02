@@ -52,7 +52,11 @@ SIGNABLE_VERDICT_KEYS = [
     "evaluated_producer_commit",
     "evaluated_producer_run_id",
     "evaluated_artifact_id",
+    "evaluated_artifact_name",
     "evaluated_artifact_sha256",
+    "signing_environment_provenance",
+    "signed_fields_schema",
+    "signed_fields",
     "verdict",
     "status",
     "adjudication_timestamp",
@@ -321,7 +325,9 @@ def main() -> int:
     sig_obj = verdict_doc["ed25519_signature"]
     raw_pub = bytes.fromhex(sig_obj["public_key_raw_hex"])
     pub_fp = sha256_bytes(raw_pub)
-    signable_payload = {k: verdict_doc[k] for k in SIGNABLE_VERDICT_KEYS}
+    declared_signed_fields = verdict_doc.get("signed_fields", SIGNABLE_VERDICT_KEYS)
+    unsigned_top_fields = set(verdict_doc.keys()) - {"canonical_payload_sha256", "ed25519_signature"} - set(declared_signed_fields)
+    signable_payload = {k: verdict_doc[k] for k in declared_signed_fields}
     canonical_bytes = json.dumps(signable_payload, sort_keys=True, indent=2).encode("utf-8")
     canonical_sha = sha256_bytes(canonical_bytes)
     sig_bytes = bytes.fromhex(sig_obj["signature_hex"])
@@ -337,15 +343,20 @@ def main() -> int:
         and len(sig_bytes) == 64
         and prod_priv_absent is True
         and custody_prov.get("block_device") == "/dev/sde"
+        and len(unsigned_top_fields) == 0
+        and sorted(declared_signed_fields) == sorted(SIGNABLE_VERDICT_KEYS)
     )
     if not check5_ok:
-        raise RuntimeError("Check 5 failed: Ed25519 or custody check mismatch")
+        raise RuntimeError(f"Check 5 failed: Ed25519 or custody check mismatch (unsigned={unsigned_top_fields})")
 
     checks.append({
         "check_id": "ACCEPTANCE-05",
-        "requirement": "Verify Ed25519 signature using pinned public key and canonical payload",
+        "requirement": "Verify Ed25519 signature using pinned public key and canonical payload (100% top-level field coverage)",
         "public_key_fingerprint_sha256": pub_fp,
         "canonical_payload_sha256": canonical_sha,
+        "signed_fields_schema": verdict_doc.get("signed_fields_schema"),
+        "signed_fields_count": len(declared_signed_fields),
+        "unsigned_top_level_fields_count": len(unsigned_top_fields),
         "producer_commit_signed": signed_prod_commit,
         "signature_bytes_len": len(sig_bytes),
         "producer_private_key_absent_on_dev_sdd": prod_priv_absent,

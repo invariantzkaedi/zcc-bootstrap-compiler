@@ -14,7 +14,7 @@
 #endif
 
 #ifndef __GNUC_MINOR__
-int __builtin_popcount(unsigned int x) {
+int _builtin_popcount(unsigned int x) {
   int count = 0;
   while (x) {
     count += (x & 1);
@@ -283,6 +283,81 @@ static int parse_mem_operand(const char *s, int *reg, long long *disp) {
     return 1;
   }
   return 0;
+}
+
+static int encode_cmpq_mem(Segment *seg, const char *mem_str, int reg_op,
+                           unsigned char opcode) {
+  const char *lp = strchr(mem_str, '(');
+  const char *rp = lp ? strchr(lp, ')') : NULL;
+  if (!lp || !rp || reg_op < 0 || reg_op > 15)
+    return 0;
+  long long disp = 0;
+  if (lp > mem_str) {
+    char disp_str[64];
+    size_t dlen = (size_t)(lp - mem_str);
+    if (dlen >= sizeof(disp_str))
+      dlen = sizeof(disp_str) - 1;
+    memcpy(disp_str, mem_str, dlen);
+    disp_str[dlen] = '\0';
+    disp = strtoll(disp_str, NULL, 0);
+  }
+  char inner[64];
+  size_t ilen = (size_t)(rp - (lp + 1));
+  if (ilen >= sizeof(inner))
+    ilen = sizeof(inner) - 1;
+  memcpy(inner, lp + 1, ilen);
+  inner[ilen] = '\0';
+
+  char *c1 = strchr(inner, ',');
+  char *c2 = c1 ? strchr(c1 + 1, ',') : NULL;
+  if (c1)
+    *c1 = '\0';
+  if (c2)
+    *c2 = '\0';
+
+  int base_reg = parse_reg(trim(inner));
+  int idx_reg = c1 ? parse_reg(trim(c1 + 1)) : -1;
+  int scale = c2 ? atoi(trim(c2 + 1)) : 1;
+  int scale_bits = (scale == 1) ? 0 : (scale == 2) ? 1 : (scale == 4) ? 2 : (scale == 8) ? 3 : -1;
+  if (base_reg < 0 || base_reg > 15 || (c1 && (idx_reg < 0 || idx_reg > 15 || idx_reg == 4)) || scale_bits < 0) {
+    fprintf(stderr, "assembler error: invalid memory operand '%s' in cmpq\n", mem_str);
+    exit(1);
+  }
+
+  unsigned char rex = 0x48;
+  if (reg_op & 8)
+    rex |= 0x04;
+  if (idx_reg >= 0 && (idx_reg & 8))
+    rex |= 0x02;
+  if (base_reg & 8)
+    rex |= 0x01;
+
+  unsigned char mod = (disp == 0 && (base_reg & 7) != 5)
+                          ? 0x00
+                          : (disp >= -128 && disp <= 127) ? 0x01 : 0x02;
+  int need_sib = (idx_reg >= 0) || ((base_reg & 7) == 4);
+  unsigned char modrm = (unsigned char)((mod << 6) | ((reg_op & 7) << 3) |
+                                        (need_sib ? 0x04 : (base_reg & 7)));
+  seg_append(seg, &rex, 1);
+  seg_append(seg, &opcode, 1);
+  seg_append(seg, &modrm, 1);
+  if (need_sib) {
+    unsigned char sib = (unsigned char)((scale_bits << 6) |
+                                        (((idx_reg >= 0) ? (idx_reg & 7) : 0x04) << 3) |
+                                        (base_reg & 7));
+    seg_append(seg, &sib, 1);
+  }
+  if (mod == 0x01) {
+    unsigned char d = (unsigned char)disp;
+    seg_append(seg, &d, 1);
+  } else if (mod == 0x02) {
+    unsigned char d[4] = {(unsigned char)(disp & 0xFF),
+                          (unsigned char)((disp >> 8) & 0xFF),
+                          (unsigned char)((disp >> 16) & 0xFF),
+                          (unsigned char)((disp >> 24) & 0xFF)};
+    seg_append(seg, d, 4);
+  }
+  return 1;
 }
 
 /* Helper encoders */
@@ -4253,7 +4328,13 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
               }
             }
           } else {
-            encode_binop(&text_seg, mnemonic, reg1, reg2);
+            if (strcmp(mnemonic, "cmpq") == 0 && strchr(op1, '(')) {
+              encode_cmpq_mem(&text_seg, op1, reg2, 0x3b);
+            } else if (strcmp(mnemonic, "cmpq") == 0 && strchr(op2, '(')) {
+              encode_cmpq_mem(&text_seg, op2, reg1, 0x39);
+            } else {
+              encode_binop(&text_seg, mnemonic, reg1, reg2);
+            }
           }
         } else if (strcmp(mnemonic, "sarq") == 0 ||
                    strcmp(mnemonic, "shlq") == 0 ||

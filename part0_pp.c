@@ -164,7 +164,9 @@ static const char *zcc_stddef_text =
     "#define ERANGE 34\n"
     "#define __builtin_frame_address(x) ((void*)0)\n"
     "#define __x86_64__ 1\n"
+    "#ifndef __SIZEOF_POINTER__\n"
     "#define __SIZEOF_POINTER__ 8\n"
+    "#endif\n"
     "#define __ORDER_LITTLE_ENDIAN__ 1234\n"
     "#define __ORDER_BIG_ENDIAN__ 4321\n"
     "#define __BYTE_ORDER__ 1234\n"
@@ -202,8 +204,13 @@ static const char *zcc_stddef_text =
     "#define offsetof(t, m) __builtin_offsetof(t, m)\n"
     "typedef int int32_t;\n"
     "typedef unsigned int uint32_t;\n"
+    "#if __SIZEOF_POINTER__ == 4\n"
+    "typedef long long int64_t;\n"
+    "typedef unsigned long long uint64_t;\n"
+    "#else\n"
     "typedef long int64_t;\n"
     "typedef unsigned long uint64_t;\n"
+    "#endif\n"
     "typedef unsigned long __uint128_t;\n"
     "typedef long __int128_t;\n"
     "typedef char int8_t;\n"
@@ -220,8 +227,13 @@ static const char *zcc_stddef_text =
     "typedef long __ssize_t;\n"
     "typedef unsigned int __uint32_t;\n"
     "typedef int __int32_t;\n"
+    "#if __SIZEOF_POINTER__ == 4\n"
+    "typedef unsigned long long __uint64_t;\n"
+    "typedef long long __int64_t;\n"
+    "#else\n"
     "typedef unsigned long __uint64_t;\n"
     "typedef long __int64_t;\n"
+    "#endif\n"
     "typedef unsigned short __uint16_t;\n"
     "typedef short __int16_t;\n"
     "typedef unsigned char __uint8_t;\n"
@@ -2544,7 +2556,7 @@ char *zcc_preprocess(const char *source, int source_len, const char *filename,
     PPMacro *m = pp_add_macro(state, "__x86_64__");
     strcpy(m->body, "1");
     m = pp_add_macro(state, "__SIZEOF_POINTER__");
-    strcpy(m->body, "8");
+    strcpy(m->body, (ZCC_POINTER_WIDTH == 4) ? "4" : "8");
     m = pp_add_macro(state, "__ORDER_LITTLE_ENDIAN__");
     strcpy(m->body, "1234");
     m = pp_add_macro(state, "__ORDER_BIG_ENDIAN__");

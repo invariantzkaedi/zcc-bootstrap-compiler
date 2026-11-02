@@ -124,14 +124,15 @@ Type *type_new(Compiler *cc, int kind) {
     else if (kind == TY_CHAR || kind == TY_UCHAR) { t->size = 1; t->align = 1; }
     else if (kind == TY_SHORT || kind == TY_USHORT) { t->size = 2; t->align = 2; }
     else if (kind == TY_INT || kind == TY_UINT) { t->size = 4; t->align = 4; }
-    else if (kind == TY_LONG || kind == TY_ULONG || kind == TY_LONGLONG || kind == TY_ULONGLONG) { t->size = 8; t->align = 8; }
+    else if (kind == TY_LONG || kind == TY_ULONG) { t->size = ZCC_POINTER_WIDTH; t->align = ZCC_POINTER_WIDTH; }
+    else if (kind == TY_LONGLONG || kind == TY_ULONGLONG) { t->size = 8; t->align = 8; }
     else if (kind == TY_FLOAT) { t->size = 4; t->align = 4; }
     else if (kind == TY_DOUBLE) { t->size = 8; t->align = 8; }
     else if (kind == TY_LONGDOUBLE) { t->size = 16; t->align = 8; }
     else if (kind == TY_FLOAT_COMPLEX) { t->size = 8; t->align = 4; }
     else if (kind == TY_DOUBLE_COMPLEX) { t->size = 16; t->align = 8; }
     else if (kind == TY_LONGDOUBLE_COMPLEX) { t->size = 16; t->align = 8; }
-    else if (kind == TY_PTR) { t->size = 8; t->align = 8; }
+    else if (kind == TY_PTR) { t->size = ZCC_POINTER_WIDTH; t->align = ZCC_POINTER_WIDTH; }
     else if (kind == TY_ENUM) { t->size = 4; t->align = 4; }
     else { t->size = 0; t->align = 1; }
     validate_type(cc, t, "type_new", 0);
@@ -159,8 +160,8 @@ Type *type_func(Compiler *cc, Type *ret) {
     Type *t;
     t = type_new(cc, TY_FUNC);
     t->ret = ret;
-    t->size = 8;
-    t->align = 8;
+    t->size = ZCC_POINTER_WIDTH;
+    t->align = ZCC_POINTER_WIDTH;
     return t;
 }
 
@@ -269,7 +270,7 @@ Node *node_num(Compiler *cc, long long val, int line) {
     n->int_val = val;
     n->type = cc->ty_int;
     if (val > 2147483647 || val < -2147483648) {
-        n->type = cc->ty_long;
+        n->type = (ZCC_POINTER_WIDTH == 4) ? cc->ty_longlong : cc->ty_long;
     }
     return n;
 }
@@ -326,6 +327,23 @@ Symbol *scope_find_local(Compiler *cc, char *name) {
     return 0;
 }
 
+static int typedef_types_compatible(Type *a, Type *b) {
+    if (a == b) return 1;
+    if (!a || !b) return 0;
+    if (a->size != b->size || a->align != b->align) return 0;
+    if (is_unsigned_type(a) != is_unsigned_type(b)) return 0;
+    if (a->kind == TY_PTR && b->kind == TY_PTR)
+        return typedef_types_compatible(a->base, b->base);
+    if (a->kind == TY_ARRAY && b->kind == TY_ARRAY)
+        return a->array_len == b->array_len && typedef_types_compatible(a->base, b->base);
+    if ((a->kind == TY_STRUCT || a->kind == TY_UNION) && a->kind == b->kind)
+        return strcmp(a->tag, b->tag) == 0;
+    if (a->kind >= TY_CHAR && a->kind <= TY_ULONGLONG &&
+        b->kind >= TY_CHAR && b->kind <= TY_ULONGLONG)
+        return 1;
+    return a->kind == b->kind;
+}
+
 Symbol *scope_add(Compiler *cc, char *name, Type *type) {
     if (!type) {
         error(cc, "symbol declared with NULL type");
@@ -336,6 +354,19 @@ Symbol *scope_add(Compiler *cc, char *name, Type *type) {
         existing = scope_find_local(cc, name);
         if (existing) {
             if (cc->current_scope->parent == 0) {
+                if (existing->is_typedef) {
+                    if (existing->stack_offset == -9999) {
+                        existing->type = type;
+                        existing->stack_offset = 0;
+                        return existing;
+                    }
+                    if (!typedef_types_compatible(existing->type, type)) {
+                        char err_msg[256];
+                        snprintf(err_msg, sizeof(err_msg), "conflicting types for typedef '%s'", name);
+                        error(cc, err_msg);
+                        exit(1);
+                    }
+                }
                 return existing;
             }
             char err_msg[256];
@@ -802,12 +833,12 @@ static void lex_number(Compiler *cc, int c) {
                peek_char(cc) == 'U' || peek_char(cc) == 'u') {
             int ch = read_char(cc);
             if (ch == 'U' || ch == 'u') is_uns = 1;
-            if (ch == 'L' || ch == 'l') is_lng = 1;
+            if (ch == 'L' || ch == 'l') is_lng++;
         }
         cc->tk = TK_NUM;
         cc->tk_val = val;
         cc->tk_text[0] = is_uns ? 'U' : 0;
-        cc->tk_text[1] = is_lng ? 'L' : 0;
+        cc->tk_text[1] = (is_lng >= 2) ? 'Q' : (is_lng ? 'L' : 0);
         cc->tk_text[2] = is_hex_or_oct ? 'H' : 0;
 }
 

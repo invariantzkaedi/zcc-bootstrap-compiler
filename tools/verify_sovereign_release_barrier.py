@@ -173,7 +173,7 @@ def main():
         sys.exit(EXIT_RELEASE_BLOCKED)
 
     # Reconstruct canonical signable payload binding the full lineage tuple
-    signable_payload = {
+    base_signable = {
         "authority": authority,
         "authority_workflow": str(verdict.get("authority_workflow", "")).strip(),
         "authority_commit": str(verdict.get("authority_commit", "")).strip(),
@@ -189,6 +189,23 @@ def main():
         "status": str(verdict.get("status", "")).strip(),
         "adjudication_timestamp": str(verdict.get("adjudication_timestamp", "")).strip(),
     }
+    if "signed_fields" in verdict:
+        declared_fields = verdict.get("signed_fields")
+        if not isinstance(declared_fields, list) or not all(isinstance(k, str) for k in declared_fields):
+            print("RELEASE BLOCKED: Malformed signed_fields list in release_verdict.json", file=sys.stderr)
+            sys.exit(EXIT_RELEASE_BLOCKED)
+        unsigned_top = set(verdict.keys()) - {"canonical_payload_sha256", "ed25519_signature"} - set(declared_fields)
+        if unsigned_top:
+            print(f"RELEASE BLOCKED: Unsigned top-level fields detected outside signed_fields: {sorted(unsigned_top)}", file=sys.stderr)
+            sys.exit(EXIT_RELEASE_BLOCKED)
+        for req_k in base_signable:
+            if req_k not in declared_fields:
+                print(f"RELEASE BLOCKED: Required field '{req_k}' missing from signed_fields", file=sys.stderr)
+                sys.exit(EXIT_RELEASE_BLOCKED)
+        signable_payload = {k: verdict[k] for k in declared_fields if k in verdict}
+        signable_payload.update(base_signable)
+    else:
+        signable_payload = base_signable
     canonical_bytes = json.dumps(signable_payload, sort_keys=True, indent=2).encode("utf-8")
     expected_payload_sha = hashlib.sha256(canonical_bytes).hexdigest()
 

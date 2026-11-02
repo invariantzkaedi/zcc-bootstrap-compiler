@@ -151,16 +151,24 @@ void init_compiler(Compiler *cc) {
     sym->is_typedef = 1;
 
     /* typedef long size_t */
-    sym = scope_add(cc, "size_t", cc->ty_ulonglong);
-    sym->is_typedef = 1;
+    sym = scope_add(cc, "size_t", (ZCC_POINTER_WIDTH == 4) ? cc->ty_ulong : cc->ty_ulonglong);
+    sym->is_typedef = 1; sym->stack_offset = -9999;
 
     /* typedef long ssize_t */
     sym = scope_add(cc, "ssize_t", cc->ty_long);
-    sym->is_typedef = 1;
+    sym->is_typedef = 1; sym->stack_offset = -9999;
 
     /* typedef int ptrdiff_t */
     sym = scope_add(cc, "ptrdiff_t", cc->ty_long);
-    sym->is_typedef = 1;
+    sym->is_typedef = 1; sym->stack_offset = -9999;
+    if (ZCC_POINTER_WIDTH == 4) {
+      sym = scope_add(cc, "intptr_t", cc->ty_long); sym->is_typedef = 1; sym->stack_offset = -9999;
+      sym = scope_add(cc, "uintptr_t", cc->ty_ulong); sym->is_typedef = 1; sym->stack_offset = -9999;
+      sym = scope_add(cc, "int64_t", cc->ty_longlong); sym->is_typedef = 1; sym->stack_offset = -9999;
+      sym = scope_add(cc, "uint64_t", cc->ty_ulonglong); sym->is_typedef = 1; sym->stack_offset = -9999;
+      sym = scope_add(cc, "__int64_t", cc->ty_longlong); sym->is_typedef = 1; sym->stack_offset = -9999;
+      sym = scope_add(cc, "__uint64_t", cc->ty_ulonglong); sym->is_typedef = 1; sym->stack_offset = -9999;
+    }
 
     /* SysV ABI requires va_list to be an array of 1 struct of size 24 */
     {
@@ -958,6 +966,18 @@ static void peephole_optimize(char *filename) {
       if (strncmp(l1, "    cmpq $0, ", 13) == 0 && sscanf(l1, "    cmpq $0, %63s", reg) == 1 && reg[0] == '%') {
         sprintf(line_ptrs[i], "    testq %s, %s\n", reg, reg); eliminated++; i++; continue;
       }
+      if (strncmp(l1, "    cmpq $", 10) == 0) {
+        long long cval = 0, disp = 0; char adj[80], *lp = NULL;
+        if (sscanf(l1, "    cmpq $%lld, %63[^\n]", &cval, reg) == 2 && (cval < -2147483648LL || cval > 2147483647LL)) {
+          const char *sc = !strstr(reg, "%r11") ? "r11" : (!strstr(reg, "%r10") ? "r10" : "r9"), *op = reg;
+          if (strstr(reg, "%rsp") && (lp = strchr(reg, '(')) != NULL) {
+            if (lp > reg) disp = strtoll(reg, NULL, 10);
+            snprintf(adj, sizeof(adj), "%lld%s", disp + 8LL, lp); op = adj;
+          }
+          sprintf(line_ptrs[i], "    pushq %%%s\n    movabsq $%lld, %%%s\n    cmpq %%%s, %s\n    popq %%%s\n", sc, cval, sc, sc, op, sc);
+          i++; continue;
+        }
+      }
       if (strncmp(l1, "    movq $0, ", 13) == 0 && sscanf(l1, "    movq $0, %63s", reg) == 1 && reg[0] == '%') {
         sprintf(line_ptrs[i], "    xorq %s, %s\n", reg, reg); eliminated++; i++; continue;
       }
@@ -1687,11 +1707,13 @@ int zcc_main(int argc, char **argv) {
                strcmp(argv[i], "--wasm") == 0 || strcmp(argv[i], "-wasm") == 0 ||
                strcmp(argv[i], "--emit-wasm") == 0 || strcmp(argv[i], "-emit-wasm") == 0) {
       g_emit_wasm = 1;
+      ZCC_POINTER_WIDTH = 4;
     } else if (strcmp(argv[i], "-target") == 0 || strcmp(argv[i], "--target") == 0) {
       i++;
       if (i < argc) {
         if (strncmp(argv[i], "wasm", 4) == 0) {
           g_emit_wasm = 1;
+          ZCC_POINTER_WIDTH = 4;
         } else if (strcmp(argv[i], "arm") == 0 || strcmp(argv[i], "thumb") == 0 || strcmp(argv[i], "thumbv6m") == 0 ||
                    strcmp(argv[i], "cortex-m0plus") == 0) {
           backend_ops = &backend_thumbv6m;

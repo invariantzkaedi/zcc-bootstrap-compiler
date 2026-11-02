@@ -148,7 +148,7 @@ def authenticate_bundle(
 
     sig_obj = verdict.get("ed25519_signature", {})
     sig_hex = str(sig_obj.get("signature_hex", "")).strip()
-    signable_payload = {
+    base_signable = {
         "authority": str(verdict.get("authority", "")).strip(),
         "authority_workflow": str(verdict.get("authority_workflow", "")).strip(),
         "authority_commit": str(verdict.get("authority_commit", "")).strip(),
@@ -164,6 +164,20 @@ def authenticate_bundle(
         "status": str(verdict.get("status", "")).strip(),
         "adjudication_timestamp": str(verdict.get("adjudication_timestamp", "")).strip(),
     }
+    if "signed_fields" in verdict:
+        declared_fields = verdict.get("signed_fields")
+        if not isinstance(declared_fields, list) or not all(isinstance(k, str) for k in declared_fields):
+            raise BundleAuthenticationError("INVALID_SIGNED_FIELDS_ARRAY")
+        unsigned_top = set(verdict.keys()) - {"canonical_payload_sha256", "ed25519_signature"} - set(declared_fields)
+        if unsigned_top:
+            raise BundleAuthenticationError(f"UNSIGNED_TOP_LEVEL_FIELDS_DETECTED: {sorted(unsigned_top)}")
+        for req_k in base_signable:
+            if req_k not in declared_fields:
+                raise BundleAuthenticationError(f"MISSING_REQUIRED_SIGNED_FIELD: {req_k}")
+        signable_payload = {k: verdict[k] for k in declared_fields if k in verdict}
+        signable_payload.update(base_signable)
+    else:
+        signable_payload = base_signable
     canonical_bytes = json.dumps(signable_payload, sort_keys=True, indent=2).encode("utf-8")
     canonical_sha = sha256_bytes(canonical_bytes)
     if canonical_sha != sig_obj.get("signed_canonical_payload_sha256"):
@@ -480,6 +494,11 @@ def run_self_test(
             v["authority_pubkey_fingerprint"] = fp
             v["evaluated_artifact_sha256"] = tar_sha
             signable = {
+                k: v[k]
+                for k in v
+                if k not in ("canonical_payload_sha256", "ed25519_signature")
+            }
+            signable.update({
                 "authority": str(v.get("authority", "")).strip(),
                 "authority_workflow": str(v.get("authority_workflow", "")).strip(),
                 "authority_commit": str(v.get("authority_commit", "")).strip(),
@@ -494,7 +513,9 @@ def run_self_test(
                 "verdict": "SOVEREIGN_RELEASE_CERTIFIED",
                 "status": "success",
                 "adjudication_timestamp": str(v.get("adjudication_timestamp", "")).strip(),
-            }
+            })
+            if "signed_fields" in signable:
+                signable["signed_fields"] = sorted(signable.keys())
             c_bytes = json.dumps(signable, sort_keys=True, indent=2).encode("utf-8")
             c_sha = sha256_bytes(c_bytes)
             v.update(signable)
