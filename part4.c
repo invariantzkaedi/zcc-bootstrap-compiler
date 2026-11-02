@@ -1031,7 +1031,7 @@ static void emit_bitfield_store_p4(Compiler *cc, Node *lhs) {
     default: fprintf(cc->out, "    movq %%r10, (%%rax)\n"); break;
     }
   }
-  fprintf(cc->out, "    movq %%r9, %%rax\n");
+  fprintf(cc->out, "    movq %%r10, %%rax\n"); emit_bitfield_extract_p4(cc, lhs);
 }
 
 /* ---------------------------------------------------------------- */
@@ -1322,10 +1322,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (node->lhs->is_bitfield) {
       pop_reg(cc, "r11");
       emit_bitfield_store_p4(cc, node->lhs);
-      {
-        ZCC_EMIT_STORE(ir_map_type(node->lhs->type), lhs_addr_ir, rhs_ir,
-                       node->line);
-      }
+      ir_emit_bitfield_store(node->lhs, lhs_addr_ir, rhs_ir, node->line);
       return;
     }
     /* Use member_size for ND_MEMBER so stage2 stores 4 bytes to cc->tk etc.,
@@ -1400,7 +1397,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     {
       long st_sz = (node->lhs->type && (node->lhs->type->kind == TY_STRUCT || node->lhs->type->kind == TY_UNION)) ? type_size(node->lhs->type) : 0;
       if (g_emit_ir && g_ir_cur_func) {
-        ir_emit(g_ir_cur_func, IR_STORE, ir_map_type(node->lhs->type), lhs_addr_ir, rhs_ir, 0, 0, st_sz, node->line);
+        ir_emit(g_ir_cur_func, IR_STORE, ir_map_type(node->lhs->type), lhs_addr_ir, rhs_ir, 0, 0, st_sz, node->line); strcpy(ir_last_result, rhs_ir);
       }
     }
     return;
@@ -1409,6 +1406,8 @@ void codegen_expr(Compiler *cc, Node *node) {
   case ND_COMPOUND_ASSIGN: {
     char lhs_addr_ir[32] = "";
     char rhs_ir[32] = "";
+    Type *lt = node->lhs ? node->lhs->type : node->type;
+    Type *ct = (node->compound_op == ND_SHL || node->compound_op == ND_SHR || is_pointer(lt) || !node->rhs || !node->rhs->type) ? lt : node->rhs->type;
     if (!node->lhs || !node->rhs) {
       error_at(cc, node->line,
                "codegen_expr: ND_COMPOUND_ASSIGN missing operand");
@@ -1416,7 +1415,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
     if (node->lhs->kind == ND_VAR && node->lhs->sym &&
-        node->lhs->sym->assigned_reg) {
+        node->lhs->sym->assigned_reg && ct == lt) {
       char *reg = node->lhs->sym->assigned_reg;
       codegen_expr_checked(cc, node->rhs);
       ir_save_result(rhs_ir);
@@ -1586,7 +1585,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     if (backend_ops) {
       codegen_load(cc, node->lhs->type);
-    } else if (node->lhs->kind == ND_MEMBER && node->lhs->member_size > 0) {
+    } else if (node->lhs->kind == ND_MEMBER && (node->lhs->is_bitfield || !node->lhs->type) && node->lhs->member_size > 0) {
       switch (node->lhs->member_size) {
       case 1:
         fprintf(cc->out, "    movzbl (%%rax), %%eax\n");
@@ -1611,6 +1610,11 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
+    if (!backend_ops && ct && is_float_type(ct) && lt) {
+      if (!is_float_type(lt)) { emit_cvtsi2fd(cc, lt, ct->kind == TY_FLOAT, "xmm0"); emit_fp_result_to_rax(cc, ct); }
+      else if (lt->kind == TY_FLOAT && ct->kind != TY_FLOAT) fprintf(cc->out, "    movd %%eax, %%xmm0\n    cvtss2sd %%xmm0, %%xmm0\n    movq %%xmm0, %%rax\n");
+    }
+    node->type = ct; node->lhs->type = ct;
     switch (node->compound_op) {
     case ND_ADD:
       if (node->lhs->type && is_float_type(node->lhs->type)) {
@@ -1777,7 +1781,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       else {
           fprintf(cc->out, "    movq %%r11, %%rcx\n");
           if (node->type && node->type->size == 4) fprintf(cc->out, "    shll %%cl, %%eax\n");
-          else if (node->type && node->type->size == 1) fprintf(cc->out, "    shrb %%cl, %%al\n");
+          else if (node->type && node->type->size == 1) fprintf(cc->out, "    shlb %%cl, %%al\n");
           else if (node->type && node->type->size == 2) fprintf(cc->out, "    shlw %%cl, %%ax\n");
           else fprintf(cc->out, "    shlq %%cl, %%rax\n");
       }
@@ -1807,13 +1811,17 @@ void codegen_expr(Compiler *cc, Node *node) {
     default:
       break;
     }
+    node->type = lt; node->lhs->type = lt;
+    if (!backend_ops && ct && is_float_type(ct) && lt) {
+      if (!is_float_type(lt)) emit_cvttfd2si(cc, lt, ct->kind == TY_FLOAT);
+      else if (lt->kind == TY_FLOAT && ct->kind != TY_FLOAT) fprintf(cc->out, "    movq %%rax, %%xmm0\n    cvtsd2ss %%xmm0, %%xmm0\n    movd %%xmm0, %%eax\n");
+    }
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
     if (node->lhs->is_bitfield) {
       emit_bitfield_store_p4(cc, node->lhs);
-      return;
-    }
+    } else {
     if (node->lhs->kind == ND_MEMBER && node->lhs->member_size > 0) {
       switch (node->lhs->member_size) {
       case 1:
@@ -1856,12 +1864,14 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r0, r1\n");
       else fprintf(cc->out, "    movq %%r11, %%rax\n");
     emit_node_extend(cc, node->lhs);
+    }
     if (g_emit_ir && g_ir_cur_func) {
       char val_tmp[32];
       char new_val_tmp[32];
       strcpy(val_tmp, ir_bridge_fresh_tmp());
       strcpy(new_val_tmp, ir_bridge_fresh_tmp());
-      ZCC_EMIT_LOAD(ir_map_type(node->lhs->type), val_tmp, lhs_addr_ir, node->line);
+      if (node->lhs->is_bitfield) ir_emit_bitfield_load(node->lhs, lhs_addr_ir, val_tmp); else ZCC_EMIT_LOAD(ir_map_type(lt), val_tmp, lhs_addr_ir, node->line);
+      if (lt && ct && (!is_float_type(lt) || lt->kind != ct->kind) && is_float_type(ct)) { char *cvt = ir_bridge_fresh_tmp(); ZCC_EMIT_UNARY(!is_float_type(lt) ? IR_ITOF : IR_CAST, ir_map_type(ct), cvt, val_tmp, node->line); strcpy(val_tmp, cvt); }
       char rhs_scaled_ir[32];
       strcpy(rhs_scaled_ir, rhs_ir);
       if (is_pointer(node->lhs->type) && (node->compound_op == ND_ADD || node->compound_op == ND_SUB)) {
@@ -1875,15 +1885,15 @@ void codegen_expr(Compiler *cc, Node *node) {
           }
       }
       ir_op_t op = ir_map_binop(node->compound_op);
-      if (is_float_type(node->lhs->type)) {
+      if (is_float_type(ct)) {
           if (op == IR_ADD)      op = IR_FADD;
           else if (op == IR_SUB) op = IR_FSUB;
           else if (op == IR_MUL) op = IR_FMUL;
           else if (op == IR_DIV) op = IR_FDIV;
       }
-      ZCC_EMIT_BINARY(op, ir_map_type(node->lhs->type), new_val_tmp, val_tmp, rhs_scaled_ir, node->line);
-      ZCC_EMIT_STORE(ir_map_type(node->lhs->type), lhs_addr_ir, new_val_tmp, node->line);
-      strcpy(ir_last_result, new_val_tmp);
+      ZCC_EMIT_BINARY(op, ir_map_type(ct), new_val_tmp, val_tmp, rhs_scaled_ir, node->line);
+      if (lt && ct && (!is_float_type(lt) || lt->kind != ct->kind) && is_float_type(ct)) { char *cvt = ir_bridge_fresh_tmp(); ZCC_EMIT_UNARY(!is_float_type(lt) ? IR_FTOI : IR_CAST, ir_map_type(lt), cvt, new_val_tmp, node->line); strcpy(new_val_tmp, cvt); }
+      if (node->lhs->is_bitfield) ir_emit_bitfield_store(node->lhs, lhs_addr_ir, new_val_tmp, node->line); else { ZCC_EMIT_STORE(ir_map_type(lt), lhs_addr_ir, new_val_tmp, node->line); strcpy(ir_last_result, new_val_tmp); }
     }
     return;
   }
@@ -2797,7 +2807,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) backend_ops->emit_binary_op(cc, ND_SHL);
     else {
         if (node->type && node->type->size == 4) fprintf(cc->out, "    shll %%cl, %%eax\n");
-        else if (node->type && node->type->size == 1) fprintf(cc->out, "    shrb %%cl, %%al\n");
+        else if (node->type && node->type->size == 1) fprintf(cc->out, "    shlb %%cl, %%al\n");
         else if (node->type && node->type->size == 2) fprintf(cc->out, "    shlw %%cl, %%ax\n");
         else fprintf(cc->out, "    shlq %%cl, %%rax\n");
     }
@@ -3591,6 +3601,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         Type *t = node->type;
         if (t && (t->kind == TY_ARRAY || t->kind == TY_STRUCT || t->kind == TY_UNION || t->kind == TY_FUNC)) {
             ZCC_EMIT_UNARY(IR_COPY, ir_map_type(node->type), dst, member_addr, node->line);
+        } else if (node->is_bitfield) { ir_emit_bitfield_load(node, member_addr, dst);
         } else {
             ZCC_EMIT_LOAD(ir_map_type(node->type), dst, member_addr, node->line);
         }

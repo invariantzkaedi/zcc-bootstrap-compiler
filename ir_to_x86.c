@@ -608,9 +608,12 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
                     else if (n->op == IR_SHL) {
                         /* shift count must be in %cl */
                         load_operand(out, n->src2, "%rcx", ra);
-                        if (n->type == IR_TY_I32 || n->type == IR_TY_U32) fprintf(out, "    shll %%cl, %%eax\n");
-                        else if (n->type == IR_TY_I16 || n->type == IR_TY_U16) fprintf(out, "    shlw %%cl, %%ax\n");
-                        else if (n->type == IR_TY_I8 || n->type == IR_TY_U8) fprintf(out, "    shlb %%cl, %%al\n");
+                        if (n->type == IR_TY_I32) fprintf(out, "    shll %%cl, %%eax\n    movslq %%eax, %%rax\n");
+                        else if (n->type == IR_TY_U32) fprintf(out, "    shll %%cl, %%eax\n");
+                        else if (n->type == IR_TY_I16) fprintf(out, "    shlw %%cl, %%ax\n    movswq %%ax, %%rax\n");
+                        else if (n->type == IR_TY_U16) fprintf(out, "    shlw %%cl, %%ax\n");
+                        else if (n->type == IR_TY_I8) fprintf(out, "    shlb %%cl, %%al\n    movsbq %%al, %%rax\n");
+                        else if (n->type == IR_TY_U8) fprintf(out, "    shlb %%cl, %%al\n");
                         else fprintf(out, "    shlq %%cl, %%rax\n");
                     } else if (n->op == IR_SHR) {
                         load_operand(out, n->src2, "%rcx", ra);
@@ -620,9 +623,9 @@ void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div) {
                             else if (n->type == IR_TY_U8) fprintf(out, "    shrb %%cl, %%al\n");
                             else fprintf(out, "    shrq %%cl, %%rax\n");
                         } else {
-                            if (n->type == IR_TY_I32) fprintf(out, "    sarl %%cl, %%eax\n");
-                            else if (n->type == IR_TY_I16) fprintf(out, "    sarw %%cl, %%ax\n");
-                            else if (n->type == IR_TY_I8) fprintf(out, "    sarb %%cl, %%al\n");
+                            if (n->type == IR_TY_I32) fprintf(out, "    sarl %%cl, %%eax\n    movslq %%eax, %%rax\n");
+                            else if (n->type == IR_TY_I16) fprintf(out, "    sarw %%cl, %%ax\n    movswq %%ax, %%rax\n");
+                            else if (n->type == IR_TY_I8) fprintf(out, "    sarb %%cl, %%al\n    movsbq %%al, %%rax\n");
                             else fprintf(out, "    sarq %%cl, %%rax\n");
                         }
                     }

@@ -1805,17 +1805,19 @@ Node *parse_primary(Compiler *cc) {
         n = node_num(cc, cc->tk_val, line);
         int is_hex_or_oct = (cc->tk_text[2] == 'H');
         unsigned long long uval = (unsigned long long)cc->tk_val;
+        Type *ty64s = (ZCC_POINTER_WIDTH == 4) ? cc->ty_longlong : cc->ty_long;
+        Type *ty64u = (ZCC_POINTER_WIDTH == 4) ? cc->ty_ulonglong : cc->ty_ulong;
         if (cc->tk_text[1] == 'L') {
              if (cc->tk_text[0] == 'U' || uval > 9223372036854775807ULL) {
-                 n->type = cc->ty_ulong;
+                 n->type = ty64u;
              } else {
-                 n->type = cc->ty_long;
+                 n->type = ty64s;
              }
         } else if (cc->tk_text[0] == 'U') {
              if (uval <= 4294967295ULL) {
                  n->type = cc->ty_uint;
              } else {
-                 n->type = cc->ty_ulong;
+                 n->type = ty64u;
              }
         } else {
              /* unsuffixed literal */
@@ -1825,17 +1827,17 @@ Node *parse_primary(Compiler *cc) {
                  } else if (uval <= 4294967295ULL) {
                      n->type = cc->ty_uint;
                  } else if (uval <= 9223372036854775807ULL) {
-                     n->type = cc->ty_long;
+                     n->type = ty64s;
                  } else {
-                     n->type = cc->ty_ulong;
+                     n->type = ty64u;
                  }
              } else {
                  if (uval <= 2147483647ULL) {
                      n->type = cc->ty_int;
                  } else if (uval <= 9223372036854775807ULL) {
-                     n->type = cc->ty_long;
+                     n->type = ty64s;
                  } else {
-                     n->type = cc->ty_ulong;
+                     n->type = ty64u;
                  }
              }
         }
@@ -2569,6 +2571,7 @@ Node *parse_postfix(Compiler *cc) {
 }
 
 /* --- unary: -, +, !, ~, *, &, ++, --, cast, sizeof --- */
+static Type *integer_promotion(Compiler *cc, Type *ty);
 
 Node *parse_unary(Compiler *cc) {
     int line;
@@ -2876,12 +2879,14 @@ Node *parse_unary(Compiler *cc) {
         next_token(cc);
         n = node_new(cc, ND_NEG, line);
         n->lhs = parse_unary(cc);
-        n->type = n->lhs->type;
+        n->type = n->lhs ? integer_promotion(cc, n->lhs->type) : cc->ty_int;
+        n->lhs = ensure_type(cc, n->lhs, n->type);
         return n;
     }
     if (cc->tk == TK_PLUS) {
         next_token(cc);
-        return parse_unary(cc);
+        n = parse_unary(cc);
+        return n ? ensure_type(cc, n, integer_promotion(cc, n->type)) : n;
     }
     if (cc->tk == TK_BANG) {
         next_token(cc);
@@ -2894,7 +2899,8 @@ Node *parse_unary(Compiler *cc) {
         next_token(cc);
         n = node_new(cc, ND_BNOT, line);
         n->lhs = parse_unary(cc);
-        n->type = n->lhs->type;
+        n->type = n->lhs ? integer_promotion(cc, n->lhs->type) : cc->ty_int;
+        n->lhs = ensure_type(cc, n->lhs, n->type);
         return n;
     }
     if (cc->tk == TK_STAR) {
@@ -3314,10 +3320,14 @@ Node *parse_assign(Compiler *cc) {
                 default: op = ND_ADD; break;
             }
             next_token(cc);
+            Node *rhs = parse_assign(cc);
+            Type *rt = (op == ND_SHL || op == ND_SHR || is_pointer(n->type))
+                       ? integer_promotion(cc, rhs->type)
+                       : usual_arith_conv(cc, n->type, rhs->type);
             ca = node_new(cc, ND_COMPOUND_ASSIGN, line);
             ca->compound_op = op;
             ca->lhs = n;
-            ca->rhs = ensure_type(cc, parse_assign(cc), n->type);
+            ca->rhs = ensure_type(cc, rhs, rt);
             ca->type = n->type;
             return ca;
         }
@@ -5650,6 +5660,15 @@ static void scan_sym_stats(Node *n) {
             scan_sym_stats(n->cases[i]);
         }
         scan_sym_stats(n->default_case);
+    }
+    if (n->kind == ND_ASM) {
+        for (int i = 0; i < n->num_asm_operands; i++) {
+            Node *op = n->asm_operands[i].expr;
+            while (op && op->kind == ND_CAST) op = op->lhs;
+            if (n->asm_operands[i].is_output && op && op->kind == ND_VAR && op->sym && get_sym_stats(op->sym))
+                get_sym_stats(op->sym)->addr_taken = 1;
+            scan_sym_stats(n->asm_operands[i].expr);
+        }
     }
 }
 

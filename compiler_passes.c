@@ -3646,6 +3646,10 @@ static ZCCNode *zcc_node_from_expr(struct Node *n) {
     z->lhs = zcc_node_from_expr(node_lhs(n));
     z->rhs = zcc_node_from_expr(node_rhs(n));
     z->compound_op = nd_to_znd(node_compound_op(n));
+    struct Node *tn = (z->compound_op == ZND_SHL || z->compound_op == ZND_SHR) ? node_lhs(n) : node_rhs(n);
+    int ts = node_type_size(tn ? tn : n);
+    int tu = node_type_unsigned(tn ? tn : n);
+    z->member_size = tu ? -ts : ts;
     int l_esz = node_ptr_elem_size(node_lhs(n));
     if (l_esz > 1 && (z->compound_op == ZND_ADD || z->compound_op == ZND_SUB)) {
       ZCCNode *mul = alloc_zcc_node();
@@ -3761,6 +3765,10 @@ static ZCCNode *zcc_node_from_stmt(struct Node *n) {
     z->lhs = zcc_node_from_expr(node_lhs(n));
     z->rhs = zcc_node_from_expr(node_rhs(n));
     z->compound_op = nd_to_znd(node_compound_op(n));
+    struct Node *tn = (z->compound_op == ZND_SHL || z->compound_op == ZND_SHR) ? node_lhs(n) : node_rhs(n);
+    int ts = node_type_size(tn ? tn : n);
+    int tu = node_type_unsigned(tn ? tn : n);
+    z->member_size = tu ? -ts : ts;
     int l_esz = node_ptr_elem_size(node_lhs(n));
     if (l_esz > 1 && (z->compound_op == ZND_ADD || z->compound_op == ZND_SUB)) {
       ZCCNode *mul = alloc_zcc_node();
@@ -4955,6 +4963,7 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     RegID val_r = zcc_lower_expr(ctx, node->rhs);
 
     int bf_q = (node->lhs && node->lhs->is_bitfield && (node->lhs->member_size > 4 || (node->lhs->bit_offset + node->lhs->bit_size > node->lhs->member_size * 8)));
+    RegID bf_ret_r = 0;
     if (node->lhs && node->lhs->is_bitfield) {
       RegID old_r = ctx->next_reg++;
       Instr *ld_o = calloc(1, sizeof(Instr));
@@ -5022,6 +5031,23 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
       bor_i->exec_freq = 1.0;
       emit_instr(ctx, bor_i);
 
+      bf_ret_r = band2_r;
+      if (!node->lhs->dst_unsigned && node->lhs->bit_size > 0 && node->lhs->bit_size < 64) {
+        RegID sign_r = ctx->next_reg++;
+        long long sign_bit = 1ULL << (node->lhs->bit_size - 1);
+        emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, sign_r, sign_bit, node->line_no));
+        RegID xor_r = ctx->next_reg++;
+        Instr *xor_i = calloc(1, sizeof(Instr));
+        xor_i->id = ctx->next_instr_id++; xor_i->op = OP_BXOR; xor_i->dst = xor_r;
+        xor_i->src[0] = band2_r; xor_i->src[1] = sign_r; xor_i->n_src = 2; xor_i->exec_freq = 1.0;
+        emit_instr(ctx, xor_i);
+        RegID sub_r = ctx->next_reg++;
+        Instr *sub_i = calloc(1, sizeof(Instr));
+        sub_i->id = ctx->next_instr_id++; sub_i->op = OP_SUB; sub_i->dst = sub_r;
+        sub_i->src[0] = xor_r; sub_i->src[1] = sign_r; sub_i->n_src = 2; sub_i->exec_freq = 1.0;
+        emit_instr(ctx, sub_i);
+        bf_ret_r = sub_r;
+      }
       val_r = final_r;
     }
 
@@ -5062,7 +5088,7 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
       emit_instr(ctx, st1);
       ctx->last_ret_rdx = 0;
     }
-    return val_r;
+    return bf_ret_r ? bf_ret_r : val_r;
   }
   case ZND_COMPOUND_ASSIGN: {
     if (!node->lhs || !node->rhs)
@@ -5074,19 +5100,54 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     if (!addr_r)
       return 0;
 
-    RegID load_r = ctx->next_reg++;
+    int bf_q = (node->lhs && node->lhs->is_bitfield && (node->lhs->member_size > 4 || (node->lhs->bit_offset + node->lhs->bit_size > node->lhs->member_size * 8)));
+    RegID raw_load_r = ctx->next_reg++;
     Instr *load_ins = calloc(1, sizeof(Instr));
     load_ins->id = ctx->next_instr_id++;
     load_ins->op = OP_LOAD;
-    load_ins->dst = load_r;
+    load_ins->dst = raw_load_r;
     load_ins->src[0] = addr_r;
     load_ins->n_src = 1;
-    load_ins->imm =
-        (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
-    load_ins->is_float = node->is_float;
+    load_ins->imm = bf_q ? 8 : ((node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8);
+    load_ins->is_float = (node->lhs && node->lhs->is_bitfield) ? 0 : node->is_float;
     load_ins->dst_size = node->dst_size;
     load_ins->exec_freq = 1.0;
     emit_instr(ctx, load_ins);
+    RegID load_r = raw_load_r;
+    if (node->lhs && node->lhs->is_bitfield) {
+      RegID bo_r = ctx->next_reg++;
+      emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, bo_r, node->lhs->bit_offset, node->line_no));
+      RegID shift_r = ctx->next_reg++;
+      Instr *sh_i = calloc(1, sizeof(Instr));
+      sh_i->id = ctx->next_instr_id++; sh_i->op = OP_SHR; sh_i->dst = shift_r;
+      sh_i->src[0] = raw_load_r; sh_i->src[1] = bo_r; sh_i->n_src = 2; sh_i->exec_freq = 1.0;
+      emit_instr(ctx, sh_i);
+      RegID mask_r = ctx->next_reg++;
+      long long mask_val = (1ULL << node->lhs->bit_size) - 1;
+      emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, mask_r, mask_val, node->line_no));
+      RegID band_r = ctx->next_reg++;
+      Instr *band_i = calloc(1, sizeof(Instr));
+      band_i->id = ctx->next_instr_id++; band_i->op = OP_BAND; band_i->dst = band_r;
+      band_i->src[0] = shift_r; band_i->src[1] = mask_r; band_i->n_src = 2; band_i->exec_freq = 1.0;
+      emit_instr(ctx, band_i);
+      load_r = band_r;
+      if (!node->lhs->dst_unsigned && node->lhs->bit_size > 0 && node->lhs->bit_size < 64) {
+        RegID sign_r = ctx->next_reg++;
+        long long sign_bit = 1ULL << (node->lhs->bit_size - 1);
+        emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, sign_r, sign_bit, node->line_no));
+        RegID xor_r = ctx->next_reg++;
+        Instr *xor_i = calloc(1, sizeof(Instr));
+        xor_i->id = ctx->next_instr_id++; xor_i->op = OP_BXOR; xor_i->dst = xor_r;
+        xor_i->src[0] = band_r; xor_i->src[1] = sign_r; xor_i->n_src = 2; xor_i->exec_freq = 1.0;
+        emit_instr(ctx, xor_i);
+        RegID sub_r = ctx->next_reg++;
+        Instr *sub_i = calloc(1, sizeof(Instr));
+        sub_i->id = ctx->next_instr_id++; sub_i->op = OP_SUB; sub_i->dst = sub_r;
+        sub_i->src[0] = xor_r; sub_i->src[1] = sign_r; sub_i->n_src = 2; sub_i->exec_freq = 1.0;
+        emit_instr(ctx, sub_i);
+        load_r = sub_r;
+      }
+    }
 
     RegID rhs_r = zcc_lower_expr(ctx, node->rhs);
     RegID sum_r = ctx->next_reg++;
@@ -5118,24 +5179,75 @@ static RegID zcc_lower_expr(LowerCtx *ctx, ZCCNode *node) {
     add_ins->src[0] = load_r;
     add_ins->src[1] = rhs_r;
     add_ins->n_src = 2;
+    add_ins->ir_type = irtype_from_node(node);
     add_ins->is_float = node->is_float;
     add_ins->dst_size = node->dst_size;
     add_ins->exec_freq = 1.0;
     emit_instr(ctx, add_ins);
 
+    RegID store_val_r = sum_r;
+    RegID ret_val_r = sum_r;
+    if (node->lhs && node->lhs->is_bitfield) {
+      long long mask_val = (1ULL << node->lhs->bit_size) - 1;
+      long long shift_mask = ~(mask_val << node->lhs->bit_offset);
+      RegID sm_r = ctx->next_reg++;
+      emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, sm_r, shift_mask, node->line_no));
+      RegID band1_r = ctx->next_reg++;
+      Instr *b1_i = calloc(1, sizeof(Instr));
+      b1_i->id = ctx->next_instr_id++; b1_i->op = OP_BAND; b1_i->dst = band1_r;
+      b1_i->src[0] = raw_load_r; b1_i->src[1] = sm_r; b1_i->n_src = 2; b1_i->exec_freq = 1.0;
+      emit_instr(ctx, b1_i);
+      RegID mv_r = ctx->next_reg++;
+      emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, mv_r, mask_val, node->line_no));
+      RegID band2_r = ctx->next_reg++;
+      Instr *b2_i = calloc(1, sizeof(Instr));
+      b2_i->id = ctx->next_instr_id++; b2_i->op = OP_BAND; b2_i->dst = band2_r;
+      b2_i->src[0] = sum_r; b2_i->src[1] = mv_r; b2_i->n_src = 2; b2_i->exec_freq = 1.0;
+      emit_instr(ctx, b2_i);
+      RegID bo_r = ctx->next_reg++;
+      emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, bo_r, node->lhs->bit_offset, node->line_no));
+      RegID shl_r = ctx->next_reg++;
+      Instr *sh_i = calloc(1, sizeof(Instr));
+      sh_i->id = ctx->next_instr_id++; sh_i->op = OP_SHL; sh_i->dst = shl_r;
+      sh_i->src[0] = band2_r; sh_i->src[1] = bo_r; sh_i->n_src = 2; sh_i->exec_freq = 1.0;
+      emit_instr(ctx, sh_i);
+      RegID final_r = ctx->next_reg++;
+      Instr *bor_i = calloc(1, sizeof(Instr));
+      bor_i->id = ctx->next_instr_id++; bor_i->op = OP_BOR; bor_i->dst = final_r;
+      bor_i->src[0] = band1_r; bor_i->src[1] = shl_r; bor_i->n_src = 2; bor_i->exec_freq = 1.0;
+      emit_instr(ctx, bor_i);
+      store_val_r = final_r;
+      ret_val_r = band2_r;
+      if (!node->lhs->dst_unsigned && node->lhs->bit_size > 0 && node->lhs->bit_size < 64) {
+        RegID sign_r = ctx->next_reg++;
+        long long sign_bit = 1ULL << (node->lhs->bit_size - 1);
+        emit_instr(ctx, make_instr_imm(ctx->next_instr_id++, OP_CONST, sign_r, sign_bit, node->line_no));
+        RegID xor_r = ctx->next_reg++;
+        Instr *xor_i = calloc(1, sizeof(Instr));
+        xor_i->id = ctx->next_instr_id++; xor_i->op = OP_BXOR; xor_i->dst = xor_r;
+        xor_i->src[0] = band2_r; xor_i->src[1] = sign_r; xor_i->n_src = 2; xor_i->exec_freq = 1.0;
+        emit_instr(ctx, xor_i);
+        RegID sub_r = ctx->next_reg++;
+        Instr *sub_i = calloc(1, sizeof(Instr));
+        sub_i->id = ctx->next_instr_id++; sub_i->op = OP_SUB; sub_i->dst = sub_r;
+        sub_i->src[0] = xor_r; sub_i->src[1] = sign_r; sub_i->n_src = 2; sub_i->exec_freq = 1.0;
+        emit_instr(ctx, sub_i);
+        ret_val_r = sub_r;
+      }
+    }
+
     Instr *st = calloc(1, sizeof(Instr));
     st->id = ctx->next_instr_id++;
     st->op = OP_STORE;
     st->dst = 0;
-    st->src[0] = sum_r;
+    st->src[0] = store_val_r;
     st->src[1] = addr_r;
     st->n_src = 2;
-    st->is_float = node->is_float;
+    st->is_float = (node->lhs && node->lhs->is_bitfield) ? 0 : node->is_float;
     st->exec_freq = 1.0;
-    st->imm =
-        (node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8;
+    st->imm = bf_q ? 8 : ((node->lhs && node->lhs->member_size > 0) ? node->lhs->member_size : 8);
     emit_instr(ctx, st);
-    return sum_r;
+    return ret_val_r;
   }
   default:
     return 0;

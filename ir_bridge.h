@@ -217,5 +217,105 @@ static void ir_emit_var_load(Node *node) {
     }
 }
 
+static void ir_emit_bitfield_load(Node *node, const char *addr_ir, char *dst) {
+    int bf_q;
+    ir_type_t st_ty;
+    char addr_loc[32];
+    char final_dst[32];
+    char raw_tmp[32];
+    char cur_tmp[32];
+    int uns;
+    int left_shift;
+    int right_shift;
+    if (!g_emit_ir || !g_ir_cur_func || !node) return;
+    strcpy(addr_loc, addr_ir);
+    strcpy(final_dst, dst);
+    bf_q = (node->member_size > 4 || (node->bit_offset + node->bit_size > node->member_size * 8));
+    st_ty = bf_q ? IR_TY_U64 : (node->member_size == 1 ? IR_TY_U8 : (node->member_size == 2 ? IR_TY_U16 : (node->member_size == 4 ? IR_TY_U32 : IR_TY_U64)));
+    strcpy(raw_tmp, ir_bridge_fresh_tmp());
+    ZCC_EMIT_LOAD(st_ty, raw_tmp, addr_loc, node->line);
+    strcpy(cur_tmp, raw_tmp);
+    uns = (node->type && (is_unsigned_type(node->type) || node->type->kind == TY_ENUM)) ? 1 : 0;
+    left_shift = 64 - node->bit_offset - node->bit_size;
+    right_shift = 64 - node->bit_size;
+    if (left_shift > 0 && left_shift < 64) {
+        char shl_c[32];
+        char shl_t[32];
+        strcpy(shl_c, ir_bridge_fresh_tmp());
+        ZCC_EMIT_CONST(IR_TY_I64, shl_c, left_shift, node->line);
+        strcpy(shl_t, ir_bridge_fresh_tmp());
+        ZCC_EMIT_BINARY(IR_SHL, IR_TY_U64, shl_t, cur_tmp, shl_c, node->line);
+        strcpy(cur_tmp, shl_t);
+    }
+    if (right_shift > 0 && right_shift < 64) {
+        char shr_c[32];
+        strcpy(shr_c, ir_bridge_fresh_tmp());
+        ZCC_EMIT_CONST(IR_TY_I64, shr_c, right_shift, node->line);
+        ZCC_EMIT_BINARY(IR_SHR, uns ? IR_TY_U64 : IR_TY_I64, final_dst, cur_tmp, shr_c, node->line);
+    } else {
+        ZCC_EMIT_UNARY(IR_COPY, uns ? IR_TY_U64 : IR_TY_I64, final_dst, cur_tmp, node->line);
+    }
+    strcpy(ir_last_result, final_dst);
+}
+
+static void ir_emit_bitfield_store(Node *lhs, const char *addr_ir, const char *val_ir, int line) {
+    int bf_q;
+    ir_type_t st_ty;
+    char addr_loc[32];
+    char val_loc[32];
+    char old_t[32];
+    char sm_c[32];
+    char old_m[32];
+    char mv_c[32];
+    char val_m[32];
+    char bo_c[32];
+    char val_sh[32];
+    char merged[32];
+    char res_t[32];
+    unsigned long long mask_val;
+    unsigned long long shift_mask;
+    int uns;
+    int shift64;
+    if (!g_emit_ir || !g_ir_cur_func || !lhs) return;
+    strcpy(addr_loc, addr_ir);
+    strcpy(val_loc, val_ir);
+    bf_q = (lhs->member_size > 4 || (lhs->bit_offset + lhs->bit_size > lhs->member_size * 8));
+    st_ty = bf_q ? IR_TY_U64 : (lhs->member_size == 1 ? IR_TY_U8 : (lhs->member_size == 2 ? IR_TY_U16 : (lhs->member_size == 4 ? IR_TY_U32 : IR_TY_U64)));
+    strcpy(old_t, ir_bridge_fresh_tmp());
+    ZCC_EMIT_LOAD(st_ty, old_t, addr_loc, line);
+    mask_val = (lhs->bit_size == 64) ? 0xFFFFFFFFFFFFFFFFULL : ((1ULL << lhs->bit_size) - 1ULL);
+    shift_mask = ~(mask_val << lhs->bit_offset);
+    strcpy(sm_c, ir_bridge_fresh_tmp());
+    ZCC_EMIT_CONST(IR_TY_I64, sm_c, (long)shift_mask, line);
+    strcpy(old_m, ir_bridge_fresh_tmp());
+    ZCC_EMIT_BINARY(IR_AND, IR_TY_U64, old_m, old_t, sm_c, line);
+    strcpy(mv_c, ir_bridge_fresh_tmp());
+    ZCC_EMIT_CONST(IR_TY_I64, mv_c, (long)mask_val, line);
+    strcpy(val_m, ir_bridge_fresh_tmp());
+    ZCC_EMIT_BINARY(IR_AND, IR_TY_U64, val_m, val_loc, mv_c, line);
+    strcpy(bo_c, ir_bridge_fresh_tmp());
+    ZCC_EMIT_CONST(IR_TY_I64, bo_c, lhs->bit_offset, line);
+    strcpy(val_sh, ir_bridge_fresh_tmp());
+    ZCC_EMIT_BINARY(IR_SHL, IR_TY_U64, val_sh, val_m, bo_c, line);
+    strcpy(merged, ir_bridge_fresh_tmp());
+    ZCC_EMIT_BINARY(IR_OR, IR_TY_U64, merged, old_m, val_sh, line);
+    ZCC_EMIT_STORE(st_ty, addr_loc, merged, line);
+    uns = (lhs->type && (is_unsigned_type(lhs->type) || lhs->type->kind == TY_ENUM)) ? 1 : 0;
+    shift64 = 64 - lhs->bit_size;
+    if (!uns && shift64 > 0 && shift64 < 64) {
+        char sc_t[32];
+        char shl_t[32];
+        strcpy(sc_t, ir_bridge_fresh_tmp());
+        ZCC_EMIT_CONST(IR_TY_I64, sc_t, shift64, line);
+        strcpy(shl_t, ir_bridge_fresh_tmp());
+        ZCC_EMIT_BINARY(IR_SHL, IR_TY_U64, shl_t, val_m, sc_t, line);
+        strcpy(res_t, ir_bridge_fresh_tmp());
+        ZCC_EMIT_BINARY(IR_SHR, IR_TY_I64, res_t, shl_t, sc_t, line);
+        strcpy(ir_last_result, res_t);
+    } else {
+        strcpy(ir_last_result, val_m);
+    }
+}
+
 #undef ZCC_IR_BRIDGE_ALLOWED
 #endif /* ZCC_IR_BRIDGE_H */
