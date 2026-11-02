@@ -63,11 +63,10 @@ REQUIRED_BUNDLE_MEMBERS: Set[str] = {
     "toolchain.json",
     "differential_c99_receipt.json",
     "meta_verification_receipt.json",
-}
-
-ALLOWED_OPTIONAL_MEMBERS: Set[str] = {
     "ACTIVE_GENERATION.json",
 }
+
+ALLOWED_OPTIONAL_MEMBERS: Set[str] = set()
 
 
 class BundleAuthenticationError(RuntimeError):
@@ -254,6 +253,19 @@ def authenticate_bundle(
                     f"BUNDLE_MEMBER_DIGEST_MISMATCH: member '{art_name}' physical SHA-256 {act_sha} != manifest {exp_sha}"
                 )
 
+        # 5B. Cross-Verify 14th Member ACTIVE_GENERATION.json against release_manifest.json & lineage
+        active_gen_obj = json.loads((extract_dir / "ACTIVE_GENERATION.json").read_text(encoding="utf-8"))
+        if (
+            str(active_gen_obj.get("generation_id", "")).strip() != prod_run
+            or str(active_gen_obj.get("git_commit", "")).strip().lower() != prod_commit
+            or str(active_gen_obj.get("manifest_sha256", "")).strip().lower()
+            != str(member_inventory["release_manifest.json"]["sha256"]).lower()
+            or active_gen_obj.get("artifacts") != manifest_arts
+        ):
+            raise BundleAuthenticationError(
+                "BUNDLE_ACTIVE_GEN_POINTER_MISMATCH: ACTIVE_GENERATION.json disagrees with release_manifest.json"
+            )
+
         # 6. Direct Byte-Equality & ELF Validation on Extracted Stage 2/3 Artifacts
         for f2, f3, min_sz, is_elf in [
             ("zcc2.s", "zcc3.s", 1_000_000, False),
@@ -401,6 +413,13 @@ def authenticate_bundle(
             "evaluated_producer_run_id": prod_run,
             "provenance_records_verified": 4,
             "stage6_manifest_chain_verified": bool(prov_lineage),
+            "cardinality_accounting": {
+                "physical_archive_members": len(seen_members),
+                "expected_manifest_members": len(REQUIRED_BUNDLE_MEMBERS),
+                "independently_authenticated_members": len(member_inventory),
+                "excluded_or_unauthenticated_members": [],
+                "excluded_count": 0,
+            },
             "members_verified_count": len(member_inventory),
             "member_inventory": member_inventory,
             "live_execution_probe": exec_probe_result,
@@ -429,9 +448,9 @@ def run_self_test(
         )
         checks.append({
             "id": "MV-BUNDLE-POS-01",
-            "scenario": "Genuine physical release bundle full extraction, 13-member SHA-256 verification, 6-stage chain & live execution",
+            "scenario": "Genuine physical release bundle full extraction, 14/14-member SHA-256 verification, 6-stage chain & live execution",
             "verdict": "PASS",
-            "observed": f"Verified {pos_res['members_verified_count']} physical members (outer SHA-256 {pos_res['outer_bundle_sha256'][:16]}...)",
+            "observed": f"Verified {pos_res['members_verified_count']}/{len(REQUIRED_BUNDLE_MEMBERS)} physical members (0 excluded; outer SHA-256 {pos_res['outer_bundle_sha256'][:16]}...)",
         })
 
         # Helper to build a mutated bundle + ephemeral Ed25519 signed verdict so outer hash passes
@@ -512,7 +531,12 @@ def run_self_test(
             m = json.loads((m_dir / "release_manifest.json").read_text(encoding="utf-8"))
             m["artifacts"]["zcc2"] = new_sha
             m["artifacts"]["zcc3"] = new_sha
-            (m_dir / "release_manifest.json").write_text(json.dumps(m, indent=2) + "\n", encoding="utf-8")
+            m_bytes = (json.dumps(m, indent=2) + "\n").encode("utf-8")
+            (m_dir / "release_manifest.json").write_bytes(m_bytes)
+            ag = json.loads((m_dir / "ACTIVE_GENERATION.json").read_text(encoding="utf-8"))
+            ag["manifest_sha256"] = sha256_bytes(m_bytes)
+            ag["artifacts"] = dict(m["artifacts"])
+            (m_dir / "ACTIVE_GENERATION.json").write_text(json.dumps(ag, indent=2) + "\n", encoding="utf-8")
             pack_all(m_dir, tf)
 
         # MV-BUNDLE-03: Missing required member (zcc3 removed)
@@ -537,7 +561,19 @@ def run_self_test(
         def mut_6(m_dir: Path, tf: tarfile.TarFile) -> None:
             m = json.loads((m_dir / "release_manifest.json").read_text(encoding="utf-8"))
             m.setdefault("provenance_lineage", {})["provenance_stage5_record_sha256"] = "0" * 64
-            (m_dir / "release_manifest.json").write_text(json.dumps(m, indent=2) + "\n", encoding="utf-8")
+            m_bytes = (json.dumps(m, indent=2) + "\n").encode("utf-8")
+            (m_dir / "release_manifest.json").write_bytes(m_bytes)
+            ag = json.loads((m_dir / "ACTIVE_GENERATION.json").read_text(encoding="utf-8"))
+            ag["manifest_sha256"] = sha256_bytes(m_bytes)
+            ag["artifacts"] = dict(m["artifacts"])
+            (m_dir / "ACTIVE_GENERATION.json").write_text(json.dumps(ag, indent=2) + "\n", encoding="utf-8")
+            pack_all(m_dir, tf)
+
+        # MV-BUNDLE-07: Tampered 14th member ACTIVE_GENERATION.json (manifest_sha256 mismatch)
+        def mut_7(m_dir: Path, tf: tarfile.TarFile) -> None:
+            ag = json.loads((m_dir / "ACTIVE_GENERATION.json").read_text(encoding="utf-8"))
+            ag["manifest_sha256"] = "f" * 64
+            (m_dir / "ACTIVE_GENERATION.json").write_text(json.dumps(ag, indent=2) + "\n", encoding="utf-8")
             pack_all(m_dir, tf)
 
         negative_specs = [
@@ -547,6 +583,7 @@ def run_self_test(
             ("MV-BUNDLE-04", "Unlisted extra file (trojan_hook.sh) injected into .tar.gz", mut_4, "BUNDLE_UNLISTED_MEMBER"),
             ("MV-BUNDLE-05", "Path traversal member (../escape.txt) injected into .tar.gz", mut_5, "BUNDLE_UNSAFE_TAR_MEMBER"),
             ("MV-BUNDLE-06", "Broken Stage 5 -> Stage 6 hash link in release_manifest.json", mut_6, "BUNDLE_STAGE6_CHAIN_BREAK"),
+            ("MV-BUNDLE-07", "Tampered 14th member ACTIVE_GENERATION.json manifest_sha256 pointer", mut_7, "BUNDLE_ACTIVE_GEN_POINTER_MISMATCH"),
         ]
 
         for cid, desc, fn, expected_tag in negative_specs:

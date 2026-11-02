@@ -45,6 +45,10 @@ def main():
     # V4-06 Remediation: Hardcoded Architectural Invariants
     # The external sovereign verifier enforces fail-closed minimums regardless
     # of any attempt by a compromised in-repo policy to disable them.
+    if policy.get("enforcement_mode") != "FAIL_CLOSED":
+        reject("POLICY INTEGRITY VIOLATION (V4-06): Policy must enforce enforcement_mode='FAIL_CLOSED'", EXIT_POLICY_ERROR)
+    if policy.get("adjudicator_integrity", {}).get("require_adjudicator_hash_pinned") is False:
+        reject("POLICY INTEGRITY VIOLATION (V4-06): Policy cannot disable require_adjudicator_hash_pinned", EXIT_POLICY_ERROR)
     if policy.get("required_commit_binding") is False:
         reject("POLICY INTEGRITY VIOLATION (V4-06): Policy cannot disable required_commit_binding", EXIT_POLICY_ERROR)
     if policy.get("stage_identity", {}).get("require_direct_byte_equality") is False:

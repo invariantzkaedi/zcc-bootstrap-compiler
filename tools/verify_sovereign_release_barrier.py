@@ -217,6 +217,7 @@ def main():
 
     # 9. Optional Deep Physical Bundle Authentication (Track 2 Decisive Gate)
     if args.deep_verify_bundle:
+        sys.dont_write_bytecode = True
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from verify_release_bundle_deep import authenticate_bundle, BundleAuthenticationError
         pub_p = Path(args.authority_pubkey) if args.authority_pubkey else None
@@ -229,7 +230,7 @@ def main():
                     pub_p = c
                     break
         try:
-            authenticate_bundle(
+            deep_report = authenticate_bundle(
                 bundle_path=artifact_path,
                 verdict_path=verdict_path,
                 expected_commit=exp_commit,
@@ -252,7 +253,13 @@ def main():
     print(f"   Artifact SHA-256:        {actual_art_sha}")
     print(f"   Ed25519 Digital Sig:     {claimed_sig_hex[:32]}... [RFC 8032 VERIFIED]")
     if args.deep_verify_bundle:
-        print("   Deep Bundle Auth:        13/13 MEMBERS + STAGE 1-6 PROVENANCE + LIVE ELF EXEC (PASS)")
+        card = deep_report.get("cardinality_accounting", {})
+        n_auth = card.get("independently_authenticated_members", deep_report.get("members_verified_count", 14))
+        n_phys = card.get("physical_archive_members", 14)
+        n_exp = card.get("expected_manifest_members", 14)
+        n_excl = card.get("excluded_count", 0)
+        print(f"   Deep Bundle Auth:        {n_auth}/{n_phys} MEMBERS + STAGE 1-6 PROVENANCE + LIVE ELF EXEC (PASS)")
+        print(f"   Bundle Cardinality:      physical={n_phys}, expected={n_exp}, authenticated={n_auth}, excluded={n_excl} (None)")
     print(f"   Verdict:                 SOVEREIGN_RELEASE_CERTIFIED (PASS)")
     print("================================================================================")
     sys.exit(EXIT_OK)

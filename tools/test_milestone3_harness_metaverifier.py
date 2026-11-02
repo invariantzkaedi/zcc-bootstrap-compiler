@@ -67,7 +67,24 @@ def main() -> int:
         # ======================================================================
         # 1. ORACLE MUTATION CONTROLS (3 checks)
         # ======================================================================
-        r_ora1 = run_cmd(["python3", str(repo / "tools" / "zcc_differential_c99_oracle.py"), "--compiler", str(repo / "zcc2"), "--seeds", "0", "--self-test"])
+        zcc2_bin = repo / "zcc2"
+        if not zcc2_bin.is_file() and Path("/tmp/zcc_cleanroom_repro/zcc2").is_file():
+            zcc2_bin = Path("/tmp/zcc_cleanroom_repro/zcc2")
+        elif not zcc2_bin.is_file() and args.bundle and Path(args.bundle).is_file():
+            import tarfile
+            with tarfile.open(args.bundle, "r:gz") as tf:
+                for m in tf.getmembers():
+                    if Path(m.name).name == "zcc2":
+                        fobj = tf.extractfile(m)
+                        if fobj is not None:
+                            zcc2_bin = work / "zcc2"
+                            zcc2_bin.write_bytes(fobj.read())
+                            zcc2_bin.chmod(0o755)
+                            break
+        elif not zcc2_bin.is_file() and Path("/mnt/h/__DOWNLOADS/zcc_github_upload/zcc2").is_file():
+            zcc2_bin = Path("/mnt/h/__DOWNLOADS/zcc_github_upload/zcc2")
+
+        r_ora1 = run_cmd(["python3", str(repo / "tools" / "zcc_differential_c99_oracle.py"), "--compiler", str(zcc2_bin), "--seeds", "0", "--self-test"])
         record(
             "MV-ORACLE-01",
             "zcc_differential_c99_oracle.py",
@@ -207,6 +224,14 @@ def main() -> int:
         pm5.write_text(json.dumps(pol_m5), encoding="utf-8")
         r_pol5 = run_cmd(["python3", str(repo / "tools" / "sovereign_release_verifier.py"), "--policy", str(pm5), "--evidence", str(evid_clean), "--receipt", str(base_rec_path), "--expected-commit", exp_commit, "--repo", str(repo)])
         record("MV-POLICY-05", "sovereign_release_verifier.py", "Perturbed pinned_scripts['gate.sh'] SHA-256", "12", r_pol5.returncode, r_pol5.returncode == 12 and "ADJUDICATOR COMPROMISED" in r_pol5.stderr, r_pol5.stderr)
+
+        # MV-POLICY-06: Downgrade enforcement_mode from FAIL_CLOSED to PERMISSIVE
+        pol_m6 = copy.deepcopy(base_pol)
+        pol_m6["enforcement_mode"] = "PERMISSIVE"
+        pm6 = work / "pol_m6.json"
+        pm6.write_text(json.dumps(pol_m6), encoding="utf-8")
+        r_pol6 = run_cmd(["python3", str(repo / "tools" / "sovereign_release_verifier.py"), "--policy", str(pm6), "--evidence", str(evid_clean), "--receipt", str(base_rec_path), "--expected-commit", exp_commit, "--repo", str(repo)])
+        record("MV-POLICY-06", "sovereign_release_verifier.py", "Policy downgrade: enforcement_mode='PERMISSIVE'", "10", r_pol6.returncode, r_pol6.returncode == 10 and "V4-06" in r_pol6.stderr, r_pol6.stderr)
 
         # ======================================================================
         # 4. ED25519 ASYMMETRIC RELEASE BARRIER MUTATION CONTROLS (5 checks)
@@ -378,10 +403,10 @@ def main() -> int:
             record(
                 "MV-BUNDLE-01",
                 "verify_release_bundle_deep.py",
-                "7-check physical .tar.gz deep authenticator (path traversal, unlisted file, inner member XOR, Stage-6 chain break, missing member, forged manifest)",
+                "8-check physical .tar.gz 14/14-member deep authenticator (path traversal, unlisted file, inner member XOR, Stage-6 chain break, missing member, forged manifest, ACTIVE_GENERATION pointer tamper)",
                 "0",
                 r_bun.returncode,
-                r_bun.returncode == 0 and "ALL 7/7 CHECKS PASSED" in r_bun.stdout,
+                r_bun.returncode == 0 and "ALL 8/8 CHECKS PASSED" in r_bun.stdout,
                 r_bun.stdout,
             )
 
