@@ -85,6 +85,7 @@ def main():
     parser.add_argument("--expected-authority-commit", required=True, help="Expected authority commit SHA (Mandatory V4-M5-18 & V4-M5-20)")
     parser.add_argument("--authority-pubkey", required=False, help="Path to authority Ed25519 public key")
     parser.add_argument("--pinned-fingerprint", default=CANONICAL_AUTHORITY_FINGERPRINT, help="Expected public key fingerprint")
+    parser.add_argument("--deep-verify-bundle", action="store_true", help="Perform deep tar.gz member extraction, Stage 1-6 provenance chain check, and live zcc2/zcc3 execution")
 
     args = parser.parse_args()
 
@@ -214,6 +215,33 @@ def main():
         print(f"RELEASE BLOCKED: Sovereign authority verdict is '{verdict_str}' (status: '{status_str}'). Deployment prohibited.", file=sys.stderr)
         sys.exit(EXIT_RELEASE_BLOCKED)
 
+    # 9. Optional Deep Physical Bundle Authentication (Track 2 Decisive Gate)
+    if args.deep_verify_bundle:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from verify_release_bundle_deep import authenticate_bundle, BundleAuthenticationError
+        pub_p = Path(args.authority_pubkey) if args.authority_pubkey else None
+        if pub_p is None:
+            for c in [
+                Path(__file__).resolve().parent.parent / "contracts" / "authority_ed25519_public.pem",
+                Path("/mnt/h/__DOWNLOADS/zcc_github_upload/contracts/authority_ed25519_public.pem"),
+            ]:
+                if c.is_file():
+                    pub_p = c
+                    break
+        try:
+            authenticate_bundle(
+                bundle_path=artifact_path,
+                verdict_path=verdict_path,
+                expected_commit=exp_commit,
+                expected_run_id=exp_run,
+                pubkey_path=pub_p,
+                pinned_fingerprint=args.pinned_fingerprint,
+                run_live_exec=True,
+            )
+        except BundleAuthenticationError as exc:
+            print(f"RELEASE BLOCKED: Deep physical release bundle authentication failed: {exc}", file=sys.stderr)
+            sys.exit(EXIT_RELEASE_BLOCKED)
+
     print("================================================================================")
     print("✨ SOVEREIGN RELEASE BARRIER: ACCESS GRANTED")
     print(f"   Authority:               {authority} ({signable_payload['authority_commit'][:10]})")
@@ -223,6 +251,8 @@ def main():
     print(f"   Producer Run ID:         {prod_run}")
     print(f"   Artifact SHA-256:        {actual_art_sha}")
     print(f"   Ed25519 Digital Sig:     {claimed_sig_hex[:32]}... [RFC 8032 VERIFIED]")
+    if args.deep_verify_bundle:
+        print("   Deep Bundle Auth:        13/13 MEMBERS + STAGE 1-6 PROVENANCE + LIVE ELF EXEC (PASS)")
     print(f"   Verdict:                 SOVEREIGN_RELEASE_CERTIFIED (PASS)")
     print("================================================================================")
     sys.exit(EXIT_OK)

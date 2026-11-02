@@ -16,6 +16,7 @@
 # ==============================================================================
 
 set -euo pipefail
+export PYTHONNOUSERSITE=1
 
 # 0. Canonical Repository Anchoring
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -1648,7 +1649,48 @@ with open(path, 'w') as f:
     echo "=== ALL SELF-TEST CONTROL CHECKS PASSED (A, B, B2, C, D, E, F, G, H, I, J, K, L, M, N) ==="
 }
 
-# --- Crash-Consistent Release Publication & WAL Recovery Engine ---
+# --- Crash-Consistent Release Publication & Storage-Durable WAL Recovery Engine ---
+fsync_path_and_parent() {
+    python3 - "$@" <<'PY'
+import os, sys
+from pathlib import Path
+
+def sync_dir(d: Path) -> None:
+    try:
+        dfd = os.open(str(d), os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    except OSError:
+        pass
+
+visited_dirs = set()
+for arg in sys.argv[1:]:
+    p = Path(arg)
+    if p.is_file() and not p.is_symlink():
+        try:
+            fd = os.open(str(p), os.O_RDWR)
+        except OSError:
+            try:
+                fd = os.open(str(p), os.O_RDONLY)
+            except OSError:
+                fd = -1
+        if fd >= 0:
+            try:
+                os.fsync(fd)
+            except OSError:
+                pass
+            finally:
+                os.close(fd)
+        visited_dirs.add(p.parent.resolve())
+    elif p.is_dir():
+        visited_dirs.add(p.resolve())
+for d in visited_dirs:
+    sync_dir(d)
+PY
+}
+
 write_tx_journal() {
     local target_repo="$1"
     local tx_run_id="$2"
@@ -1657,10 +1699,11 @@ write_tx_journal() {
     local extra_note="${5:-}"
     mkdir -p "$target_repo/.releases"
     local j_tmp="$target_repo/.releases/tx_journal.json.tmp.$$"
-    python3 - "$j_tmp" "$tx_run_id" "$tx_state" "$rb_dir" "$extra_note" <<'PY'
+    python3 - "$j_tmp" "$target_repo/.releases/tx_journal.json" "$tx_run_id" "$tx_state" "$rb_dir" "$extra_note" <<'PY'
 import json, os, sys
 from datetime import datetime, timezone
-out_path, run_id, state, rb_dir, note = sys.argv[1:6]
+from pathlib import Path
+out_tmp, final_path, run_id, state, rb_dir, note = sys.argv[1:7]
 payload = {
     "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     "run_id": run_id,
@@ -1668,13 +1711,86 @@ payload = {
     "rollback_dir": rb_dir,
     "note": note,
 }
-with open(out_path, "w", encoding="utf-8") as f:
+with open(out_tmp, "w", encoding="utf-8") as f:
     json.dump(payload, f, indent=2)
     f.write("\n")
     f.flush()
     os.fsync(f.fileno())
+os.replace(out_tmp, final_path)
+try:
+    dfd = os.open(str(Path(final_path).parent), os.O_RDONLY)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
+except OSError:
+    pass
 PY
-    mv -f "$j_tmp" "$target_repo/.releases/tx_journal.json"
+}
+
+repair_root_from_active_generation() {
+    local target_repo="$1"
+    python3 - "$target_repo" <<'PY'
+import hashlib, json, os, shutil, sys
+from pathlib import Path
+
+repo = Path(sys.argv[1]).resolve()
+ag_path = repo / ".releases" / "ACTIVE_GENERATION"
+if not ag_path.is_file():
+    sys.exit(0)
+try:
+    ptr = json.loads(ag_path.read_text(encoding="utf-8"))
+    rel_dir = repo / str(ptr.get("release_dir", ""))
+    manifest_path = rel_dir / "release_manifest.json"
+    if not manifest_path.is_file():
+        sys.exit(0)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    expected = manifest.get("artifacts", {})
+except Exception:
+    sys.exit(0)
+
+repaired = []
+for name in ("zcc2.s", "zcc3.s", "zcc2", "zcc3"):
+    exp_sha = str(expected.get(name, "")).strip().lower()
+    src = rel_dir / name
+    dst = repo / name
+    if not exp_sha or not src.is_file():
+        continue
+    need_repair = False
+    if not dst.is_file() or dst.stat().st_size == 0:
+        need_repair = True
+    else:
+        act_sha = hashlib.sha256(dst.read_bytes()).hexdigest().lower()
+        if act_sha != exp_sha:
+            need_repair = True
+    if need_repair:
+        tmp_dst = repo / f"{name}.repair_tmp.{os.getpid()}"
+        with open(tmp_dst, "wb") as rf:
+            rf.write(src.read_bytes())
+            rf.flush()
+            try:
+                os.fsync(rf.fileno())
+            except OSError:
+                pass
+        if name in ("zcc2", "zcc3"):
+            try:
+                os.chmod(tmp_dst, 0o755)
+            except OSError:
+                pass
+        os.replace(tmp_dst, dst)
+        repaired.append(name)
+
+if repaired:
+    try:
+        dfd = os.open(str(repo), os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    except OSError:
+        pass
+    print(f"[STORAGE-DURABILITY REPAIR] Self-healed root artifacts {repaired} from verified ACTIVE_GENERATION ({rel_dir.name}).", file=sys.stderr)
+PY
 }
 
 recover_release_transaction() {
@@ -1682,20 +1798,38 @@ recover_release_transaction() {
     local reason="${2:-EXIT_TRAP}"
     local j_file="$target_repo/.releases/tx_journal.json"
     rm -f "$target_repo/zcc2.s.tx_tmp" "$target_repo/zcc3.s.tx_tmp" "$target_repo/zcc2.tx_tmp" "$target_repo/zcc3.tx_tmp" 2>/dev/null || true
-    rm -f "$target_repo/.releases/ACTIVE_GENERATION.tmp."* "$target_repo/.releases/current.tmp."* 2>/dev/null || true
-
-    if [ ! -f "$j_file" ]; then
-        return 0
-    fi
+    rm -f "$target_repo/.releases/ACTIVE_GENERATION.tmp."* "$target_repo/.releases/current.tmp."* "$target_repo/.releases/tx_journal.json.tmp."* 2>/dev/null || true
 
     local j_info
-    j_info=$(python3 - "$j_file" <<'PY'
+    j_info=$(python3 - "$j_file" "$target_repo/.releases" <<'PY'
 import json, sys
-try:
-    d = json.load(open(sys.argv[1], encoding="utf-8"))
-    print(f"{d.get('state', 'UNKNOWN')}|{d.get('run_id', 'UNKNOWN')}|{d.get('rollback_dir', '')}")
-except Exception:
-    print("MALFORMED|UNKNOWN|")
+from pathlib import Path
+j_path = Path(sys.argv[1])
+rel_root = Path(sys.argv[2])
+state, run_id, rb_dir = "NONE", "UNKNOWN", ""
+if j_path.is_file():
+    try:
+        d = json.loads(j_path.read_text(encoding="utf-8"))
+        state = str(d.get("state", "UNKNOWN"))
+        run_id = str(d.get("run_id", "UNKNOWN"))
+        rb_dir = str(d.get("rollback_dir", ""))
+    except Exception:
+        state = "MALFORMED"
+# Storage-durability fallback: if journal was truncated/corrupted on power loss
+# or missing while a rollback-* directory exists on disk, discover it directly!
+if (not rb_dir or not Path(rb_dir).is_dir()) and rel_root.is_dir():
+    rb_candidates = sorted(
+        [p for p in rel_root.glob("rollback-*") if p.is_dir()],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if rb_candidates:
+        rb_dir = str(rb_candidates[0])
+        if run_id == "UNKNOWN":
+            run_id = rb_candidates[0].name[len("rollback-"):]
+        if state in ("NONE", "COMMITTED", "CLEAN"):
+            state = "ORPHANED_ROLLBACK_DIR"
+print(f"{state}|{run_id}|{rb_dir}")
 PY
 )
     local j_state="${j_info%%|*}"
@@ -1703,13 +1837,15 @@ PY
     local j_run="${rest%%|*}"
     local rb_dir="${rest#*|}"
 
-    if [ "$j_state" = "COMMITTED" ] || [ "$j_state" = "ROLLED_BACK" ] || [ "$j_state" = "CLEAN" ]; then
+    if [ "$j_state" = "NONE" ] || [ "$j_state" = "COMMITTED" ] || [ "$j_state" = "ROLLED_BACK" ] || [ "$j_state" = "CLEAN" ]; then
+        repair_root_from_active_generation "$target_repo"
         return 0
     fi
 
     if [ -n "$rb_dir" ] && [ -d "$rb_dir" ]; then
         if [ -f "$rb_dir/ACTIVE_GENERATION.present" ] && [ -f "$rb_dir/ACTIVE_GENERATION" ]; then
             cp -f "$rb_dir/ACTIVE_GENERATION" "$target_repo/.releases/ACTIVE_GENERATION.restore_tmp"
+            fsync_path_and_parent "$target_repo/.releases/ACTIVE_GENERATION.restore_tmp"
             mv -f "$target_repo/.releases/ACTIVE_GENERATION.restore_tmp" "$target_repo/.releases/ACTIVE_GENERATION"
             local prev_rel_dir
             prev_rel_dir=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('release_dir','').replace('.releases/',''))" "$target_repo/.releases/ACTIVE_GENERATION" 2>/dev/null || true)
@@ -1723,18 +1859,24 @@ PY
         for tx_art in zcc2.s zcc3.s zcc2 zcc3; do
             if [ -f "$rb_dir/$tx_art.present" ] && [ -f "$rb_dir/$tx_art" ]; then
                 cp -f "$rb_dir/$tx_art" "$target_repo/$tx_art.restore_tmp"
+                fsync_path_and_parent "$target_repo/$tx_art.restore_tmp"
                 mv -f "$target_repo/$tx_art.restore_tmp" "$target_repo/$tx_art"
             elif [ -f "$rb_dir/$tx_art.absent" ]; then
                 rm -f "$target_repo/$tx_art" 2>/dev/null || true
             fi
         done
         chmod +x "$target_repo/zcc2" "$target_repo/zcc3" 2>/dev/null || true
+        fsync_path_and_parent "$target_repo/.releases" "$target_repo"
     fi
 
     if [ -n "$j_run" ] && [ "$j_run" != "UNKNOWN" ]; then
         rm -rf "$target_repo/.releases/rel-$j_run.staging" "$target_repo/.releases/rel-$j_run" 2>/dev/null || true
     fi
+    if [ -n "$rb_dir" ] && [ -d "$rb_dir" ]; then
+        rm -rf "$rb_dir" 2>/dev/null || true
+    fi
 
+    repair_root_from_active_generation "$target_repo"
     write_tx_journal "$target_repo" "$j_run" "ROLLED_BACK" "$rb_dir" "Recovered from $j_state ($reason)"
     echo "[TRANSACTIONAL ROLLBACK] Release transaction ($j_run, state=$j_state, reason=$reason) aborted; ACTIVE_GENERATION and all 4 root artifacts preserved byte-for-byte." >&2
     return 0
@@ -1764,6 +1906,7 @@ prepare_release_transaction() {
         fi
     done
 
+    fsync_path_and_parent "$rb_dir"/* "$rb_dir" "$target_repo/.releases"
     write_tx_journal "$target_repo" "$tx_run_id" "IN_PROGRESS" "$rb_dir" "Transaction initialized"
 }
 
@@ -1822,7 +1965,7 @@ publish_release_transaction() {
         exit 72
     fi
 
-    # Write release_manifest.json inside versioned release directory with per-file fsync
+    # Write Stage-6 release_manifest.json inside versioned release directory with per-file & directory fsync
     python3 - "$rel_staging" "$target_repo" "$tx_run_id" <<'PY'
 import hashlib, json, os, subprocess, sys
 from datetime import datetime, timezone
@@ -1842,11 +1985,43 @@ if not commit:
     except Exception:
         commit = "UNKNOWN"
 
+prov_path = rel_dir / "provenance.jsonl"
+prov_ledger_sha = sha(prov_path)
+prov_stage5_record_sha = "NONE"
+stage1_src_sha = sha(repo_root / "zcc.c")
+stage1_bin_sha = sha(repo_root / "zcc")
+prov_stages_recorded = []
+if prov_path.is_file():
+    raw_lines = [l.strip() for l in prov_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    if raw_lines:
+        prov_stage5_record_sha = hashlib.sha256(raw_lines[-1].encode("utf-8")).hexdigest()
+        try:
+            first_rec = json.loads(raw_lines[0])
+            stage1_src_sha = first_rec.get("source_sha256", stage1_src_sha)
+            stage1_bin_sha = first_rec.get("compiler_sha256_before", stage1_bin_sha)
+            prov_stages_recorded = [json.loads(line).get("stage") for line in raw_lines]
+        except Exception:
+            pass
+
 manifest = {
+    "schema": "zcc-release-publication-manifest-v2",
+    "stage": 6,
+    "record_type": "release_publication_manifest",
     "generation_id": run_id,
     "published_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     "git_commit": commit,
     "filesystem_device_id": rel_dir.stat().st_dev,
+    "provenance_lineage": {
+        "provenance_jsonl_stages": prov_stages_recorded,
+        "provenance_scope": "4-record provenance.jsonl covers Stages 2, 3, 4, 5 (with Stage 1 bound in Record 1 source_sha256 and compiler_sha256_before); this Stage 6 manifest chains onto Record 4 (Stage 5) via previous_hash.",
+        "stage1_source_sha256": stage1_src_sha,
+        "stage1_compiler_sha256": stage1_bin_sha,
+        "provenance_ledger_sha256": prov_ledger_sha,
+        "previous_hash": prov_stage5_record_sha,
+        "provenance_stage5_record_sha256": prov_stage5_record_sha,
+        "differential_c99_receipt_sha256": sha(rel_dir / "differential_c99_receipt.json"),
+        "toolchain_sha256": sha(rel_dir / "toolchain.json"),
+    },
     "artifacts": {
         "zcc2.s": sha(rel_dir / "zcc2.s"),
         "zcc3.s": sha(rel_dir / "zcc3.s"),
@@ -1864,9 +2039,11 @@ with open(m_path, "w", encoding="utf-8") as f:
     f.flush()
     os.fsync(f.fileno())
 PY
+    fsync_path_and_parent "$rel_staging"/* "$rel_staging"
 
-    # Intra-filesystem atomic directory rename (.staging -> rel-$tx_run_id)
+    # Intra-filesystem atomic directory rename (.staging -> rel-$tx_run_id) + parent dir fsync
     mv -f "$rel_staging" "$rel_final"
+    fsync_path_and_parent "$rel_final" "$target_repo/.releases"
 
     # Boundary 2: Post-stage-directory / pre-pointer-flip fault injection hook
     if [ "${ZCC_INJECT_TX_FAULT:-}" = "post_stage_dir" ] || [ "${ZCC_INJECT_TX_FAULT:-}" = "1" ] || [ "${ZCC_INJECT_TX_FAULT:-}" = "post_candidate" ]; then
@@ -1874,12 +2051,13 @@ PY
         exit 70
     fi
 
-    # Stage intra-filesystem legacy root candidates (.tx_tmp) from same-filesystem rel_final
+    # Stage intra-filesystem legacy root candidates (.tx_tmp) from same-filesystem rel_final with fsync
     cp -f "$rel_final/zcc2.s" "$target_repo/zcc2.s.tx_tmp"
     cp -f "$rel_final/zcc3.s" "$target_repo/zcc3.s.tx_tmp"
     cp -f "$rel_final/zcc2" "$target_repo/zcc2.tx_tmp"
     cp -f "$rel_final/zcc3" "$target_repo/zcc3.tx_tmp"
     chmod +x "$target_repo/zcc2.tx_tmp" "$target_repo/zcc3.tx_tmp" 2>/dev/null || true
+    fsync_path_and_parent "$target_repo/zcc2.s.tx_tmp" "$target_repo/zcc3.s.tx_tmp" "$target_repo/zcc2.tx_tmp" "$target_repo/zcc3.tx_tmp" "$target_repo"
 
     # Single-Pointer Atomic Release Generation Switch (ACTIVE_GENERATION + .releases/current)
     write_tx_journal "$target_repo" "$tx_run_id" "FLIPPING_POINTER" "$rb_dir" "Switching single atomic release pointer ACTIVE_GENERATION"
@@ -1895,6 +2073,7 @@ pointer = {
     "release_dir": f".releases/rel-{run_id}",
     "git_commit": m_data.get("git_commit", "UNKNOWN"),
     "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+    "provenance_stage5_record_sha256": m_data.get("provenance_lineage", {}).get("provenance_stage5_record_sha256", "NONE"),
     "artifacts": m_data.get("artifacts", {}),
 }
 with open(gen_tmp, "w", encoding="utf-8") as f:
@@ -1904,6 +2083,7 @@ with open(gen_tmp, "w", encoding="utf-8") as f:
 PY
     mv -f "$gen_tmp" "$target_repo/.releases/ACTIVE_GENERATION"
     ln -sfn "rel-$tx_run_id" "$target_repo/.releases/current.tmp.$tx_run_id" 2>/dev/null && mv -Tf "$target_repo/.releases/current.tmp.$tx_run_id" "$target_repo/.releases/current" 2>/dev/null || ln -sfn "rel-$tx_run_id" "$target_repo/.releases/current" 2>/dev/null || true
+    fsync_path_and_parent "$target_repo/.releases/ACTIVE_GENERATION" "$target_repo/.releases"
 
     # Boundary 3: Post-pointer-flip / pre-legacy-rename fault injection hook
     if [ "${ZCC_INJECT_TX_FAULT:-}" = "post_pointer_flip" ]; then
@@ -1937,6 +2117,7 @@ PY
     fi
 
     mv -f "$target_repo/zcc3.tx_tmp" "$target_repo/zcc3"
+    fsync_path_and_parent "$target_repo/zcc2.s" "$target_repo/zcc3.s" "$target_repo/zcc2" "$target_repo/zcc3" "$target_repo"
 
     cmp -s "$target_repo/zcc2.s" "$rel_final/zcc2.s"
     cmp -s "$target_repo/zcc3.s" "$rel_final/zcc3.s"
@@ -1950,6 +2131,7 @@ PY
 
     write_tx_journal "$target_repo" "$tx_run_id" "COMMITTED" "$rb_dir" "All generation & legacy root artifacts published cleanly"
     rm -rf "$rb_dir" 2>/dev/null || true
+    fsync_path_and_parent "$target_repo/.releases"
     TX_COMMITTED=1
 }
 

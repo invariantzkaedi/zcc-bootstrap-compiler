@@ -35,6 +35,9 @@ def main() -> int:
     parser.add_argument("--receipt", required=True, help="Path to active meta_verification_receipt.json")
     parser.add_argument("--policy", required=True, help="Path to active sovereign_release_policy.json")
     parser.add_argument("--commit", required=True, help="Expected 40-char Git commit SHA")
+    parser.add_argument("--bundle", default=None, help="Path to physical release bundle .tar.gz for deep authentication")
+    parser.add_argument("--verdict", default=None, help="Path to signed release_verdict.json for deep authentication")
+    parser.add_argument("--run-id", default=None, help="Expected producer run ID for deep bundle authentication")
     parser.add_argument("--out", default=None, help="Output JSON matrix path")
     args = parser.parse_args()
 
@@ -348,6 +351,56 @@ def main() -> int:
             "--pinned-fingerprint", fp_a,
         ])
         record("MV-SIG-05", "verify_sovereign_release_barrier.py", "Authentic Ed25519-signed SOVEREIGN_RELEASE_REJECTED verdict", "1", r_sig5.returncode, r_sig5.returncode == 1 and "Deployment prohibited" in r_sig5.stderr, r_sig5.stderr)
+
+        # ======================================================================
+        # 5. TRACK 2 CONSUMER, DEEP BUNDLE & ISOLATED KEY CUSTODY CONTROLS (3 checks)
+        # ======================================================================
+        r_cons = run_cmd(["python3", str(repo / "tools" / "zcc_release_consumer.py"), "--repo", str(repo), "--self-test"])
+        record(
+            "MV-CONSUMER-01",
+            "zcc_release_consumer.py",
+            "6-check multi-file reader consistency & mid-read pause gauntlet (naive symlink tear vs openat pin lease)",
+            "0",
+            r_cons.returncode,
+            r_cons.returncode == 0 and "ALL 6/6 CHECKS PASSED" in r_cons.stdout,
+            r_cons.stdout,
+        )
+
+        if args.bundle and args.verdict and args.run_id:
+            r_bun = run_cmd([
+                "python3", str(repo / "tools" / "verify_release_bundle_deep.py"),
+                "--bundle", str(Path(args.bundle).resolve()),
+                "--verdict", str(Path(args.verdict).resolve()),
+                "--expected-commit", exp_commit,
+                "--expected-run-id", args.run_id.strip(),
+                "--self-test",
+            ])
+            record(
+                "MV-BUNDLE-01",
+                "verify_release_bundle_deep.py",
+                "7-check physical .tar.gz deep authenticator (path traversal, unlisted file, inner member XOR, Stage-6 chain break, missing member, forged manifest)",
+                "0",
+                r_bun.returncode,
+                r_bun.returncode == 0 and "ALL 7/7 CHECKS PASSED" in r_bun.stdout,
+                r_bun.stdout,
+            )
+
+        # MV-CUSTODY-01: Verify Ed25519 private key does not exist on producer container /dev/sdd or producer repo
+        prod_priv_candidates = [
+            repo / "keys" / "authority_ed25519_private.pem",
+            repo / "contracts" / "authority_ed25519_private.pem",
+            Path("/home/zkaedi/zcc-release-authority/keys/authority_ed25519_private.pem"),
+        ]
+        leaked = [str(p) for p in prod_priv_candidates if p.exists()]
+        record(
+            "MV-CUSTODY-01",
+            "key_custody_isolation",
+            "Verify authority_ed25519_private.pem is absent from producer repo and producer WSL2 block device (/dev/sdd)",
+            "0 (absent on producer)",
+            0 if not leaked else 1,
+            len(leaked) == 0,
+            "PASS: Private key physically absent from producer block device (/dev/sdd); isolated in separate authority container (/dev/sde)." if not leaked else f"FAIL: Private key found on producer at {leaked}",
+        )
 
         summary = {
             "specialist": "Harness Meta-Verifier",

@@ -402,6 +402,136 @@ def main() -> int:
             "verdict": "PASS",
         })
 
+        # 5. Storage-Level Power-Loss Simulation A: Truncated/Corrupted WAL Journal after SIGKILL Mid-Rename
+        run_publish(gate_sh, sandbox_root, stage_a, evid_dir, "run-gen-A")
+        res_kill_trunc = run_publish(gate_sh, sandbox_root, stage_b, evid_dir, "run-sigkill-trunc", fault="sigkill_mid_rename_2")
+        # Simulate power loss mid-journal-write by truncating tx_journal.json to 17 bytes of invalid JSON
+        (sandbox_root / ".releases" / "tx_journal.json").write_bytes(b'{"timestamp_utc":')
+        torn_trunc_state = read_repo_state(sandbox_root)
+        res_rec_trunc = subprocess.run(
+            ["bash", str(gate_sh), "--recover-tx", str(sandbox_root)],
+            capture_output=True,
+            text=True,
+        )
+        rec_trunc_state = read_repo_state(sandbox_root)
+        trunc_ok = (
+            res_kill_trunc.returncode != 0
+            and torn_trunc_state["journal_state"] == "PARSE_ERR"
+            and torn_trunc_state["zcc2.s"] == digests_b["asm_sha256"]
+            and torn_trunc_state["zcc2"] == digests_a["bin_sha256"]
+            and res_rec_trunc.returncode == 0
+            and rec_trunc_state["active_generation"] == "run-gen-A"
+            and rec_trunc_state["journal_state"] == "ROLLED_BACK"
+            and rec_trunc_state["zcc2.s"] == digests_a["asm_sha256"]
+            and rec_trunc_state["zcc3.s"] == digests_a["asm_sha256"]
+            and rec_trunc_state["zcc2"] == digests_a["bin_sha256"]
+            and rec_trunc_state["zcc3"] == digests_a["bin_sha256"]
+        )
+        if not trunc_ok:
+            print(f"FAIL: Storage-level truncated journal recovery failed: torn={torn_trunc_state}, rec={rec_trunc_state}", file=sys.stderr)
+            return 1
+
+        results.append({
+            "scenario": "DURABILITY-01: Storage-Level Truncated WAL Journal (17-byte Corrupt JSON) + SIGKILL Recovery",
+            "boundary": "power_loss_truncated_journal_mid_rename_2",
+            "torn_state_before_recovery": torn_trunc_state,
+            "post_recovery_state": rec_trunc_state,
+            "verdict": "PASS",
+        })
+
+        # 6. Storage-Level Power-Loss Simulation B: Zero-Byte / Torn Root Data Blocks under COMMITTED Journal
+        run_publish(gate_sh, sandbox_root, stage_a, evid_dir, "run-gen-A")
+        (sandbox_root / "zcc2").write_bytes(b"")
+        (sandbox_root / "zcc3.s").write_bytes(b"/* partial unsynced block */")
+        torn_blocks_state = read_repo_state(sandbox_root)
+        res_repair = subprocess.run(
+            ["bash", str(gate_sh), "--recover-tx", str(sandbox_root)],
+            capture_output=True,
+            text=True,
+        )
+        repaired_state = read_repo_state(sandbox_root)
+        repair_ok = (
+            torn_blocks_state["zcc2"] != digests_a["bin_sha256"]
+            and torn_blocks_state["zcc3.s"] != digests_a["asm_sha256"]
+            and res_repair.returncode == 0
+            and "[STORAGE-DURABILITY REPAIR]" in res_repair.stderr
+            and repaired_state["zcc2.s"] == digests_a["asm_sha256"]
+            and repaired_state["zcc3.s"] == digests_a["asm_sha256"]
+            and repaired_state["zcc2"] == digests_a["bin_sha256"]
+            and repaired_state["zcc3"] == digests_a["bin_sha256"]
+        )
+        if not repair_ok:
+            print(f"FAIL: Storage-level torn root block self-healing failed: repaired={repaired_state}, stderr={res_repair.stderr}", file=sys.stderr)
+            return 1
+
+        results.append({
+            "scenario": "DURABILITY-02: Storage-Level Zero-Byte/Torn Root Block Self-Healing from ACTIVE_GENERATION",
+            "boundary": "power_loss_unsynced_root_blocks",
+            "torn_state_before_recovery": torn_blocks_state,
+            "post_recovery_state": repaired_state,
+            "verdict": "PASS",
+        })
+
+        # 7. Parent-Directory & File fsync(2) Syscall Verification via strace
+        strace_log = tmp_arena / "strace_fsync.log"
+        res_strace = subprocess.run(
+            [
+                "strace", "-f", "-e", "trace=fsync,fdatasync",
+                "-o", str(strace_log),
+                "bash", str(gate_sh), "--test-publish-tx", str(ext4_repo), str(stage_b), str(evid_dir), "run-strace-fsync",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        strace_text = strace_log.read_text(encoding="utf-8", errors="replace") if strace_log.is_file() else ""
+        fsync_ok_count = strace_text.count("fsync(")
+        if res_strace.returncode != 0 or fsync_ok_count < 10:
+            print(f"FAIL: strace fsync verification failed: rc={res_strace.returncode}, fsync_calls={fsync_ok_count}", file=sys.stderr)
+            return 1
+
+        results.append({
+            "scenario": "DURABILITY-03: Kernel Syscall Audit (strace -f -e trace=fsync) on File & Parent-Directory Barriers",
+            "boundary": "fsync_syscall_barrier_verification",
+            "observed_fsync_syscalls": fsync_ok_count,
+            "verdict": "PASS",
+            "post_state": read_repo_state(ext4_repo),
+        })
+
+        # 8. Deterministic Pause-Between-Opens Consumer Verification (Naive Symlink vs ZCCReleaseConsumer openat)
+        sys.path.insert(0, str(repo_root / "tools"))
+        from zcc_release_consumer import ZCCReleaseConsumer
+
+        run_publish(gate_sh, ext4_repo, stage_a, evid_dir, "run-gen-A")
+        cur_link = ext4_repo / ".releases" / "current"
+        naive_1 = sha256_file(cur_link / "zcc2.s")
+        naive_2 = sha256_file(cur_link / "zcc3.s")
+        run_publish(gate_sh, ext4_repo, stage_b, evid_dir, "run-gen-B")
+        naive_3 = sha256_file(cur_link / "zcc2")
+        naive_4 = sha256_file(cur_link / "zcc3")
+        naive_tore = (naive_1 == digests_a["asm_sha256"] and naive_3 == digests_b["bin_sha256"])
+
+        run_publish(gate_sh, ext4_repo, stage_a, evid_dir, "run-gen-A")
+        pinned_consumer = ZCCReleaseConsumer(ext4_repo)
+        consumed_gen_a = pinned_consumer.consume_generation(
+            after_second_open_hook=lambda: run_publish(gate_sh, ext4_repo, stage_b, evid_dir, "run-gen-B")
+        )
+        pinned_coherent = (
+            consumed_gen_a.generation_id == "run-gen-A"
+            and consumed_gen_a.artifact_digests["zcc2.s"] == digests_a["asm_sha256"]
+            and consumed_gen_a.artifact_digests["zcc2"] == digests_a["bin_sha256"]
+        )
+        if not (naive_tore and pinned_coherent):
+            print(f"FAIL: Pause-between-opens check failed: naive_tore={naive_tore}, pinned_coherent={pinned_coherent}", file=sys.stderr)
+            return 1
+
+        results.append({
+            "scenario": "CONCURRENCY-02: Deterministic Pause-Between-Opens (Naive .releases/current Tear vs Pinned openat Coherency)",
+            "boundary": "pause_after_second_open_during_generation_flip",
+            "naive_symlink_mixed_generation_observed": naive_tore,
+            "pinned_openat_consumer_coherent": pinned_coherent,
+            "verdict": "PASS",
+        })
+
         summary = {
             "specialist": "Transaction Safety Auditor",
             "verdict": "PASS",
@@ -409,6 +539,10 @@ def main() -> int:
             "scenarios_passed": len(results),
             "same_filesystem_rename_verified": True,
             "uncatchable_sigkill_wal_recovery_verified": True,
+            "storage_level_truncated_journal_recovery_verified": True,
+            "storage_level_torn_block_self_healing_verified": True,
+            "kernel_fsync_syscall_count": fsync_ok_count,
+            "deterministic_pause_openat_coherency_verified": True,
             "concurrent_reader_zero_mixed_generations_verified": True,
             "ext4_consistent_reads": total_ext4_reads,
             "drvfs_consistent_reads": total_drv_reads,
