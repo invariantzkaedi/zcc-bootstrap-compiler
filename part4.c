@@ -1043,11 +1043,12 @@ static void emit_ir_inc_dec(Compiler *cc, Node *lhs, int is_inc, int is_post, in
     if (!lhs || !lhs->type) return;
     
     char lhs_addr[32];
-    char *vname = ir_var_name(lhs);
-    if (vname && vname[0]) {
+    if (lhs->kind == ND_VAR && lhs->sym) {
+        char *vname = ir_var_name(lhs);
         strncpy(lhs_addr, vname, 31);
         lhs_addr[31] = 0;
     } else {
+        codegen_addr_checked(cc, lhs);
         ir_save_result(lhs_addr);
     }
     
@@ -1058,7 +1059,7 @@ static void emit_ir_inc_dec(Compiler *cc, Node *lhs, int is_inc, int is_post, in
         for (i = 0; tmp[i]; i++) val_tmp[i] = tmp[i];
         val_tmp[i] = 0;
     }
-    ZCC_EMIT_LOAD(ir_map_type(lhs->type), val_tmp, lhs_addr, line);
+    if (lhs->is_bitfield) ir_emit_bitfield_load(lhs, lhs_addr, val_tmp); else ZCC_EMIT_LOAD(ir_map_type(lhs->type), val_tmp, lhs_addr, line);
     
     int esz = 1;
     if (is_pointer(lhs->type))
@@ -1087,7 +1088,7 @@ static void emit_ir_inc_dec(Compiler *cc, Node *lhs, int is_inc, int is_post, in
     }
     ZCC_EMIT_BINARY(op, ir_map_type(lhs->type), new_val_tmp, val_tmp, esz_tmp, line);
     
-    ZCC_EMIT_STORE(ir_map_type(lhs->type), lhs_addr, new_val_tmp, line);
+    if (lhs->is_bitfield) { ir_emit_bitfield_store(lhs, lhs_addr, new_val_tmp, line); if (!is_post) ir_save_result(new_val_tmp); } else ZCC_EMIT_STORE(ir_map_type(lhs->type), lhs_addr, new_val_tmp, line);
     
     const char *res_tmp = is_post ? val_tmp : new_val_tmp;
     int i;
@@ -3877,6 +3878,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
     codegen_load(cc, node->lhs->type);
+    if (node->lhs->is_bitfield) emit_bitfield_extract_p4(cc, node->lhs);
     if (node->lhs->type && is_float_type(node->lhs->type)) {
       /* CG-FLOAT-011: float ++/-- must use FP add, not integer addq */
       if (node->lhs->type->kind == TY_FLOAT) {
@@ -3900,6 +3902,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
+    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else {
     switch (type_size(node->lhs->type)) {
     case 1:
       if (backend_ops) fprintf(cc->out, "    strb r1, [r0]\n");
@@ -3921,6 +3924,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r0, r1\n");
       else fprintf(cc->out, "    movq %%r11, %%rax\n");
     emit_node_extend(cc, node->lhs);
+    }
     if (!g_emit_ir) {
       char *dst = ir_bridge_fresh_tmp();
       ZCC_EMIT_UNARY(IR_CAST, ir_map_type(node->lhs->type), dst, "pre_inc", node->line);
@@ -3962,6 +3966,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
     codegen_load(cc, node->lhs->type);
+    if (node->lhs->is_bitfield) emit_bitfield_extract_p4(cc, node->lhs);
     if (node->lhs->type && is_float_type(node->lhs->type)) {
       /* CG-FLOAT-011: float -- must use FP sub, not integer subq */
       if (node->lhs->type->kind == TY_FLOAT) {
@@ -3985,6 +3990,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
+    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else {
     switch (type_size(node->lhs->type)) {
     case 1:
       if (backend_ops) fprintf(cc->out, "    strb r1, [r0]\n");
@@ -4006,6 +4012,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r0, r1\n");
       else fprintf(cc->out, "    movq %%r11, %%rax\n");
     emit_node_extend(cc, node->lhs);
+    }
     if (!g_emit_ir) {
       char *dst = ir_bridge_fresh_tmp();
       ZCC_EMIT_UNARY(IR_CAST, ir_map_type(node->lhs->type), dst, "pre_dec", node->line);
@@ -4045,6 +4052,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
     codegen_load(cc, node->lhs->type);
+    if (node->lhs->is_bitfield) emit_bitfield_extract_p4(cc, node->lhs);
     push_reg(cc, "rax"); /* save original value */
     if (node->lhs->type && is_float_type(node->lhs->type)) {
       /* CG-FLOAT-011: float post++ must use FP add, not integer addq */
@@ -4070,6 +4078,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rdx"); /* rdx = original value */
     pop_reg(cc, "rax"); /* rax = address */
+    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else {
     switch (type_size(node->lhs->type)) {
     case 1:
       if (backend_ops) fprintf(cc->out, "    strb r1, [r0]\n");
@@ -4087,6 +4096,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (backend_ops) fprintf(cc->out, "    str r1, [r0]\n");
       else fprintf(cc->out, "    movq %%r11, (%%rax)\n");
       break;
+    }
     }
     if (backend_ops) fprintf(cc->out, "    mov r0, r3\n");
       else fprintf(cc->out, "    movq %%rdx, %%rax\n");
@@ -4129,6 +4139,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
     codegen_load(cc, node->lhs->type);
+    if (node->lhs->is_bitfield) emit_bitfield_extract_p4(cc, node->lhs);
     push_reg(cc, "rax");
     if (node->lhs->type && is_float_type(node->lhs->type)) {
       /* CG-FLOAT-011: float post-- must use FP sub, not integer subq */
@@ -4154,6 +4165,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rdx"); /* rdx = original value */
     pop_reg(cc, "rax"); /* rax = address */
+    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else {
     switch (type_size(node->lhs->type)) {
     case 1:
       if (backend_ops) fprintf(cc->out, "    strb r1, [r0]\n");
@@ -4171,6 +4183,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (backend_ops) fprintf(cc->out, "    str r1, [r0]\n");
       else fprintf(cc->out, "    movq %%r11, (%%rax)\n");
       break;
+    }
     }
     if (backend_ops) fprintf(cc->out, "    mov r0, r3\n");
       else fprintf(cc->out, "    movq %%rdx, %%rax\n");
