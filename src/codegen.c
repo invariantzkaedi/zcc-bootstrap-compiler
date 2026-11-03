@@ -3624,7 +3624,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
               }
             }
           } else if (op1[0] == '$') {
-            long long imm = strtoll(op1 + 1, NULL, 0);
+            long long imm = (op1[1] == '-') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);
             int reg2_base = 0;
             long long disp2 = 0;
             if (parse_mem_operand(op2, &reg2_base, &disp2)) {
@@ -3764,7 +3764,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
           }
         } else if (strcmp(mnemonic, "movl") == 0) {
           if (op1[0] == '$') {
-            long long imm = strtoll(op1 + 1, NULL, 0);
+            long long imm = (op1[1] == '-') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);
             int reg2_base = 0;
             long long disp2 = 0;
             if (parse_mem_operand(op2, &reg2_base, &disp2)) {

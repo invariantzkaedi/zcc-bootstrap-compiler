@@ -43,6 +43,18 @@ typedef struct {
     char label[32];
 } FlitPoolEntry;
 
+static int parse_imm_line(const char *line, const char *prefix, const char *suffix, long long *out) {
+    size_t plen = strlen(prefix);
+    if (!line || strncmp(line, prefix, plen) != 0) return 0;
+    const char *p = line + plen;
+    if (*p == ' ' || *p == '\t' || *p == '\0') return 0;
+    char *endp = NULL;
+    long long v = (*p == '-') ? strtoll(p, &endp, 0) : (long long)strtoull(p, &endp, 0);
+    if (!endp || endp == p || strcmp(endp, suffix) != 0) return 0;
+    if (out) *out = v;
+    return 1;
+}
+
 static int is_loc_hoistable_prev(const char *m) {
     if (!m || strncmp(m, "    ", 4) != 0) return 0;
     if (m[4] == '.' || strncmp(m, "    call", 8) == 0 || strncmp(m, "    j", 5) == 0 ||
@@ -365,8 +377,8 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
             if ((pmask & 0x002U) && strncmp(l1, "    movq $", 10) == 0 && strstr(l1, ", %r11\n") && i + 1 < nlines) {
                 long long c = 0, s = 0;
                 char *l2 = line_ptrs[i + 1];
-                if (sscanf(l1, "    movq $%lld, %%r11", &c) == 1) {
-                    if (sscanf(l2, "    shlq $%lld, %%r11", &s) == 1 && strstr(l2, ", %r11\n") && s >= 0 && s < 62) {
+                if (parse_imm_line(l1, "    movq $", ", %r11\n", &c)) {
+                    if (parse_imm_line(l2, "    shlq $", ", %r11\n", &s) && s >= 0 && s < 62) {
                         long long nc = c << s;
                         if (nc >= -2147483647LL && nc <= 2147483647LL) {
                             sprintf(line_ptrs[i], "    movq $%lld, %%r11\n", nc);
@@ -378,7 +390,7 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                             sprintf(line_ptrs[i], "    movq $%lld, %%r11\n", nc);
                             line_ptrs[i + 1][0] = 0; eliminated += 1; i += 2; continue;
                         }
-                    } else if (sscanf(l2, "    imulq $%lld, %%r11", &s) == 1 && strstr(l2, ", %r11\n")) {
+                    } else if (parse_imm_line(l2, "    imulq $", ", %r11\n", &s)) {
                         long long nc = c * s;
                         if (nc >= -2147483647LL && nc <= 2147483647LL) {
                             sprintf(line_ptrs[i], "    movq $%lld, %%r11\n", nc);
@@ -396,9 +408,8 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
             /* 4a. leaq disp(%rbp), %rax + addq $c, %rax -> leaq (disp+c)(%rbp), %rax */
             if ((pmask & 0x004U) && strncmp(l1, "    leaq ", 9) == 0 && strstr(l1, "(%rbp), %rax\n") && i + 1 < nlines) {
                 long long d1 = 0, d2 = 0;
-                if (sscanf(l1, "    leaq %lld(%%rbp), %%rax", &d1) == 1 &&
-                    strncmp(line_ptrs[i + 1], "    addq $", 10) == 0 && strstr(line_ptrs[i + 1], ", %rax\n") &&
-                    sscanf(line_ptrs[i + 1], "    addq $%lld, %%rax", &d2) == 1) {
+                if (parse_imm_line(l1, "    leaq ", "(%rbp), %rax\n", &d1) &&
+                    parse_imm_line(line_ptrs[i + 1], "    addq $", ", %rax\n", &d2)) {
                     sprintf(line_ptrs[i], "    leaq %lld(%%rbp), %%rax\n", d1 + d2);
                     line_ptrs[i + 1][0] = 0; eliminated += 1; i += 2; continue;
                 }
@@ -442,9 +453,8 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
             if ((pmask & 0x004U) && strncmp(l1, "    addq $", 10) == 0 && strstr(l1, ", %rax\n") && i + 1 < nlines) {
                 long long d1 = 0, d2 = 0;
                 char *l2 = line_ptrs[i + 1];
-                if (sscanf(l1, "    addq $%lld, %%rax", &d1) == 1 &&
-                    strncmp(l2, "    addq $", 10) == 0 && strstr(l2, ", %rax\n") &&
-                    sscanf(l2, "    addq $%lld, %%rax", &d2) == 1) {
+                if (parse_imm_line(l1, "    addq $", ", %rax\n", &d1) &&
+                    parse_imm_line(l2, "    addq $", ", %rax\n", &d2)) {
                     long long sum = d1 + d2;
                     if (sum == 0) {
                         line_ptrs[i][0] = 0; line_ptrs[i + 1][0] = 0; eliminated += 2; i += 2; continue;
@@ -684,9 +694,11 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                 }
             }
             if ((pmask & 0x080U) && i + 1 < nlines && strcmp(line_ptrs[i + 1], "    movl %eax, %eax\n") == 0) {
+                int l1_len = (int)strlen(l1);
+                long long imm = -1;
                 if (strcmp(l1, "    xorl %eax, %eax\n") == 0 || strcmp(l1, "    movzbl %al, %eax\n") == 0 ||
-                    strncmp(l1, "    movl $", 10) == 0 ||
-                    (strncmp(l1, "    movq $", 10) == 0 && l1[10] >= '0' && l1[10] <= '9' && atoll(l1 + 10) <= 2147483647LL)) {
+                    (l1_len > 16 && strncmp(l1, "    movl $", 10) == 0 && strcmp(l1 + l1_len - 7, ", %eax\n") == 0) ||
+                    (parse_imm_line(l1, "    movq $", ", %rax\n", &imm) && imm >= 0 && imm <= 2147483647LL)) {
                     line_ptrs[i + 1][0] = 0;
                     eliminated += 1;
                 }
@@ -825,9 +837,9 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
             }
             if (rsp_depth >= 0) {
                 long long val = 0;
-                if (strncmp(l, "    subq $", 10) == 0 && strstr(l, ", %rsp\n") && sscanf(l, "    subq $%lld, %%rsp", &val) == 1) {
+                if (parse_imm_line(l, "    subq $", ", %rsp\n", &val)) {
                     rsp_depth += val;
-                } else if (strncmp(l, "    addq $", 10) == 0 && strstr(l, ", %rsp\n") && sscanf(l, "    addq $%lld, %%rsp", &val) == 1) {
+                } else if (parse_imm_line(l, "    addq $", ", %rsp\n", &val)) {
                     rsp_depth -= val;
                 } else if (strncmp(l, "    pushq ", 10) == 0 && strcmp(l, "    pushq %rbp\n") != 0) {
                     rsp_depth += 8;

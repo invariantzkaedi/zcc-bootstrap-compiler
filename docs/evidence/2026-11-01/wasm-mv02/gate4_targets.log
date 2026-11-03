@@ -17,18 +17,18 @@ Execute 50 seeded randomized non-constant 64-bit input vectors across ZCC --wasm
 pp_process_include: stdint.h added 180 macros, total is 216
 [Phase 1] Lexical Array Bootstrap... OK
 [Phase 2] AST Topological Generation... OK
-[OK] WebAssembly module emitted to /tmp/tmpi34x6__8/rand.zcc.wasm
+[OK] WebAssembly module emitted to /tmp/tmpzxsv4d6x/rand.zcc.wasm
 ok
 test_05_meta_verification_negative_controls (test_wasm_i64.TestWasmI64Remediation.test_05_meta_verification_negative_controls)
 MV-6 / MV-7: Prove the verification harness fails closed on corrupted/truncated/mutated WASM. ... zcc: warning: using synthesized header stub for stdint.h
 pp_process_include: stdint.h added 180 macros, total is 216
 [Phase 1] Lexical Array Bootstrap... OK
 [Phase 2] AST Topological Generation... OK
-[OK] WebAssembly module emitted to /tmp/tmp8odhgwra/clean.wasm
+[OK] WebAssembly module emitted to /tmp/tmpd0az4n5l/clean.wasm
 ok
 
 ----------------------------------------------------------------------
-Ran 5 tests in 3.523s
+Ran 5 tests in 4.192s
 
 OK
 test_01_wasm_mv02_signedness_and_control_flow (test_wasm_mv02.TestWasmMV02Adversarial.test_01_wasm_mv02_signedness_and_control_flow)
@@ -47,7 +47,7 @@ test_07_mv12_peephole_boost_and_tco_soundness (test_wasm_mv02.TestWasmMV02Advers
 MV-12 + ZCC-PROVE-04: Differential execution of `tests/x86_mv02_imm64.c` under `ZCC_OPT=1` ... ok
 
 ----------------------------------------------------------------------
-Ran 7 tests in 6.295s
+Ran 7 tests in 5.846s
 
 OK
 Executing ZCC Oracle Negative Controls & Verification Gauntlet against: /mnt/h/__DOWNLOADS/zcc_github_upload/zcc_quest.py

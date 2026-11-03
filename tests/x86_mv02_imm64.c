@@ -636,6 +636,37 @@ int classify_mv13_pass8_and_pass5c(void) {
     return 158;
 }
 
+/* MV-14 + ZCC-PROVE-06:
+ *   1) `zcc_x86_peephole_boost` Pass 6 (`ZCC_OPT=1`):
+ *      - `movq $5, %r11` (or `movl $5, %ecx`) before `movl %eax, %eax` must NOT elide `movl %eax, %eax`.
+ *      - `movq $0xfffffffffffffff0, %rax` (negative sign-extended hex imm32) before `movl %eax, %eax`
+ *        must NOT elide `movl %eax, %eax`.
+ *   2) `zcc_x86_peephole_boost` Pass 3 (`ZCC_OPT=1`) & `src/codegen.c`:
+ *      - `movq $0x10, %r11` followed by `shlq $3, %r11` folds to `movq $128, %r11` (`0x80`), NOT `$0`.
+ *      - `src/codegen.c` encodes `movq $0xfffffffffffffff0, %rax` as `-16` (`48 c7 c0 f0 ff ff ff`), NOT `-1`.
+ */
+int classify_mv14_pass6_and_hex_imm(void) {
+    long long rax_zext1 = 0, rax_zext2 = 0, r11_shift = 0;
+#ifdef __ZCC__
+    asm("movabsq $0x11223344deadbeef, %rax\n    movq $5, %r11\n    movl %eax, %eax");
+    asm("movq %%rax, %0" : "=r"(rax_zext1));
+
+    asm("movq $0xfffffffffffffff0, %rax\n    movl %eax, %eax");
+    asm("movq %%rax, %0" : "=r"(rax_zext2));
+
+    asm("movq $0x10, %r11\n    shlq $3, %r11");
+    asm("movq %%r11, %0" : "=r"(r11_shift));
+#else
+    rax_zext1 = 0x00000000deadbeefLL;
+    rax_zext2 = 0x00000000fffffff0LL;
+    r11_shift = 0x80LL;
+#endif
+    if (rax_zext1 != 0x00000000deadbeefLL) return -160;
+    if (rax_zext2 != 0x00000000fffffff0LL) return -161;
+    if (r11_shift != 0x80LL) return -162;
+    return 168;
+}
+
 int main(void) {
     if (classify(4294967296LL) != 7) return 1;
     if (classify(-4294967296LL) != 9) return 2;
@@ -658,5 +689,6 @@ int main(void) {
     if (classify_mv11_rmw_and_u64_imm() != 138) return 19;
     if (classify_mv12_boost_and_tco() != 148) return 20;
     if (classify_mv13_pass8_and_pass5c() != 158) return 21;
+    if (classify_mv14_pass6_and_hex_imm() != 168) return 22;
     return 0;
 }

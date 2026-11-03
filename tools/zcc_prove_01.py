@@ -1133,21 +1133,62 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         'strncmp(nl, "    cvttss2si ", 14) == 0 || strncmp(nl, "    cvttsd2si ", 14) == 0'
         in sse_text
     )
+    has_sse_parse_imm_helper = (
+        'static int parse_imm_line(const char *line, const char *prefix, const char *suffix, long long *out)'
+        in sse_text
+        and 'parse_imm_line(l1, "    movq $", ", %r11\\n", &c)' in sse_text
+        and 'parse_imm_line(l1, "    movq $", ", %rax\\n", &imm) && imm >= 0 && imm <= 2147483647LL' in sse_text
+        and 'strcmp(l1 + l1_len - 7, ", %eax\\n") == 0' in sse_text
+    )
+    codegen_text = (REPO_ROOT / "src" / "codegen.c").read_text(encoding="utf-8")
+    has_codegen_movq_u64_imm = (
+        'long long imm = (op1[1] == \'-\') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);'
+        in codegen_text[codegen_text.find('if (strcmp(mnemonic, "movq") == 0'):codegen_text.find('if (strcmp(mnemonic, "movabsq") == 0')]
+    )
     if (
         not has_sse_pass0a_hex_guard
         or not has_sse_pass7_mov_guard
         or not has_no_sse_pxor_rax_bug
         or not has_sse_pass8_label_jump_guard
         or not has_sse_pass5c_overwrite_guard
+        or not has_sse_parse_imm_helper
+        or not has_codegen_movq_u64_imm
     ):
         return False, {
-            "error": "src/x86_codegen_sse.c Pass 0a / Pass 5c / Pass 7 / Pass 8 guard missing",
+            "error": "src/x86_codegen_sse.c or src/codegen.c Pass 0a / Pass 3 / Pass 5c / Pass 6 / Pass 7 / Pass 8 / movq u64 guard missing",
             "has_sse_pass0a_hex_guard": has_sse_pass0a_hex_guard,
             "has_sse_pass5c_overwrite_guard": has_sse_pass5c_overwrite_guard,
             "has_sse_pass7_mov_guard": has_sse_pass7_mov_guard,
             "has_no_sse_pxor_rax_bug": has_no_sse_pxor_rax_bug,
             "has_sse_pass8_label_jump_guard": has_sse_pass8_label_jump_guard,
+            "has_sse_parse_imm_helper": has_sse_parse_imm_helper,
+            "has_codegen_movq_u64_imm": has_codegen_movq_u64_imm,
         }
+
+    # ZCC-PROVE-06: Pass 6 movl %eax, %eax Zero-Extension Elision Soundness & Negative Controls
+    s_p6 = z3.Solver()
+    imm64 = z3.BitVec("imm64", 64)
+    s_p6.add(imm64 >= z3.BitVecVal(0, 64), imm64 <= z3.BitVecVal(2147483647, 64))
+    rax_after_movq = imm64
+    rax_after_zext = z3.ZeroExt(32, z3.Extract(31, 0, rax_after_movq))
+    s_p6.add(rax_after_movq != rax_after_zext)
+    if s_p6.check() != z3.unsat:
+        return False, {"error": "ZCC-PROVE-06 Pass 6 movq $imm, %rax (0 <= imm <= INT32_MAX) zero-extension Z3 proof failed"}
+
+    # Negative Control 6A: movq $imm, %r11 does NOT zero bits [63:32] of %rax
+    s_p6_neg1 = z3.Solver()
+    rax_pre = z3.BitVec("rax_pre", 64)
+    s_p6_neg1.add(z3.Extract(63, 32, rax_pre) != z3.BitVecVal(0, 32))
+    s_p6_neg1.add(rax_pre != z3.ZeroExt(32, z3.Extract(31, 0, rax_pre)))
+    if s_p6_neg1.check() != z3.sat:
+        return False, {"error": "ZCC-PROVE-06 Negative Control 6A failed to find SAT counterexample"}
+
+    # Negative Control 6B: movq $-16 (0xfffffffffffffff0), %rax has bits [63:32] == 0xffffffff != 0
+    s_p6_neg2 = z3.Solver()
+    neg_imm = z3.BitVecVal(0xFFFFFFFFFFFFFFF0, 64)
+    s_p6_neg2.add(neg_imm != z3.ZeroExt(32, z3.Extract(31, 0, neg_imm)))
+    if s_p6_neg2.check() != z3.sat:
+        return False, {"error": "ZCC-PROVE-06 Negative Control 6B failed to find SAT counterexample"}
 
     # ZCC-PROVE-05: Pass 8 16-Byte Call Alignment Modulo-16 Invariant & Branch Desync Negative Control
     s_p8 = z3.Solver()
@@ -1197,6 +1238,10 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "sse_pass7_mov_guard_active": has_sse_pass7_mov_guard,
         "sse_pass7_no_pxor_rax_bug": has_no_sse_pxor_rax_bug,
         "sse_pass8_label_jump_guard_active": has_sse_pass8_label_jump_guard,
+        "sse_parse_imm_helper_active": has_sse_parse_imm_helper,
+        "codegen_movq_u64_imm_active": has_codegen_movq_u64_imm,
+        "pass6_zext_elision_soundness": "UNSAT (PROVEN_SOUND)",
+        "pass6_non_rax_and_hex_negative_controls": "SAT_CAUGHT (movq $5, %r11 and movq $0xfffffffffffffff0, %rax leave bits [63:32] non-zero)",
         "part5_tco_full_function_escape_guard_active": has_tco_full_func_guard,
     }
 

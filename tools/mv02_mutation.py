@@ -571,6 +571,42 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "python3 tools/zcc_prove_01.py",
     },
+    {
+        "id": "MV14-01",
+        "desc": "Peephole boost Pass 6 elides movl %eax, %eax after movq $imm, %r11 when destination register check (, %rax) is omitted",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                    (parse_imm_line(l1, "    movq $", ", %rax\\n", &imm) && imm >= 0 && imm <= 2147483647LL)) {',
+        "new": '                    (strncmp(l1, "    movq $", 10) == 0 && l1[10] >= \'0\' && l1[10] <= \'9\' && atoll(l1 + 10) <= 2147483647LL)) { /* MV14-01 */',
+        "build": "make zcc",
+        "test": "ZCC_OPT=1 ./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv14_01 && /tmp/x86_mv14_01",
+    },
+    {
+        "id": "MV14-02",
+        "desc": "Peephole boost Pass 3 misparses hex immediate movq $0x10, %r11 as 0 when sscanf $%lld is used instead of parse_imm_line",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                if (parse_imm_line(l1, "    movq $", ", %r11\\n", &c)) {',
+        "new": '                if (sscanf(l1, "    movq $%lld, %%r11", &c) == 1) { /* MV14-02 */',
+        "build": "make zcc",
+        "test": "ZCC_OPT=1 ./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv14_02 && /tmp/x86_mv14_02",
+    },
+    {
+        "id": "MV14-03",
+        "desc": "Internal ELF assembler src/codegen.c saturates movq $0xfffffffffffffff0, %rax to -1 (LLONG_MAX) when strtoll is used instead of strtoull",
+        "file": "src/codegen.c",
+        "old": "          } else if (op1[0] == '$') {\n            long long imm = (op1[1] == '-') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);",
+        "new": "          } else if (op1[0] == '$') {\n            long long imm = strtoll(op1 + 1, NULL, 0); /* MV14-03 */",
+        "build": "make zcc",
+        "test": "ZCC_OPT=1 ./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv14_03 && /tmp/x86_mv14_03",
+    },
+    {
+        "id": "MV14-04",
+        "desc": "ZCC-PROVE-06 verifier rejects src/x86_codegen_sse.c when Pass 6 movl $, %eax destination suffix guard is removed",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                    (l1_len > 16 && strncmp(l1, "    movl $", 10) == 0 && strcmp(l1 + l1_len - 7, ", %eax\\n") == 0) ||',
+        "new": '                    strncmp(l1, "    movl $", 10) == 0 || /* MV14-04 */',
+        "build": "make zcc",
+        "test": "python3 tools/zcc_prove_01.py",
+    },
 ]
 
 
