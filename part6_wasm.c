@@ -1613,7 +1613,8 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
         if (loop_body->num_stmts != 1 || !loop_body->stmts[0]) return;
         loop_body = loop_body->stmts[0];
     }
-    if (loop_body->kind != ND_ASSIGN || !loop_body->lhs || !loop_body->rhs) return;
+    if ((loop_body->kind != ND_ASSIGN && loop_body->kind != ND_COMPOUND_ASSIGN) ||
+        !loop_body->lhs || !loop_body->rhs) return;
 
     /* Match init: i = 0 */
     if (node->init->kind != ND_ASSIGN || !node->init->lhs || node->init->lhs->kind != ND_VAR) return;
@@ -1642,25 +1643,40 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
     const char *inc_name = inc_var->sym ? inc_var->sym->name : inc_var->name;
     if (!inc_name || strcmp(inc_name, ivar_name) != 0) return;
 
-    /* Match body: dst[i] = a[i] OP b[i] */
-    Node *rhs = loop_body->rhs;
-    if (!rhs || (rhs->kind != ND_ADD && rhs->kind != ND_SUB && rhs->kind != ND_MUL)) return;
+    /* Match body: dst[i] = a[i] OP b[i]  OR  dst[i] OP= b[i] */
+    int op_kind = 0;
     int esz_d = 0, f32_d = 0, esz_a = 0, f32_a = 0, esz_b = 0, f32_b = 0;
     Node *dst_base = wasm_match_indexed_ptr(loop_body->lhs, ivar_name, &esz_d, &f32_d);
-    Node *a_base = wasm_match_indexed_ptr(rhs->lhs, ivar_name, &esz_a, &f32_a);
-    Node *b_base = wasm_match_indexed_ptr(rhs->rhs, ivar_name, &esz_b, &f32_b);
+    Node *a_base = NULL;
+    Node *b_base = NULL;
+    if (loop_body->kind == ND_COMPOUND_ASSIGN) {
+        op_kind = loop_body->compound_op;
+        a_base = dst_base;
+        esz_a = esz_d;
+        f32_a = f32_d;
+        b_base = wasm_match_indexed_ptr(loop_body->rhs, ivar_name, &esz_b, &f32_b);
+    } else {
+        Node *rhs = loop_body->rhs;
+        if (!rhs) return;
+        op_kind = rhs->kind;
+        a_base = wasm_match_indexed_ptr(rhs->lhs, ivar_name, &esz_a, &f32_a);
+        b_base = wasm_match_indexed_ptr(rhs->rhs, ivar_name, &esz_b, &f32_b);
+    }
     if (!dst_base || !a_base || !b_base) return;
     if (f32_d != f32_a || f32_d != f32_b) return;
 
     uint32_t simd_op = 0;
     if (f32_d) {
-        if (rhs->kind == ND_ADD) simd_op = WASM_SIMD_F32X4_ADD;
-        else if (rhs->kind == ND_SUB) simd_op = WASM_SIMD_F32X4_SUB;
-        else if (rhs->kind == ND_MUL) simd_op = WASM_SIMD_F32X4_MUL;
+        if (op_kind == ND_ADD) simd_op = WASM_SIMD_F32X4_ADD;
+        else if (op_kind == ND_SUB) simd_op = WASM_SIMD_F32X4_SUB;
+        else if (op_kind == ND_MUL) simd_op = WASM_SIMD_F32X4_MUL;
     } else {
-        if (rhs->kind == ND_ADD) simd_op = WASM_SIMD_I32X4_ADD;
-        else if (rhs->kind == ND_SUB) simd_op = WASM_SIMD_I32X4_SUB;
-        else if (rhs->kind == ND_MUL) simd_op = WASM_SIMD_I32X4_MUL;
+        if (op_kind == ND_ADD) simd_op = WASM_SIMD_I32X4_ADD;
+        else if (op_kind == ND_SUB) simd_op = WASM_SIMD_I32X4_SUB;
+        else if (op_kind == ND_MUL) simd_op = WASM_SIMD_I32X4_MUL;
+        else if (op_kind == ND_BAND) simd_op = WASM_SIMD_V128_AND;
+        else if (op_kind == ND_BOR) simd_op = WASM_SIMD_V128_OR;
+        else if (op_kind == ND_BXOR) simd_op = WASM_SIMD_V128_XOR;
     }
     if (!simd_op) return;
 

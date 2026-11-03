@@ -71,27 +71,27 @@ void riscv_emit_prologue(RISCVAsmBuffer *buf, const char *func_name, size_t stac
     snprintf(line, sizeof(line), "%s:", func_name ? func_name : "main");
     riscv_asm_emit_line(buf, line);
 
-    /* Allocate stack frame, save ra (x1) and s0/fp (x8) */
-    snprintf(line, sizeof(line), "\taddi sp, sp, -%zu", aligned_stack);
-    riscv_asm_emit_line(buf, line);
-    snprintf(line, sizeof(line), "\tsd ra, %zu(sp)", aligned_stack - 8);
-    riscv_asm_emit_line(buf, line);
-    snprintf(line, sizeof(line), "\tsd s0, %zu(sp)", aligned_stack - 16);
-    riscv_asm_emit_line(buf, line);
-    snprintf(line, sizeof(line), "\taddi s0, sp, %zu", aligned_stack);
-    riscv_asm_emit_line(buf, line);
+    /* Allocate stack frame, save ra (x1) and s0/fp (x8) at dedicated 16-byte header [s0-16..s0] */
+    riscv_asm_emit_line(buf, "\taddi sp, sp, -16");
+    riscv_asm_emit_line(buf, "\tsd ra, 8(sp)");
+    riscv_asm_emit_line(buf, "\tsd s0, 0(sp)");
+    riscv_asm_emit_line(buf, "\tmv s0, sp");
+    if (aligned_stack <= 2032) {
+        snprintf(line, sizeof(line), "\taddi sp, sp, -%zu", aligned_stack);
+        riscv_asm_emit_line(buf, line);
+    } else {
+        snprintf(line, sizeof(line), "\tli t0, %zu", aligned_stack);
+        riscv_asm_emit_line(buf, line);
+        riscv_asm_emit_line(buf, "\tsub sp, sp, t0");
+    }
 }
 
 void riscv_emit_epilogue(RISCVAsmBuffer *buf, size_t stack_size) {
-    char line[256];
-    size_t aligned_stack = riscv_align_stack_frame(stack_size);
-
-    snprintf(line, sizeof(line), "\tld ra, %zu(sp)", aligned_stack - 8);
-    riscv_asm_emit_line(buf, line);
-    snprintf(line, sizeof(line), "\tld s0, %zu(sp)", aligned_stack - 16);
-    riscv_asm_emit_line(buf, line);
-    snprintf(line, sizeof(line), "\taddi sp, sp, %zu", aligned_stack);
-    riscv_asm_emit_line(buf, line);
+    (void)stack_size;
+    riscv_asm_emit_line(buf, "\tmv sp, s0");
+    riscv_asm_emit_line(buf, "\tld ra, 8(sp)");
+    riscv_asm_emit_line(buf, "\tld s0, 0(sp)");
+    riscv_asm_emit_line(buf, "\taddi sp, sp, 16");
     riscv_asm_emit_line(buf, "\tret");
 }
 

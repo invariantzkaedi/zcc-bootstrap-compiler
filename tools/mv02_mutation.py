@@ -715,6 +715,42 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_09_arm64_riscv64_qemu_and_wasm_autovec_v128",
     },
+    {
+        "id": "MV19-01",
+        "desc": "Standalone src/arm64_codegen.c emits stp/ldp [sp, #-aligned_stack]! without >504 range guard so large frames fail aarch64-linux-gnu-as",
+        "file": "src/arm64_codegen.c",
+        "old": '    if (aligned_stack <= 504) {',
+        "new": '    if (1 || aligned_stack <= 504) { /* MV19-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_10_standalone_arm64_riscv_codegen_cfold_math_and_wasm_autovec_v2",
+    },
+    {
+        "id": "MV19-02",
+        "desc": "Standalone src/riscv_codegen.c sets s0 = sp + 16 so saved ra/s0 at 8(sp)/0(sp) alias -8(s0)/-16(s0) stack slots and crash on return",
+        "file": "src/riscv_codegen.c",
+        "old": '    riscv_asm_emit_line(buf, "\\tmv s0, sp");',
+        "new": '    riscv_asm_emit_line(buf, "\\taddi s0, sp, 16"); /* MV19-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_10_standalone_arm64_riscv_codegen_cfold_math_and_wasm_autovec_v2",
+    },
+    {
+        "id": "MV19-03",
+        "desc": "part4.c eval_const_call_math omits double-precision cos() and pow() so global initializers emit .zero 8 instead of folded IEEE-754 double bits",
+        "file": "part4.c",
+        "old": '    if ((strcmp(elem->func_name, "pow") == 0 || strcmp(elem->func_name, "powf") == 0) &&',
+        "new": '    if (strcmp(elem->func_name, "powf") == 0 && /* MV19-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_10_standalone_arm64_riscv_codegen_cfold_math_and_wasm_autovec_v2",
+    },
+    {
+        "id": "MV19-04",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop omits ND_COMPOUND_ASSIGN and bitwise XOR/AND/OR so in-place/bitwise loops fail to emit v128 opcodes",
+        "file": "part6_wasm.c",
+        "old": '    if ((loop_body->kind != ND_ASSIGN && loop_body->kind != ND_COMPOUND_ASSIGN) ||',
+        "new": '    if (loop_body->kind != ND_ASSIGN || /* MV19-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_10_standalone_arm64_riscv_codegen_cfold_math_and_wasm_autovec_v2",
+    },
 ]
 
 

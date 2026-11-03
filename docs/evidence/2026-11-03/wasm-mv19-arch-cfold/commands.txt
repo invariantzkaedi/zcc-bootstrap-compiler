@@ -1,0 +1,11 @@
+git log --oneline -n 5 --follow -- src/arm64_codegen.c
+git log --oneline -n 5 --follow -- src/riscv_codegen.c
+git log --oneline -n 5 --follow -- part4.c
+git log --oneline -n 5 --follow -- part6_wasm.c
+python3 /mnt/c/Users/zkaed/.gemini/antigravity/brain/363b8fa0-5979-44ee-a9f7-cccf00e52f25/scratch/probe_mv19.py
+make zcc
+python3 -m unittest tests/test_arm64_codegen.py tests/test_riscv_codegen.py
+make selfhost 2>&1 | tee /tmp/zcc-selfhost-mv19.log
+python3 -m unittest tests/test_wasm_mv02.py
+python3 tools/zcc_prove_01.py
+bash scripts/run_mv02_gate.sh

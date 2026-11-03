@@ -86,17 +86,35 @@ void arm64_emit_prologue(ARM64AsmBuffer *buf, const char *func_name, size_t stac
     arm64_asm_emit_line(buf, line);
 
     /* Save Frame Pointer (x29) and Link Register (x30) onto stack, allocate stack space */
-    snprintf(line, sizeof(line), "\tstp x29, x30, [sp, #-%zu]!", aligned_stack);
-    arm64_asm_emit_line(buf, line);
-    arm64_asm_emit_line(buf, "\tmov x29, sp");
+    if (aligned_stack <= 504) {
+        snprintf(line, sizeof(line), "\tstp x29, x30, [sp, #-%zu]!", aligned_stack);
+        arm64_asm_emit_line(buf, line);
+        arm64_asm_emit_line(buf, "\tmov x29, sp");
+    } else {
+        arm64_asm_emit_line(buf, "\tstp x29, x30, [sp, #-16]!");
+        arm64_asm_emit_line(buf, "\tmov x29, sp");
+        if (aligned_stack <= 4095) {
+            snprintf(line, sizeof(line), "\tsub sp, sp, #%zu", aligned_stack);
+            arm64_asm_emit_line(buf, line);
+        } else {
+            snprintf(line, sizeof(line), "\tldr x16, =%zu", aligned_stack);
+            arm64_asm_emit_line(buf, line);
+            arm64_asm_emit_line(buf, "\tsub sp, sp, x16");
+        }
+    }
 }
 
 void arm64_emit_epilogue(ARM64AsmBuffer *buf, size_t stack_size) {
     char line[256];
     size_t aligned_stack = arm64_align_stack_frame(stack_size);
 
-    snprintf(line, sizeof(line), "\tldp x29, x30, [sp], #%zu", aligned_stack);
-    arm64_asm_emit_line(buf, line);
+    if (aligned_stack <= 504) {
+        snprintf(line, sizeof(line), "\tldp x29, x30, [sp], #%zu", aligned_stack);
+        arm64_asm_emit_line(buf, line);
+    } else {
+        arm64_asm_emit_line(buf, "\tmov sp, x29");
+        arm64_asm_emit_line(buf, "\tldp x29, x30, [sp], #16");
+    }
     arm64_asm_emit_line(buf, "\tret");
 }
 
@@ -130,14 +148,36 @@ void arm64_emit_sdiv(ARM64AsmBuffer *buf, ARM64Register dest, ARM64Register src1
 
 void arm64_emit_ldr_stack(ARM64AsmBuffer *buf, ARM64Register dest, int offset) {
     char line[128];
-    snprintf(line, sizeof(line), "\tldr %s, [x29, #%d]", arm64_get_reg_name64(dest), offset);
-    arm64_asm_emit_line(buf, line);
+    const char *r = arm64_get_reg_name64(dest);
+    if (offset >= -256 && offset < 0) {
+        snprintf(line, sizeof(line), "\tldur %s, [x29, #%d]", r, offset);
+        arm64_asm_emit_line(buf, line);
+    } else if (offset >= 0 && offset <= 32760 && (offset % 8 == 0)) {
+        snprintf(line, sizeof(line), "\tldr %s, [x29, #%d]", r, offset);
+        arm64_asm_emit_line(buf, line);
+    } else {
+        snprintf(line, sizeof(line), "\tldr x16, =%d", offset);
+        arm64_asm_emit_line(buf, line);
+        snprintf(line, sizeof(line), "\tldr %s, [x29, x16]", r);
+        arm64_asm_emit_line(buf, line);
+    }
 }
 
 void arm64_emit_str_stack(ARM64AsmBuffer *buf, ARM64Register src, int offset) {
     char line[128];
-    snprintf(line, sizeof(line), "\tstr %s, [x29, #%d]", arm64_get_reg_name64(src), offset);
-    arm64_asm_emit_line(buf, line);
+    const char *r = arm64_get_reg_name64(src);
+    if (offset >= -256 && offset < 0) {
+        snprintf(line, sizeof(line), "\tstur %s, [x29, #%d]", r, offset);
+        arm64_asm_emit_line(buf, line);
+    } else if (offset >= 0 && offset <= 32760 && (offset % 8 == 0)) {
+        snprintf(line, sizeof(line), "\tstr %s, [x29, #%d]", r, offset);
+        arm64_asm_emit_line(buf, line);
+    } else {
+        snprintf(line, sizeof(line), "\tldr x16, =%d", offset);
+        arm64_asm_emit_line(buf, line);
+        snprintf(line, sizeof(line), "\tstr %s, [x29, x16]", r);
+        arm64_asm_emit_line(buf, line);
+    }
 }
 
 AAPCS64StructArgLayout arm64_classify_struct_arg(size_t struct_size) {

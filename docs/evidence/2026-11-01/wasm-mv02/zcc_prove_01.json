@@ -80,6 +80,8 @@
     "part5_tco_full_function_escape_guard_active": true,
     "aarch64_frame_and_32bit_store_guard_active": true,
     "riscv64_ra_s0_frame_separation_active": true,
+    "standalone_arm64_riscv_guards_active": true,
+    "cfold_double_math_sin_cos_pow_active": true,
     "wasm_simd128_autovec_active": true,
     "wasm_simd128_4lane_plus_tail_equivalence": "UNSAT (PROVEN_SOUND)"
   },

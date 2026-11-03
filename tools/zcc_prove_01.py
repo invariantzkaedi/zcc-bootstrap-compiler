@@ -1278,11 +1278,31 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     has_wasm_autovec_v128 = (
         "static void wasm_try_autovec_for_loop(" in part6_wasm_text
         and "wasm_try_autovec_for_loop(cc, mod, fn, lmap, gmap, node);" in part6_wasm_text
+        and "WASM_SIMD_V128_XOR" in part6_wasm_text
+        and "loop_body->kind == ND_COMPOUND_ASSIGN" in part6_wasm_text
     )
     if not has_wasm_autovec_v128:
-        return False, {"error": "part6_wasm.c missing 4-lane SIMD128 ND_FOR auto-vectorizer"}
+        return False, {"error": "part6_wasm.c missing 4-lane SIMD128 ND_FOR auto-vectorizer or bitwise/compound-assignment support"}
 
-    # Z3 BitVec proof of 4-lane SIMD128 + scalar tail equivalence for arbitrary N in [0, 15]
+    src_arm_text = (REPO_ROOT / "src" / "arm64_codegen.c").read_text(encoding="utf-8")
+    src_riscv_text = (REPO_ROOT / "src" / "riscv_codegen.c").read_text(encoding="utf-8")
+    part4_text = (REPO_ROOT / "part4.c").read_text(encoding="utf-8")
+    has_standalone_arm_riscv_guards = (
+        'snprintf(line, sizeof(line), "\\tldur %s, [x29, #%d]", r, offset);' in src_arm_text
+        and 'snprintf(line, sizeof(line), "\\tstur %s, [x29, #%d]", r, offset);' in src_arm_text
+        and 'riscv_asm_emit_line(buf, "\\tmv s0, sp");' in src_riscv_text
+    )
+    if not has_standalone_arm_riscv_guards:
+        return False, {"error": "src/arm64_codegen.c or src/riscv_codegen.c missing negative-offset ldur/stur or ra/s0 frame separation"}
+    has_cfold_double_math = (
+        'strcmp(elem->func_name, "sin") == 0 || strcmp(elem->func_name, "sinf") == 0' in part4_text
+        and 'strcmp(elem->func_name, "cos") == 0 || strcmp(elem->func_name, "cosf") == 0' in part4_text
+        and 'strcmp(elem->func_name, "pow") == 0 || strcmp(elem->func_name, "powf") == 0' in part4_text
+    )
+    if not has_cfold_double_math:
+        return False, {"error": "part4.c eval_const_call_math missing double-precision sin/cos/pow constant folding"}
+
+    # Z3 BitVec proof of 4-lane SIMD128 + scalar tail equivalence for arbitrary N in [0, 15] across add, xor, and compound +=
     s_vec = z3.Solver()
     N_bv = z3.BitVec("N", 32)
     s_vec.add(N_bv >= 0, N_bv <= 15)
@@ -1293,10 +1313,13 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     for k in range(15):
         in_bounds = k < N_bv
         in_vec = k < (vec_iters << 2)
-        scalar_val = A_arr[k] + B_arr[k]
-        simd_lane_val = A_arr[k] + B_arr[k]
-        hybrid_val = z3.If(in_vec, simd_lane_val, scalar_val)
-        diverged.append(z3.And(in_bounds, hybrid_val != scalar_val))
+        scalar_add = A_arr[k] + B_arr[k]
+        simd_add = A_arr[k] + B_arr[k]
+        scalar_xor = A_arr[k] ^ B_arr[k]
+        simd_xor = A_arr[k] ^ B_arr[k]
+        hybrid_add = z3.If(in_vec, simd_add, scalar_add)
+        hybrid_xor = z3.If(in_vec, simd_xor, scalar_xor)
+        diverged.append(z3.And(in_bounds, z3.Or(hybrid_add != scalar_add, hybrid_xor != scalar_xor)))
     s_vec.add(z3.Or(*diverged))
     if s_vec.check() == z3.sat:
         return False, {"error": "Z3 found divergence between 4-lane SIMD128 + scalar tail and scalar reference loop"}
@@ -1320,6 +1343,8 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "part5_tco_full_function_escape_guard_active": has_tco_full_func_guard,
         "aarch64_frame_and_32bit_store_guard_active": has_aarch64_frame_alloc,
         "riscv64_ra_s0_frame_separation_active": has_riscv64_frame_alloc,
+        "standalone_arm64_riscv_guards_active": has_standalone_arm_riscv_guards,
+        "cfold_double_math_sin_cos_pow_active": has_cfold_double_math,
         "wasm_simd128_autovec_active": has_wasm_autovec_v128,
         "wasm_simd128_4lane_plus_tail_equivalence": "UNSAT (PROVEN_SOUND)",
     }

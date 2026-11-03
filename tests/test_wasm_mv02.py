@@ -634,6 +634,192 @@ int main(void) {
                 self.assertEqual(rwt.returncode, 0, rwt.stderr)
                 self.assertEqual(rwt.stdout.strip(), "0")
 
+    def test_10_standalone_arm64_riscv_codegen_cfold_math_and_wasm_autovec_v2(self) -> None:
+        """
+        MV-19 / ARCH-AUDIT-02 / CFOLD-MATH-01 / WASM-SIMD128-AUTOVEC-V2:
+        1. Standalone src/arm64_codegen.c: large frame (stack_size=600 > 504) + negative offset ldur/stur (-8)
+           cross-assembled with aarch64-linux-gnu-as and executed on qemu-aarch64-static -> exit 42.
+        2. Standalone src/riscv_codegen.c: nested call saving/restoring local at -8(s0) without clobbering
+           saved ra at 8(s0) cross-assembled with riscv64-linux-gnu-gcc and executed on qemu-riscv64-static -> exit 42.
+        3. Double-precision constant-folding in part4.c + part5.c for sin(0.0), cos(0.0), and pow(2.0, 10.0)
+           in global initializers and runtime expressions.
+        4. WASM 4-lane v128 auto-vectorization for bitwise (v128.and/or/xor) and compound-assignment (+=, -=, *=, ^=) loops.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            # 1. Standalone src/arm64_codegen.c QEMU verification
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                drv_arm_c = pathlib.Path(tmp) / "drv_arm64.c"
+                drv_arm_bin = pathlib.Path(tmp) / "drv_arm64"
+                arm_s = pathlib.Path(tmp) / "standalone_arm64.s"
+                arm_o = pathlib.Path(tmp) / "standalone_arm64.o"
+                arm_elf = pathlib.Path(tmp) / "standalone_arm64.elf"
+                drv_arm_c.write_text(
+                    r"""
+#include <stdio.h>
+#include "arm64_codegen.h"
+int main(void) {
+    ARM64AsmBuffer buf;
+    arm64_asm_init(&buf);
+    arm64_emit_prologue(&buf, "test_fn", 600);
+    arm64_asm_emit_line(&buf, "\tmov x0, #42");
+    arm64_emit_str_stack(&buf, ARM64_REG_X0, -8);
+    arm64_asm_emit_line(&buf, "\tmov x0, #0");
+    arm64_emit_ldr_stack(&buf, ARM64_REG_X0, -8);
+    arm64_emit_epilogue(&buf, 600);
+    fputs(buf.data, stdout);
+    fprintf(stdout, ".globl _start\n_start:\n\tbl test_fn\n\tmov x8, #93\n\tsvc #0\n");
+    arm64_asm_free(&buf);
+    return 0;
+}
+""",
+                    encoding="utf-8",
+                )
+                rc = subprocess.run(
+                    ["gcc", f"-I{REPO_ROOT / 'src'}", str(drv_arm_c), str(REPO_ROOT / "src" / "arm64_codegen.c"), "-o", str(drv_arm_bin)],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(rc.returncode, 0, rc.stderr)
+                asm_txt = subprocess.check_output([str(drv_arm_bin)], text=True)
+                self.assertIn("ldur x0, [x29, #-8]", asm_txt)
+                self.assertIn("stur x0, [x29, #-8]", asm_txt)
+                arm_s.write_text(asm_txt, encoding="utf-8")
+                ras = subprocess.run(["aarch64-linux-gnu-as", str(arm_s), "-o", str(arm_o)], capture_output=True, text=True)
+                self.assertEqual(ras.returncode, 0, ras.stderr)
+                rld = subprocess.run(["aarch64-linux-gnu-ld", str(arm_o), "-o", str(arm_elf)], capture_output=True, text=True)
+                self.assertEqual(rld.returncode, 0, rld.stderr)
+                rq = subprocess.run(["qemu-aarch64-static", str(arm_elf)], capture_output=True, text=True)
+                self.assertEqual(rq.returncode, 42)
+
+            # 2. Standalone src/riscv_codegen.c QEMU verification
+            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
+                drv_rv_c = pathlib.Path(tmp) / "drv_rv64.c"
+                drv_rv_bin = pathlib.Path(tmp) / "drv_rv64"
+                rv_s = pathlib.Path(tmp) / "standalone_rv64.s"
+                rv_elf = pathlib.Path(tmp) / "standalone_rv64.elf"
+                drv_rv_c.write_text(
+                    r"""
+#include <stdio.h>
+#include "riscv_codegen.h"
+int main(void) {
+    RISCVAsmBuffer buf;
+    riscv_asm_init(&buf);
+    riscv_emit_prologue(&buf, "leaf_fn", 32);
+    riscv_asm_emit_line(&buf, "\tli a0, 12");
+    riscv_emit_epilogue(&buf, 32);
+    riscv_emit_prologue(&buf, "main", 32);
+    riscv_asm_emit_line(&buf, "\tli a0, 30");
+    riscv_emit_sd_stack(&buf, RISCV_REG_A0, -8);
+    riscv_emit_sd_stack(&buf, RISCV_REG_A0, -16);
+    riscv_asm_emit_line(&buf, "\tcall leaf_fn");
+    riscv_emit_ld_stack(&buf, RISCV_REG_A1, -8);
+    riscv_emit_add(&buf, RISCV_REG_A0, RISCV_REG_A0, RISCV_REG_A1);
+    riscv_emit_epilogue(&buf, 32);
+    fputs(buf.data, stdout);
+    riscv_asm_free(&buf);
+    return 0;
+}
+""",
+                    encoding="utf-8",
+                )
+                rc = subprocess.run(
+                    ["gcc", f"-I{REPO_ROOT / 'src'}", str(drv_rv_c), str(REPO_ROOT / "src" / "riscv_codegen.c"), "-o", str(drv_rv_bin)],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(rc.returncode, 0, rc.stderr)
+                rv_txt = subprocess.check_output([str(drv_rv_bin)], text=True)
+                rv_s.write_text(rv_txt, encoding="utf-8")
+                rgcc = subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_elf)], capture_output=True, text=True)
+                self.assertEqual(rgcc.returncode, 0, rgcc.stderr)
+                rq = subprocess.run(["qemu-riscv64-static", str(rv_elf)], capture_output=True, text=True, timeout=3)
+                self.assertEqual(rq.returncode, 42)
+
+            # 3. Double-precision constant folding (sin, cos, pow) in part4.c / part5.c
+            cf_c = pathlib.Path(tmp) / "cfold_math.c"
+            cf_s = pathlib.Path(tmp) / "cfold_math.s"
+            cf_bin = pathlib.Path(tmp) / "cfold_math"
+            cf_c.write_text(
+                r"""
+double g_cos0 = cos(0.0);
+double g_sin0 = sin(0.0);
+double g_pow2_10 = pow(2.0, 10.0);
+int main(void) {
+    double local_pow = pow(3.0, 4.0);
+    if ((int)g_cos0 != 1) return 1;
+    if ((int)g_sin0 != 0) return 2;
+    if ((int)g_pow2_10 != 1024) return 3;
+    if ((int)local_pow != 81) return 4;
+    return 0;
+}
+""",
+                encoding="utf-8",
+            )
+            rs = subprocess.run([str(ZCC_BIN), "-S", str(cf_c), "-o", str(cf_s)], capture_output=True, text=True)
+            self.assertEqual(rs.returncode, 0, rs.stderr)
+            s_content = cf_s.read_text(encoding="utf-8")
+            # 1.0 in IEEE-754 double is 4607182418800017408 (0x3ff0000000000000); 1024.0 is 4652218415073722368 (0x4090000000000000)
+            self.assertIn(".quad 4607182418800017408", s_content)
+            self.assertIn(".quad 4652218415073722368", s_content)
+            rb = subprocess.run([str(ZCC_BIN), str(cf_c), "-o", str(cf_bin)], capture_output=True, text=True)
+            self.assertEqual(rb.returncode, 0, rb.stderr)
+            rr = subprocess.run([str(cf_bin)], capture_output=True, text=True)
+            self.assertEqual(rr.returncode, 0)
+
+            # 4. WASM SIMD128 Auto-Vectorization v2 (Bitwise & Compound Assignment)
+            av2_c = pathlib.Path(tmp) / "autovec_v2.c"
+            av2_wasm = pathlib.Path(tmp) / "autovec_v2.wasm"
+            av2_c.write_text(
+                r"""
+void vec_xor_i32(int *dst, const int *a, const int *b, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = a[i] ^ b[i];
+    }
+}
+void vec_and_inplace(int *dst, const int *a, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] &= a[i];
+    }
+}
+void vec_add_inplace(int *dst, const int *a, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] += a[i];
+    }
+}
+int main(void) {
+    int a[7], b[7], d[7];
+    for (int i = 0; i < 7; i++) {
+        a[i] = (i + 1) * 15;
+        b[i] = (i + 1) * 7;
+        d[i] = 0;
+    }
+    vec_xor_i32(d, a, b, 7);
+    vec_and_inplace(d, a, 7);
+    vec_add_inplace(d, b, 7);
+    for (int i = 0; i < 7; i++) {
+        int expected = (((a[i] ^ b[i]) & a[i]) + b[i]);
+        if (d[i] != expected) return 10 + i;
+    }
+    return 0;
+}
+""",
+                encoding="utf-8",
+            )
+            rw = subprocess.run([str(ZCC_BIN), "--wasm", str(av2_c), "-o", str(av2_wasm)], capture_output=True, text=True)
+            self.assertEqual(rw.returncode, 0, rw.stderr)
+            wbytes = av2_wasm.read_bytes()
+            self.assertIn(b"\xfd\x51", wbytes, "Missing v128.xor (0xfd 0x51)")
+            self.assertIn(b"\xfd\x4e", wbytes, "Missing v128.and (0xfd 0x4e)")
+            self.assertIn(b"\xfd\xae\x01", wbytes, "Missing i32x4.add (0xfd 0xae 0x01)")
+            if shutil.which("wasm-validate"):
+                rv = subprocess.run(["wasm-validate", str(av2_wasm)], capture_output=True, text=True)
+                self.assertEqual(rv.returncode, 0, rv.stderr)
+            self.assertEqual(run_wasm_node(av2_wasm), 0)
+            if WASMTIME_BIN.exists():
+                rwt = subprocess.run([str(WASMTIME_BIN), "run", "--invoke", "main", str(av2_wasm)], capture_output=True, text=True)
+                self.assertEqual(rwt.returncode, 0, rwt.stderr)
+                self.assertEqual(rwt.stdout.strip(), "0")
+
 
 if __name__ == "__main__":
     unittest.main()

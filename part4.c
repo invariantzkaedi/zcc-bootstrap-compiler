@@ -6645,7 +6645,8 @@ static int eval_const_call_math(Node *elem, long long *out_bits) {
     if (elem->kind != ND_CALL || !elem->func_name[0]) return 0;
 
     if ((strcmp(elem->func_name, "sqrt") == 0 || strcmp(elem->func_name, "sqrtf") == 0 ||
-         strcmp(elem->func_name, "sinf") == 0 || strcmp(elem->func_name, "cosf") == 0 ||
+         strcmp(elem->func_name, "sin") == 0 || strcmp(elem->func_name, "sinf") == 0 ||
+         strcmp(elem->func_name, "cos") == 0 || strcmp(elem->func_name, "cosf") == 0 ||
          strcmp(elem->func_name, "fabs") == 0 || strcmp(elem->func_name, "fabsf") == 0) &&
         elem->num_args == 1 && elem->args && elem->args[0]) {
         ok0 = 1;
@@ -6661,8 +6662,8 @@ static int eval_const_call_math(Node *elem, long long *out_bits) {
         }
 
         if (strcmp(elem->func_name, "sqrt") == 0 || strcmp(elem->func_name, "sqrtf") == 0) out = det_sqrt_d(arg0);
-        else if (strcmp(elem->func_name, "sinf") == 0) out = det_sin_d(arg0);
-        else if (strcmp(elem->func_name, "cosf") == 0) out = det_cos_d(arg0);
+        else if (strcmp(elem->func_name, "sin") == 0 || strcmp(elem->func_name, "sinf") == 0) out = det_sin_d(arg0);
+        else if (strcmp(elem->func_name, "cos") == 0 || strcmp(elem->func_name, "cosf") == 0) out = det_cos_d(arg0);
         else out = det_fabs_d(arg0);
 
         if (elem->type && elem->type->kind == TY_FLOAT) {
@@ -6678,7 +6679,8 @@ static int eval_const_call_math(Node *elem, long long *out_bits) {
         return 1;
     }
 
-    if (strcmp(elem->func_name, "powf") == 0 && elem->num_args == 2 && elem->args && elem->args[0] && elem->args[1]) {
+    if ((strcmp(elem->func_name, "pow") == 0 || strcmp(elem->func_name, "powf") == 0) &&
+        elem->num_args == 2 && elem->args && elem->args[0] && elem->args[1]) {
         ok0 = 1; ok1 = 1;
         arg0_bits = eval_const_expr_p4(elem->args[0], &ok0);
         arg1_bits = eval_const_expr_p4(elem->args[1], &ok1);
@@ -6701,10 +6703,14 @@ static int eval_const_call_math(Node *elem, long long *out_bits) {
         }
         if (!det_to_integer_exp(arg1, &iexp)) return 0;
         out = det_pow_int_d(arg0, iexp);
-        {
+        if (elem->type && elem->type->kind == TY_FLOAT) {
             float f = (float)out;
             unsigned int bits;
             memcpy(&bits, &f, sizeof(float));
+            *out_bits = (long long)bits;
+        } else {
+            unsigned long long bits;
+            memcpy(&bits, &out, sizeof(double));
             *out_bits = (long long)bits;
         }
         return 1;

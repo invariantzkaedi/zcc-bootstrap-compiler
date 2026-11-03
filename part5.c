@@ -486,7 +486,18 @@ void init_compiler(Compiler *cc) {
       ft->num_params = 1;
       ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
       ft->params[0] = cc->ty_double;
+      sym = scope_add(cc, "sin", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_double);
+      ft->num_params = 1;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+      ft->params[0] = cc->ty_double;
       sym = scope_add(cc, "cos", ft); sym->is_global = 1;
+      ft = type_func(cc, cc->ty_double);
+      ft->num_params = 2;
+      ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
+      ft->params[0] = cc->ty_double;
+      ft->params[1] = cc->ty_double;
+      sym = scope_add(cc, "pow", ft); sym->is_global = 1;
       ft = type_func(cc, cc->ty_double);
       ft->num_params = 1;
       ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
