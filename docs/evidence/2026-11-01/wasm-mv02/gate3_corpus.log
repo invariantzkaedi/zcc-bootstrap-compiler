@@ -1,0 +1,809 @@
+  [0;32m[PASS][0m Build environment ready
+[0;36m── Category 1: Basic Operations ──[0m
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m return_42 (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m arithmetic (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m if_branch (rc=0, 1 IR funcs)
+[0;36m── Category 2: Loops and Variables (Mem2Reg stress) ──[0m
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (28 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (9 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m for_loop_sum (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (28 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (9 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m while_factorial (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m multi_var (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m shift_mask (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (6 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (2 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m ushort_div_long (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (8 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (2 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m signed_char_cast (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m mixed_unsigned_long (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m signed_char_128 (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m short_wrap (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (4 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m ushort_negative (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m unsigned_char_to_long (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (4 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m char_mod_1023 (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (5 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m int_and_uint (rc=0, 1 IR funcs)
+[0;36m── Category 3: Pointers and Memory (CG-IR-008/010 regression) ──[0m
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (9 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m pointer_deref (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (16 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func escape_func -> void
+; end escape_func  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m pointer_escape_call (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (19 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func escape_ret -> ptr
+; end escape_ret  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m pointer_escape_ret (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (12 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m pointer_escape_store (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (20 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m pointer_ambiguous (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (9 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (9 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (13 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (3 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m pointer_offset_phi (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (3 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (48 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=6
+
+; func some_external_func -> void
+; end some_external_func  nodes=0
+
+; func test_var_index -> i32
+; end test_var_index  nodes=0
+
+; func test_escape_via_call -> i32
+; end test_escape_via_call  nodes=0
+
+; func test_phi_differing -> i32
+; end test_phi_differing  nodes=0
+
+; func test_chained -> i32
+; end test_chained  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m pointer_offset_extra (rc=0, 6 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=6
+
+; func some_external_func -> void
+; end some_external_func  nodes=0
+
+; func test_var_index -> i32
+; end test_var_index  nodes=0
+
+; func test_escape_via_call -> i32
+; end test_escape_via_call  nodes=0
+
+; func test_phi_differing -> i32
+; end test_phi_differing  nodes=0
+
+; func test_chained -> i32
+; end test_chained  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (22 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (4 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m ptr_arith (rc=0, 1 IR funcs)
+[0;36m── Category 4: Function Calls (CG-IR-007/013 regression) ──[0m
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (6 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func add -> i32
+; end add  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (2 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m simple_call (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func sum6 -> i32
+; end sum6  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m six_arg_call (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (24 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func fib -> i32
+; end fib  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m recursive_fib (rc=0, 2 IR funcs)
+[0;36m── Category 5: Structs and Member Access ──[0m
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m struct_access (rc=0, 1 IR funcs)
+[0;36m── Category 6: Switch Statements ──[0m
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (4 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func classify -> i32
+; end classify  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (3 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m switch_stmt (rc=0, 2 IR funcs)
+[0;36m── Category 7: String and Global Operations ──[0m
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (13 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func inc -> i32
+; end inc  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m global_var (rc=0, 2 IR funcs)
+[0;36m── Category 8: Complex Control Flow (PHI stress) ──[0m
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (47 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (17 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m nested_loops (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (11 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func abs_val -> i32
+; end abs_val  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (3 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m ternary_expr (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (3 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m logical_ops (rc=0, 1 IR funcs)
+[0;36m── Category 9: Callee-Save Register Pressure (CG-IR-011 regression) ──[0m
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (39 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func heavy -> i32
+; end heavy  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m reg_pressure (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m eight_locals (rc=0, 1 IR funcs)
+[0;36m── Category 10: cc_alloc Pattern (CG-IR-005 regression) ──[0m
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (51 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func my_alloc -> ptr
+; end my_alloc  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (8 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [0;32m[PASS][0m alloc_pattern (rc=0, 2 IR funcs)
+  [0;33m[SKIP][0m Selfhost (--quick mode)
+
+[0;36m══════════════════════════════════════════════════[0m
+  [0;32mPASS: 37[0m  [0;31mFAIL: 0[0m  [0;33mSKIP: 1[0m
+[0;36m══════════════════════════════════════════════════[0m
+[0;32mALL TESTS PASSED[0m

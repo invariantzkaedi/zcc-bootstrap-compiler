@@ -1,0 +1,328 @@
+{
+  "tool": "ZCC-PROVE-01",
+  "mode": "mv09_part5",
+  "mechanical_part5_extraction": true,
+  "unconstrained_64bit_ea_domain": true,
+  "full_128bit_xmm_register_file_modeled": true,
+  "full_memory_array_equality": true,
+  "compiler_xmm_ownership_invariant": {
+    "codegen_xmm_usage": {
+      "part4.c": [
+        "xmm0",
+        "xmm1",
+        "xmm2",
+        "xmm3"
+      ],
+      "compiler_passes.c": [
+        "xmm0",
+        "xmm1"
+      ],
+      "src/x86_codegen_sse.c": [
+        "xmm0",
+        "xmm1",
+        "xmm7"
+      ],
+      "src/ir_to_x86.c": [
+        "xmm0",
+        "xmm1",
+        "xmm2"
+      ],
+      "src/opt/prime_v2_regalloc_opt.c": [],
+      "regalloc.c": [
+        "xmm0",
+        "xmm1",
+        "xmm2",
+        "xmm3",
+        "xmm4",
+        "xmm5",
+        "xmm6",
+        "xmm7"
+      ]
+    },
+    "reserved_peephole_xmm_pool": [
+      "%xmm15",
+      "%xmm14",
+      "%xmm13",
+      "%xmm12"
+    ],
+    "part5_forward_liveness_scan_active": true,
+    "part5_full_function_liveness_scan_active": true,
+    "zcc2_s_lowered_sites_verified_dead": 0
+  },
+  "zcc_prove_02_super_peepholes": {
+    "cmp0_to_test_32_64": "UNSAT (PROVEN_SOUND)",
+    "mov0_to_xor_guarded_gpr": "UNSAT (PROVEN_SOUND)",
+    "mov0_to_xor_unguarded_eflags_negative_control": "SAT_CAUGHT (ZF=0 clobbered to ZF=1 before setcc/cmovcc/jcc)",
+    "part5_eflags_lookahead_guard_active": true,
+    "shift_zero_elision_32_64": "UNSAT (PROVEN_SOUND)",
+    "mov_r11_rax_dead_write_guarded": "UNSAT (PROVEN_SOUND)",
+    "mov_r11_rax_unguarded_rmw_negative_control": "SAT_CAUGHT (addq disp(%rbp), %rax and xorq %rcx, %rax clobber live %rax)",
+    "part5_mov_r11_rax_guard_active": true,
+    "imul_pow2_strength_reduction_2_to_64": "UNSAT (PROVEN_SOUND)",
+    "sliding_window_peepholes_2d_2e_3b_3c_3d_3e_3f_3": "UNSAT (PROVEN_SOUND)"
+  },
+  "zcc_prove_04_boost_and_tco": {
+    "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
+    "pass7_dead_write_rmw_negative_control": "SAT_CAUGHT (addq disp(%rbp), %rax clobbers live %rdx->%rax)",
+    "pass7_dead_write_pxor_negative_control": "SAT_CAUGHT (pxor %xmm0, %xmm0 leaves stale %rax instead of %r11)",
+    "sse_pass0a_hex_guard_active": true,
+    "sse_pass7_mov_guard_active": true,
+    "sse_pass7_no_pxor_rax_bug": true,
+    "part5_tco_full_function_escape_guard_active": true
+  },
+  "cases_verified": 25,
+  "total_emulated_states": 5000,
+  "self_test_negative_controls": "PASS (10/10 unsound modes including live 128-bit %xmm15/%xmm14/%xmm13 clobbers rejected with minimal counterexamples)",
+  "cases": [
+    {
+      "case": "REG_RAX",
+      "operand": "%rax",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "REG_R11",
+      "operand": "%r11",
+      "selected_gpr_scratch": "%r10",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "REG_R10",
+      "operand": "%r10",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "REG_R9",
+      "operand": "%r9",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "REG_RSP",
+      "operand": "%rsp",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "REG_RBP",
+      "operand": "%rbp",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_LOCAL_RBP",
+      "operand": "-8(%rbp)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_SCRATCH_PRIMARY_RBP",
+      "operand": "-288(%rbp)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_SCRATCH_SECONDARY_RBP",
+      "operand": "-296(%rbp)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_SCRATCH_PRIMARY_RSP",
+      "operand": "32(%rsp)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_SCRATCH_SECONDARY_RSP",
+      "operand": "24(%rsp)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_RSP_POS8",
+      "operand": "8(%rsp)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_REDZONE_8",
+      "operand": "-8(%rsp)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_REDZONE_120",
+      "operand": "-120(%rsp)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_REDZONE_128",
+      "operand": "-128(%rsp)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_BASE_R11",
+      "operand": "8(%r11)",
+      "selected_gpr_scratch": "%r10",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_BASE_R10",
+      "operand": "8(%r10)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_SIB_R11_R10",
+      "operand": "8(%r11, %r10, 8)",
+      "selected_gpr_scratch": "%r9",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_SIB_RSP_RCX_8",
+      "operand": "8(%rsp, %rcx, 8)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_SIB_RSP_RCX_24",
+      "operand": "24(%rsp, %rcx, 8)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_SIB_RSP_RCX_16",
+      "operand": "16(%rsp, %rcx, 8)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "MEM_SIB_RSP_SCRATCH32",
+      "operand": "32(%rsp, %rcx, 8)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm15",
+      "live_xmm_count": 12,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "LIVE_XMM15_128BIT",
+      "operand": "8(%rsp, %rcx, 8)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm14",
+      "live_xmm_count": 13,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "LIVE_XMM15_AND_XMM14_128BIT",
+      "operand": "32(%rsp, %rcx, 8)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm13",
+      "live_xmm_count": 14,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    },
+    {
+      "case": "LIVE_XMM15_XMM14_XMM13_128BIT",
+      "operand": "24(%rsp, %rcx, 8)",
+      "selected_gpr_scratch": "%r11",
+      "selected_xmm_scratch": "%xmm12",
+      "live_xmm_count": 15,
+      "z3_proof": "UNSAT",
+      "emulated_states": 200,
+      "status": "PROVEN_SOUND"
+    }
+  ]
+}

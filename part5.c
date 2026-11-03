@@ -967,22 +967,26 @@ static void peephole_optimize(char *filename) {
         sprintf(line_ptrs[i], "    testq %s, %s\n", reg, reg); eliminated++; i++; continue;
       }
       if (strncmp(l1, "    cmpq $", 10) == 0) {
-        long long cval = 0, disp = 0; char adj[80], *lp = NULL;
+        long long cval = 0; int x15 = 0, x14 = 0, x13 = 0, k = i;
         if (sscanf(l1, "    cmpq $%lld, %63[^\n]", &cval, reg) == 2 && (cval < -2147483648LL || cval > 2147483647LL)) {
-          const char *sc = !strstr(reg, "%r11") ? "r11" : (!strstr(reg, "%r10") ? "r10" : "r9"), *op = reg;
-          if (strstr(reg, "%rsp") && (lp = strchr(reg, '(')) != NULL) {
-            if (lp > reg) disp = strtoll(reg, NULL, 10);
-            snprintf(adj, sizeof(adj), "%lld%s", disp + 8LL, lp); op = adj;
+          while (k > 0 && strcmp(line_ptrs[k], "    pushq %rbp\n") != 0) k--;
+          for (k++; k < nlines && strcmp(line_ptrs[k], "    pushq %rbp\n") != 0; k++) {
+            if (strstr(line_ptrs[k], "%xmm15")) x15 = 1;
+            if (strstr(line_ptrs[k], "%xmm14")) x14 = 1;
+            if (strstr(line_ptrs[k], "%xmm13")) x13 = 1;
           }
-          sprintf(line_ptrs[i], "    pushq %%%s\n    movabsq $%lld, %%%s\n    cmpq %%%s, %s\n    popq %%%s\n", sc, cval, sc, sc, op, sc);
+          const char *sc = !strstr(reg, "%r11") ? "r11" : (!strstr(reg, "%r10") ? "r10" : "r9");
+          const char *xsc = !x15 ? "xmm15" : (!x14 ? "xmm14" : (!x13 ? "xmm13" : "xmm12"));
+          sprintf(line_ptrs[i], "    movq %%%s, %%%s\n    movabsq $%lld, %%%s\n    cmpq %%%s, %s\n    movq %%%s, %%%s\n", sc, xsc, cval, sc, sc, reg, xsc, sc);
           i++; continue;
         }
       }
-      if (strncmp(l1, "    movq $0, ", 13) == 0 && sscanf(l1, "    movq $0, %63s", reg) == 1 && reg[0] == '%') {
-        sprintf(line_ptrs[i], "    xorq %s, %s\n", reg, reg); eliminated++; i++; continue;
-      }
-      if (strncmp(l1, "    movl $0, ", 13) == 0 && sscanf(l1, "    movl $0, %63s", reg) == 1 && reg[0] == '%') {
-        sprintf(line_ptrs[i], "    xorl %s, %s\n", reg, reg); eliminated++; i++; continue;
+      if ((strncmp(l1, "    movq $0, ", 13) == 0 || strncmp(l1, "    movl $0, ", 13) == 0) && sscanf(l1 + 13, "%63s", reg) == 1 && reg[0] == '%') {
+        int k = i + 1;
+        while (k < nlines && (line_ptrs[k][0] == 0 || strncmp(line_ptrs[k], "    .loc ", 9) == 0 || strncmp(line_ptrs[k], "    .file ", 10) == 0)) k++;
+        if (k >= nlines || (strncmp(line_ptrs[k], "    set", 7) != 0 && strncmp(line_ptrs[k], "    cmov", 8) != 0 && (strncmp(line_ptrs[k], "    j", 5) != 0 || strncmp(line_ptrs[k], "    jmp", 7) == 0))) {
+          sprintf(line_ptrs[i], "    xor%c %s, %s\n", l1[7], reg, reg); eliminated++; i++; continue;
+        }
       }
       if (strncmp(l1, "    shlq $0, ", 13) == 0 || strncmp(l1, "    shrq $0, ", 13) == 0 ||
           strncmp(l1, "    shll $0, ", 13) == 0 || strncmp(l1, "    shrl $0, ", 13) == 0) {
@@ -1006,7 +1010,7 @@ static void peephole_optimize(char *filename) {
           char *nl = line_ptrs[k];
           int nlen = strlen(nl);
           if (nlen >= 7 && (strcmp(nl + nlen - 7, ", %rax\n") == 0 || strcmp(nl + nlen - 7, ", %eax\n") == 0)) {
-            if (strstr(nl, "(%rbp)") || strncmp(nl, "    xor", 7) == 0 || strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0) {
+            if ((strstr(nl, "(%rbp)") && (strncmp(nl, "    mov", 7) == 0 || strncmp(nl, "    lea", 7) == 0)) || strcmp(nl, "    xorq %rax, %rax\n") == 0 || strcmp(nl, "    xorl %eax, %eax\n") == 0 || strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0) {
               line_ptrs[i][0] = 0; eliminated++; i++; continue;
             }
           }
@@ -1044,8 +1048,7 @@ static void peephole_optimize(char *filename) {
         if (sscanf(line_ptrs[i+5], "    call %63s", tgt1) == 1 && sscanf(line_ptrs[i+9], "    call %63s", tgt2) == 1 &&
             strcmp(tgt1, tgt2) == 0 && sscanf(line_ptrs[i+11], "    jmp %63s", end_lbl) == 1) {
           int has_local_stack = 0, k;
-          for (k = i - 1; k >= 0 && k >= i - 32; k--) {
-            if (line_ptrs[k][0] == '.' && line_ptrs[k][1] == 'L') break;
+          for (k = i - 1; k >= 0 && strcmp(line_ptrs[k], "    pushq %rbp\n") != 0; k--) {
             if (strstr(line_ptrs[k], "leaq ") && strstr(line_ptrs[k], "(%rbp)")) { has_local_stack = 1; break; }
           }
           if (has_local_stack) { i++; continue; }

@@ -1,0 +1,17 @@
+test_01_wasm_mv02_signedness_and_control_flow (tests.test_wasm_mv02.TestWasmMV02Adversarial.test_01_wasm_mv02_signedness_and_control_flow)
+Verify tests/wasm_mv02_signedness.c across ZCC WASM, GCC, and Clang. ... ok
+test_02_x86_mv02_imm64_and_live_r11_preservation (tests.test_wasm_mv02.TestWasmMV02Adversarial.test_02_x86_mv02_imm64_and_live_r11_preservation)
+Verify tests/x86_mv02_imm64.c preserves live %r11/%r10/%r9, %rsp value, and red-zone memory across 64-bit immediate comparison. ... ok
+test_03_typedef_redeclaration_compatibility_and_rejection (tests.test_wasm_mv02.TestWasmMV02Adversarial.test_03_typedef_redeclaration_compatibility_and_rejection)
+Verify compatible typedef redeclaration succeeds and incompatible typedef redeclaration fails closed. ... ok
+test_04_seven_defect_class_seed_sensitivity (tests.test_wasm_mv02.TestWasmMV02Adversarial.test_04_seven_defect_class_seed_sensitivity)
+Verify 50 seeded metamorphic vectors + all 7 defect classes from Section 2.C: ... ok
+test_05_mv04_gnu_as_binary_encoding_equivalence (tests.test_wasm_mv02.TestWasmMV02Adversarial.test_05_mv04_gnu_as_binary_encoding_equivalence)
+MV-04 Independent Assembler Oracle: ... ok
+test_06_zcc_prove_01_peephole_truth_machine (tests.test_wasm_mv02.TestWasmMV02Adversarial.test_06_zcc_prove_01_peephole_truth_machine)
+ZCC-PROVE-01: Formal Z3 SMT + 3,800-state differential machine-state equivalence verifier ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 5.541s
+
+OK

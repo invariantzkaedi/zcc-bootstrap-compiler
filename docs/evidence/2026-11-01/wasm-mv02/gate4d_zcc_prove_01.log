@@ -1,0 +1,1 @@
+[ZCC-PROVE-01] PASS: 22/22 operand classes formally proven UNSAT via Z3 + 4400 differential machine states verified (0 counterexamples; 5/5 negative-control bugs caught).

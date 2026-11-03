@@ -2482,13 +2482,13 @@ static void encode_movq_xmm(Segment *seg, int reg1, int reg2) {
     seg_append(seg, &modrm, 1);
   } else if (reg1 >= 16 && reg2 < 16) {
     if (hw1 & 8)
-      rex |= 0x01;
-    if (hw2 & 8)
       rex |= 0x04;
+    if (hw2 & 8)
+      rex |= 0x01;
     seg_append(seg, &rex, 1);
     unsigned char op[2] = {0x0f, 0x7e};
     seg_append(seg, op, 2);
-    unsigned char modrm = 0xc0 | ((hw2 & 7) << 3) | (hw1 & 7);
+    unsigned char modrm = 0xc0 | ((hw1 & 7) << 3) | (hw2 & 7);
     seg_append(seg, &modrm, 1);
   }
 }
@@ -2519,18 +2519,18 @@ static void encode_movd_xmm(Segment *seg, int reg1, int reg2) {
     seg_append(seg, &modrm, 1);
   } else if (reg1 >= 16 && reg2 < 16) {
     if (hw1 & 8) {
-      rex |= 0x01;
+      rex |= 0x04;
       need_rex = 1;
     }
     if (hw2 & 8) {
-      rex |= 0x04;
+      rex |= 0x01;
       need_rex = 1;
     }
     if (need_rex)
       seg_append(seg, &rex, 1);
     unsigned char op[2] = {0x0f, 0x7e};
     seg_append(seg, op, 2);
-    unsigned char modrm = 0xc0 | ((hw2 & 7) << 3) | (hw1 & 7);
+    unsigned char modrm = 0xc0 | ((hw1 & 7) << 3) | (hw2 & 7);
     seg_append(seg, &modrm, 1);
   }
 }
@@ -3125,6 +3125,10 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
       unsigned char b[3] = {0xc5, 0xf8, 0x77};
       seg_append(&text_seg, b, 3);
       matched = 1;
+    } else if (strcmp(mnemonic, "syscall") == 0) {
+      unsigned char b[2] = {0x0f, 0x05};
+      seg_append(&text_seg, b, 2);
+      matched = 1;
     }
     /* 1-operand instructions */
     else if (strcmp(mnemonic, "pushq") == 0) {
@@ -3654,7 +3658,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
         } else if (strcmp(mnemonic, "movabsq") == 0 ||
                    strcmp(mnemonic, "movabs") == 0) {
           if (op1[0] == '$') {
-            long long imm = strtoll(op1 + 1, NULL, 0);
+            long long imm = (op1[1] == '-') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);
             unsigned char rex = 0x48;
             if (reg2 & 8)
               rex |= 0x01;
@@ -4328,10 +4332,11 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
               }
             }
           } else {
-            if (strcmp(mnemonic, "cmpq") == 0 && strchr(op1, '(')) {
-              encode_cmpq_mem(&text_seg, op1, reg2, 0x3b);
-            } else if (strcmp(mnemonic, "cmpq") == 0 && strchr(op2, '(')) {
-              encode_cmpq_mem(&text_seg, op2, reg1, 0x39);
+            unsigned char mop = (strcmp(mnemonic, "addq") == 0) ? 0x00 : (strcmp(mnemonic, "orq") == 0) ? 0x08 : (strcmp(mnemonic, "andq") == 0) ? 0x20 : (strcmp(mnemonic, "subq") == 0) ? 0x28 : (strcmp(mnemonic, "xorq") == 0) ? 0x30 : (strcmp(mnemonic, "cmpq") == 0) ? 0x38 : 0xff;
+            if (mop != 0xff && strchr(op1, '(')) {
+              encode_cmpq_mem(&text_seg, op1, reg2, mop | 0x03);
+            } else if (mop != 0xff && strchr(op2, '(')) {
+              encode_cmpq_mem(&text_seg, op2, reg1, mop | 0x01);
             } else {
               encode_binop(&text_seg, mnemonic, reg1, reg2);
             }

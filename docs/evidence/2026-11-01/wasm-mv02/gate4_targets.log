@@ -1,0 +1,72 @@
+test_01_regression_corpus_six_way_oracle (test_wasm_i64.TestWasmI64Remediation.test_01_regression_corpus_six_way_oracle)
+Compile and execute tests/wasm_i64_regression.c across ZCC-WASM (Node & Wasmtime), Clang-WASM32, GCC, Clang, and ZCC-x86_64. ... zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 180 macros, total is 216
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (656 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+ok
+test_02_sleb128_i64_boundary_constants (test_wasm_i64.TestWasmI64Remediation.test_02_sleb128_i64_boundary_constants)
+Verify 64-bit signed LEB128 encoding for INT64_MIN, INT64_MAX, UINT64_MAX, 2^31, 2^32, -2^32. ... ok
+test_03_wasm32_ilp32_data_model_and_layout_parity_with_clang (test_wasm_i64.TestWasmI64Remediation.test_03_wasm32_ilp32_data_model_and_layout_parity_with_clang)
+HYGIENE-WASM-ILP32: Verify sizeof, _Alignof, offsetof, struct layout, and pointer strides match Clang --target=wasm32. ... ok
+test_04_randomized_nonconstant_and_metamorphic_differential (test_wasm_i64.TestWasmI64Remediation.test_04_randomized_nonconstant_and_metamorphic_differential)
+Execute 50 seeded randomized non-constant 64-bit input vectors across ZCC --wasm and Clang --target=wasm32. ... zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 180 macros, total is 216
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[OK] WebAssembly module emitted to /tmp/tmpbmulra24/rand.zcc.wasm
+ok
+test_05_meta_verification_negative_controls (test_wasm_i64.TestWasmI64Remediation.test_05_meta_verification_negative_controls)
+MV-6 / MV-7: Prove the verification harness fails closed on corrupted/truncated/mutated WASM. ... zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 180 macros, total is 216
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[OK] WebAssembly module emitted to /tmp/tmpynczuhvw/clean.wasm
+ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 3.941s
+
+OK
+test_01_wasm_mv02_signedness_and_control_flow (test_wasm_mv02.TestWasmMV02Adversarial.test_01_wasm_mv02_signedness_and_control_flow)
+Verify tests/wasm_mv02_signedness.c across ZCC WASM, GCC, and Clang. ... ok
+test_02_x86_mv02_imm64_and_live_r11_preservation (test_wasm_mv02.TestWasmMV02Adversarial.test_02_x86_mv02_imm64_and_live_r11_preservation)
+Verify tests/x86_mv02_imm64.c preserves live %r11/%r10/%r9, %rsp value, and red-zone memory across 64-bit immediate comparison. ... ok
+test_03_typedef_redeclaration_compatibility_and_rejection (test_wasm_mv02.TestWasmMV02Adversarial.test_03_typedef_redeclaration_compatibility_and_rejection)
+Verify compatible typedef redeclaration succeeds and incompatible typedef redeclaration fails closed. ... ok
+test_04_seven_defect_class_seed_sensitivity (test_wasm_mv02.TestWasmMV02Adversarial.test_04_seven_defect_class_seed_sensitivity)
+Verify 50 seeded metamorphic vectors + all 7 defect classes from Section 2.C: ... ok
+test_05_mv04_gnu_as_binary_encoding_equivalence (test_wasm_mv02.TestWasmMV02Adversarial.test_05_mv04_gnu_as_binary_encoding_equivalence)
+MV-04 Independent Assembler Oracle: ... ok
+test_06_zcc_prove_01_peephole_truth_machine (test_wasm_mv02.TestWasmMV02Adversarial.test_06_zcc_prove_01_peephole_truth_machine)
+ZCC-PROVE-01: Formal Z3 SMT + 3,800-state differential machine-state equivalence verifier ... ok
+test_07_mv12_peephole_boost_and_tco_soundness (test_wasm_mv02.TestWasmMV02Adversarial.test_07_mv12_peephole_boost_and_tco_soundness)
+MV-12 + ZCC-PROVE-04: Differential execution of `tests/x86_mv02_imm64.c` under `ZCC_OPT=1` ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 7.957s
+
+OK
+Executing ZCC Oracle Negative Controls & Verification Gauntlet against: /mnt/h/__DOWNLOADS/zcc_github_upload/zcc_quest.py
+--- [MUTATION SELF-TEST] Verifying harness rejection of non-executing / broken stubs ---
+--- [CONTROL 1 / PROBE A] Counterfeit zero-byte files with marker ---
+[probe_a] FAIL: Expected wrapper exit 0, got 3
+[FAIL] Probe A failed validation.
+--- [CONTROL 1 / PROBE A] Counterfeit zero-byte files with marker ---
+[probe_a] FAIL: Wrapper did not render ordinary command success banner
+[FAIL] Probe A failed validation.
+[PASS] Mutation self-test verified: harness rigorously rejects non-executing / broken stubs.
+--- [CONTROL 1 / PROBE A] Counterfeit zero-byte files with marker ---
+[PASS] Probe A correctly executed with exit 0, rendered ordinary success, and rejected counterfeit files.
+--- [CONTROL 2 / PROBE B] Pre-existing identical files with marker ---
+[PASS] Probe B correctly executed with exit 0, rendered ordinary success, and rejected pre-existing files.
+--- [CONTROL 3 / PROBE C] Fabricated provenance with shell comment injection ---
+[PASS] Probe C correctly executed with exit 0, rendered ordinary success, and rejected rogue provenance / comment injection.
+
+========================================================
+★ ALL NEGATIVE CONTROLS PASSED (0 false certifications) ★
+========================================================
+[ZCC-PROVE-01] PASS: 25/25 operand & XMM-liveness classes formally proven UNSAT via Z3 + 5000 differential machine states verified + ZCC-PROVE-02 super-peepholes UNSAT (0 counterexamples; 10/10 negative-control bugs caught; zcc2.s dead-XMM sites verified=0).

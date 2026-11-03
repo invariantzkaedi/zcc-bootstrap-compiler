@@ -113,9 +113,11 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
     /* Pass 0a: Normalize 32-bit movabsq $imm, %rax -> movq $imm, %rax (and $0 -> xorl) */
     if (pmask & 0x001U) {
         for (int i = 0; i < nlines; i++) {
-            if (strncmp(line_ptrs[i], "    movabsq $", 13) == 0 && strstr(line_ptrs[i], ", %rax\n")) {
-                long long imm = 0;
-                if (sscanf(line_ptrs[i], "    movabsq $%lld, %%rax", &imm) == 1 &&
+            if (strncmp(line_ptrs[i], "    movabsq $", 13) == 0 && strcmp(line_ptrs[i] + strlen(line_ptrs[i]) - 7, ", %rax\n") == 0) {
+                char *endp = NULL;
+                const char *p = line_ptrs[i] + 13;
+                long long imm = (*p == '-') ? strtoll(p, &endp, 0) : (long long)strtoull(p, &endp, 0);
+                if (endp && endp > p && strcmp(endp, ", %rax\n") == 0 &&
                     imm >= -2147483648LL && imm <= 2147483647LL) {
                     if (imm == 0) {
                         sprintf(line_ptrs[i], "    xorl %%eax, %%eax\n");
@@ -754,16 +756,9 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                     int nlen = (int)strlen(nl);
                     if (nlen >= 7 && (strcmp(nl + nlen - 7, ", %rax\n") == 0 || strcmp(nl + nlen - 7, ", %eax\n") == 0) &&
                         !strstr(nl, "(%rax)") && !strstr(nl, "(%eax)") &&
-                        (strstr(nl, "(%rbp)") || strstr(nl, "(%rip)") ||
+                        (((strncmp(nl, "    mov", 7) == 0 || strncmp(nl, "    lea", 7) == 0) && (strstr(nl, "(%rbp)") || strstr(nl, "(%rip)"))) ||
                          strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0 ||
                          strcmp(nl, "    xorl %eax, %eax\n") == 0 || strcmp(nl, "    xorq %rax, %rax\n") == 0)) {
-                        line_ptrs[i][0] = 0; eliminated += 1; i += 1; continue;
-                    }
-                    if ((strncmp(nl, "    movss ", 10) == 0 || strncmp(nl, "    movsd ", 10) == 0) &&
-                        (strstr(nl, "(%rbp), %xmm0\n") || strstr(nl, "(%rip), %xmm0\n"))) {
-                        line_ptrs[i][0] = 0; eliminated += 1; i += 1; continue;
-                    }
-                    if (strcmp(nl, "    pxor %xmm0, %xmm0\n") == 0) {
                         line_ptrs[i][0] = 0; eliminated += 1; i += 1; continue;
                     }
                 }

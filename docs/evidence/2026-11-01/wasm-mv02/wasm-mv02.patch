@@ -1,0 +1,209 @@
+diff --git a/part5.c b/part5.c
+index f597f93a7..d3bf8360b 100644
+--- a/part5.c
++++ b/part5.c
+@@ -967,22 +967,26 @@ static void peephole_optimize(char *filename) {
+         sprintf(line_ptrs[i], "    testq %s, %s\n", reg, reg); eliminated++; i++; continue;
+       }
+       if (strncmp(l1, "    cmpq $", 10) == 0) {
+-        long long cval = 0, disp = 0; char adj[80], *lp = NULL;
++        long long cval = 0; int x15 = 0, x14 = 0, x13 = 0, k = i;
+         if (sscanf(l1, "    cmpq $%lld, %63[^\n]", &cval, reg) == 2 && (cval < -2147483648LL || cval > 2147483647LL)) {
+-          const char *sc = !strstr(reg, "%r11") ? "r11" : (!strstr(reg, "%r10") ? "r10" : "r9"), *op = reg;
+-          if (strstr(reg, "%rsp") && (lp = strchr(reg, '(')) != NULL) {
+-            if (lp > reg) disp = strtoll(reg, NULL, 10);
+-            snprintf(adj, sizeof(adj), "%lld%s", disp + 8LL, lp); op = adj;
++          while (k > 0 && strcmp(line_ptrs[k], "    pushq %rbp\n") != 0) k--;
++          for (k++; k < nlines && strcmp(line_ptrs[k], "    pushq %rbp\n") != 0; k++) {
++            if (strstr(line_ptrs[k], "%xmm15")) x15 = 1;
++            if (strstr(line_ptrs[k], "%xmm14")) x14 = 1;
++            if (strstr(line_ptrs[k], "%xmm13")) x13 = 1;
+           }
+-          sprintf(line_ptrs[i], "    pushq %%%s\n    movabsq $%lld, %%%s\n    cmpq %%%s, %s\n    popq %%%s\n", sc, cval, sc, sc, op, sc);
++          const char *sc = !strstr(reg, "%r11") ? "r11" : (!strstr(reg, "%r10") ? "r10" : "r9");
++          const char *xsc = !x15 ? "xmm15" : (!x14 ? "xmm14" : (!x13 ? "xmm13" : "xmm12"));
++          sprintf(line_ptrs[i], "    movq %%%s, %%%s\n    movabsq $%lld, %%%s\n    cmpq %%%s, %s\n    movq %%%s, %%%s\n", sc, xsc, cval, sc, sc, reg, xsc, sc);
+           i++; continue;
+         }
+       }
+-      if (strncmp(l1, "    movq $0, ", 13) == 0 && sscanf(l1, "    movq $0, %63s", reg) == 1 && reg[0] == '%') {
+-        sprintf(line_ptrs[i], "    xorq %s, %s\n", reg, reg); eliminated++; i++; continue;
+-      }
+-      if (strncmp(l1, "    movl $0, ", 13) == 0 && sscanf(l1, "    movl $0, %63s", reg) == 1 && reg[0] == '%') {
+-        sprintf(line_ptrs[i], "    xorl %s, %s\n", reg, reg); eliminated++; i++; continue;
++      if ((strncmp(l1, "    movq $0, ", 13) == 0 || strncmp(l1, "    movl $0, ", 13) == 0) && sscanf(l1 + 13, "%63s", reg) == 1 && reg[0] == '%') {
++        int k = i + 1;
++        while (k < nlines && (line_ptrs[k][0] == 0 || strncmp(line_ptrs[k], "    .loc ", 9) == 0 || strncmp(line_ptrs[k], "    .file ", 10) == 0)) k++;
++        if (k >= nlines || (strncmp(line_ptrs[k], "    set", 7) != 0 && strncmp(line_ptrs[k], "    cmov", 8) != 0 && (strncmp(line_ptrs[k], "    j", 5) != 0 || strncmp(line_ptrs[k], "    jmp", 7) == 0))) {
++          sprintf(line_ptrs[i], "    xor%c %s, %s\n", l1[7], reg, reg); eliminated++; i++; continue;
++        }
+       }
+       if (strncmp(l1, "    shlq $0, ", 13) == 0 || strncmp(l1, "    shrq $0, ", 13) == 0 ||
+           strncmp(l1, "    shll $0, ", 13) == 0 || strncmp(l1, "    shrl $0, ", 13) == 0) {
+@@ -1006,7 +1010,7 @@ static void peephole_optimize(char *filename) {
+           char *nl = line_ptrs[k];
+           int nlen = strlen(nl);
+           if (nlen >= 7 && (strcmp(nl + nlen - 7, ", %rax\n") == 0 || strcmp(nl + nlen - 7, ", %eax\n") == 0)) {
+-            if (strstr(nl, "(%rbp)") || strncmp(nl, "    xor", 7) == 0 || strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0) {
++            if ((strstr(nl, "(%rbp)") && (strncmp(nl, "    mov", 7) == 0 || strncmp(nl, "    lea", 7) == 0)) || strcmp(nl, "    xorq %rax, %rax\n") == 0 || strcmp(nl, "    xorl %eax, %eax\n") == 0 || strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0) {
+               line_ptrs[i][0] = 0; eliminated++; i++; continue;
+             }
+           }
+@@ -1044,8 +1048,7 @@ static void peephole_optimize(char *filename) {
+         if (sscanf(line_ptrs[i+5], "    call %63s", tgt1) == 1 && sscanf(line_ptrs[i+9], "    call %63s", tgt2) == 1 &&
+             strcmp(tgt1, tgt2) == 0 && sscanf(line_ptrs[i+11], "    jmp %63s", end_lbl) == 1) {
+           int has_local_stack = 0, k;
+-          for (k = i - 1; k >= 0 && k >= i - 32; k--) {
+-            if (line_ptrs[k][0] == '.' && line_ptrs[k][1] == 'L') break;
++          for (k = i - 1; k >= 0 && strcmp(line_ptrs[k], "    pushq %rbp\n") != 0; k--) {
+             if (strstr(line_ptrs[k], "leaq ") && strstr(line_ptrs[k], "(%rbp)")) { has_local_stack = 1; break; }
+           }
+           if (has_local_stack) { i++; continue; }
+diff --git a/src/codegen.c b/src/codegen.c
+index 07ccc813a..09dd4e1b5 100644
+--- a/src/codegen.c
++++ b/src/codegen.c
+@@ -2482,13 +2482,13 @@ static void encode_movq_xmm(Segment *seg, int reg1, int reg2) {
+     seg_append(seg, &modrm, 1);
+   } else if (reg1 >= 16 && reg2 < 16) {
+     if (hw1 & 8)
+-      rex |= 0x01;
+-    if (hw2 & 8)
+       rex |= 0x04;
++    if (hw2 & 8)
++      rex |= 0x01;
+     seg_append(seg, &rex, 1);
+     unsigned char op[2] = {0x0f, 0x7e};
+     seg_append(seg, op, 2);
+-    unsigned char modrm = 0xc0 | ((hw2 & 7) << 3) | (hw1 & 7);
++    unsigned char modrm = 0xc0 | ((hw1 & 7) << 3) | (hw2 & 7);
+     seg_append(seg, &modrm, 1);
+   }
+ }
+@@ -2519,18 +2519,18 @@ static void encode_movd_xmm(Segment *seg, int reg1, int reg2) {
+     seg_append(seg, &modrm, 1);
+   } else if (reg1 >= 16 && reg2 < 16) {
+     if (hw1 & 8) {
+-      rex |= 0x01;
++      rex |= 0x04;
+       need_rex = 1;
+     }
+     if (hw2 & 8) {
+-      rex |= 0x04;
++      rex |= 0x01;
+       need_rex = 1;
+     }
+     if (need_rex)
+       seg_append(seg, &rex, 1);
+     unsigned char op[2] = {0x0f, 0x7e};
+     seg_append(seg, op, 2);
+-    unsigned char modrm = 0xc0 | ((hw2 & 7) << 3) | (hw1 & 7);
++    unsigned char modrm = 0xc0 | ((hw1 & 7) << 3) | (hw2 & 7);
+     seg_append(seg, &modrm, 1);
+   }
+ }
+@@ -3125,6 +3125,10 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
+       unsigned char b[3] = {0xc5, 0xf8, 0x77};
+       seg_append(&text_seg, b, 3);
+       matched = 1;
++    } else if (strcmp(mnemonic, "syscall") == 0) {
++      unsigned char b[2] = {0x0f, 0x05};
++      seg_append(&text_seg, b, 2);
++      matched = 1;
+     }
+     /* 1-operand instructions */
+     else if (strcmp(mnemonic, "pushq") == 0) {
+@@ -3654,7 +3658,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
+         } else if (strcmp(mnemonic, "movabsq") == 0 ||
+                    strcmp(mnemonic, "movabs") == 0) {
+           if (op1[0] == '$') {
+-            long long imm = strtoll(op1 + 1, NULL, 0);
++            long long imm = (op1[1] == '-') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);
+             unsigned char rex = 0x48;
+             if (reg2 & 8)
+               rex |= 0x01;
+@@ -4328,10 +4332,11 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
+               }
+             }
+           } else {
+-            if (strcmp(mnemonic, "cmpq") == 0 && strchr(op1, '(')) {
+-              encode_cmpq_mem(&text_seg, op1, reg2, 0x3b);
+-            } else if (strcmp(mnemonic, "cmpq") == 0 && strchr(op2, '(')) {
+-              encode_cmpq_mem(&text_seg, op2, reg1, 0x39);
++            unsigned char mop = (strcmp(mnemonic, "addq") == 0) ? 0x00 : (strcmp(mnemonic, "orq") == 0) ? 0x08 : (strcmp(mnemonic, "andq") == 0) ? 0x20 : (strcmp(mnemonic, "subq") == 0) ? 0x28 : (strcmp(mnemonic, "xorq") == 0) ? 0x30 : (strcmp(mnemonic, "cmpq") == 0) ? 0x38 : 0xff;
++            if (mop != 0xff && strchr(op1, '(')) {
++              encode_cmpq_mem(&text_seg, op1, reg2, mop | 0x03);
++            } else if (mop != 0xff && strchr(op2, '(')) {
++              encode_cmpq_mem(&text_seg, op2, reg1, mop | 0x01);
+             } else {
+               encode_binop(&text_seg, mnemonic, reg1, reg2);
+             }
+diff --git a/src/x86_codegen_sse.c b/src/x86_codegen_sse.c
+index 7f169f31b..6aaff9190 100644
+--- a/src/x86_codegen_sse.c
++++ b/src/x86_codegen_sse.c
+@@ -113,9 +113,11 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
+     /* Pass 0a: Normalize 32-bit movabsq $imm, %rax -> movq $imm, %rax (and $0 -> xorl) */
+     if (pmask & 0x001U) {
+         for (int i = 0; i < nlines; i++) {
+-            if (strncmp(line_ptrs[i], "    movabsq $", 13) == 0 && strstr(line_ptrs[i], ", %rax\n")) {
+-                long long imm = 0;
+-                if (sscanf(line_ptrs[i], "    movabsq $%lld, %%rax", &imm) == 1 &&
++            if (strncmp(line_ptrs[i], "    movabsq $", 13) == 0 && strcmp(line_ptrs[i] + strlen(line_ptrs[i]) - 7, ", %rax\n") == 0) {
++                char *endp = NULL;
++                const char *p = line_ptrs[i] + 13;
++                long long imm = (*p == '-') ? strtoll(p, &endp, 0) : (long long)strtoull(p, &endp, 0);
++                if (endp && endp > p && strcmp(endp, ", %rax\n") == 0 &&
+                     imm >= -2147483648LL && imm <= 2147483647LL) {
+                     if (imm == 0) {
+                         sprintf(line_ptrs[i], "    xorl %%eax, %%eax\n");
+@@ -754,18 +756,11 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
+                     int nlen = (int)strlen(nl);
+                     if (nlen >= 7 && (strcmp(nl + nlen - 7, ", %rax\n") == 0 || strcmp(nl + nlen - 7, ", %eax\n") == 0) &&
+                         !strstr(nl, "(%rax)") && !strstr(nl, "(%eax)") &&
+-                        (strstr(nl, "(%rbp)") || strstr(nl, "(%rip)") ||
++                        (((strncmp(nl, "    mov", 7) == 0 || strncmp(nl, "    lea", 7) == 0) && (strstr(nl, "(%rbp)") || strstr(nl, "(%rip)"))) ||
+                          strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0 ||
+                          strcmp(nl, "    xorl %eax, %eax\n") == 0 || strcmp(nl, "    xorq %rax, %rax\n") == 0)) {
+                         line_ptrs[i][0] = 0; eliminated += 1; i += 1; continue;
+                     }
+-                    if ((strncmp(nl, "    movss ", 10) == 0 || strncmp(nl, "    movsd ", 10) == 0) &&
+-                        (strstr(nl, "(%rbp), %xmm0\n") || strstr(nl, "(%rip), %xmm0\n"))) {
+-                        line_ptrs[i][0] = 0; eliminated += 1; i += 1; continue;
+-                    }
+-                    if (strcmp(nl, "    pxor %xmm0, %xmm0\n") == 0) {
+-                        line_ptrs[i][0] = 0; eliminated += 1; i += 1; continue;
+-                    }
+                 }
+             }
+ 
+diff --git a/zcc_test_suite.sh b/zcc_test_suite.sh
+index defd85a99..9e026a675 100644
+--- a/zcc_test_suite.sh
++++ b/zcc_test_suite.sh
+@@ -480,11 +480,7 @@ int classify(int x) {
+ }
+ int main() { return classify(2); }
+ EOF
+-if [ "$QUICK" = "1" ]; then
+-    skip "switch_stmt (hang prevention)"
+-else
+-    test_file "switch_stmt" "$TESTDIR/t_switch.c" 20
+-fi
++test_file "switch_stmt" "$TESTDIR/t_switch.c" 20
+ 
+ step "Category 7: String and Global Operations"
+ 
+@@ -579,11 +575,7 @@ int main() {
+     return 1;
+ }
+ EOF
+-if [ "$QUICK" = "1" ]; then
+-    skip "alloc_pattern (IR hang guard: ZCC-SWITCH-IRLOOP)"
+-else
+-    test_file "alloc_pattern" "$TESTDIR/t_alloc_pattern.c" 0
+-fi
++test_file "alloc_pattern" "$TESTDIR/t_alloc_pattern.c" 0
+ 
+ # ══════════════════════════════════════════════════════════════════
+ # CATEGORY 11: Full Selfhost (unless --quick)
