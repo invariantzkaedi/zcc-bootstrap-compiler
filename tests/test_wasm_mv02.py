@@ -500,6 +500,140 @@ int main(void) { return 0; }
             self.assertEqual(len(z_b), 5)
             self.assertEqual(z_b, g_b)
 
+    def test_09_arm64_riscv64_qemu_and_wasm_autovec_v128(self):
+        """Verify ARM64 & RISC-V 64-bit native execution under QEMU and WASM SIMD128 loop auto-vectorization (WASM-MV-18)."""
+        arch_c = r"""
+int compute_kernel(int a, int b) {
+    int arr[2];
+    arr[0] = a;
+    arr[1] = b;
+    int assigned = (arr[0] = a + 5);
+    if (arr[1] != b) return -100;
+    if (assigned != a + 5) return -200;
+    if (arr[0] < arr[1]) {
+        return arr[0] + arr[1];
+    }
+    return arr[0] - arr[1];
+}
+
+int main(void) {
+    int r1 = compute_kernel(10, 25);
+    int r2 = compute_kernel(30, 12);
+    return (r1 == 40 && r2 == 23) ? 42 : 1;
+}
+"""
+        aarch64_start = "    .text\n    .global _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n"
+        riscv64_start = "    .text\n    .globl _start\n_start:\n    call main\n    li a7, 93\n    ecall\n"
+
+        autovec_c = r"""
+void vec_add_i32(int *dst, const int *a, const int *b, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = a[i] + b[i];
+    }
+}
+
+void vec_sub_i32(int *dst, const int *a, const int *b, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = a[i] - b[i];
+    }
+}
+
+void vec_mul_f32(float *dst, const float *a, const float *b, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = a[i] * b[i];
+    }
+}
+
+int main(void) {
+    int a[7], b[7], dst[7], sub_dst[7];
+    for (int k = 0; k < 7; k++) {
+        a[k] = (k + 1) * 10;
+        b[k] = (k + 1) * 3;
+        dst[k] = 0;
+        sub_dst[k] = 0;
+    }
+    vec_add_i32(dst, a, b, 7);
+    vec_sub_i32(sub_dst, a, b, 7);
+    for (int k = 0; k < 7; k++) {
+        if (dst[k] != (k + 1) * 13) return 10 + k;
+        if (sub_dst[k] != (k + 1) * 7) return 20 + k;
+    }
+    float fa[6], fb[6], fd[6];
+    for (int k = 0; k < 6; k++) {
+        fa[k] = (float)(k + 1);
+        fb[k] = 2.5f;
+        fd[k] = 0.0f;
+    }
+    vec_mul_f32(fd, fa, fb, 6);
+    float fsum = 0.0f;
+    for (int k = 0; k < 6; k++) {
+        fsum += fd[k];
+    }
+    if ((int)fsum != 52) return 30;
+    return 0;
+}
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            ac_path = pathlib.Path(tmp) / "arch_test.c"
+            ac_path.write_text(arch_c, encoding="utf-8")
+
+            # 1. ARM64 Cross-Assemble, Link, and QEMU Execute
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                arm_s = pathlib.Path(tmp) / "arch_arm64.s"
+                arm_st = pathlib.Path(tmp) / "start_arm64.s"
+                arm_o = pathlib.Path(tmp) / "arch_arm64.o"
+                arm_sto = pathlib.Path(tmp) / "start_arm64.o"
+                arm_elf = pathlib.Path(tmp) / "arch_arm64.elf"
+                arm_st.write_text(aarch64_start, encoding="utf-8")
+                r1 = subprocess.run([str(ZCC_BIN), "--arm64", "-S", str(ac_path), "-o", str(arm_s)], capture_output=True, text=True)
+                self.assertEqual(r1.returncode, 0, r1.stderr)
+                r2 = subprocess.run(["aarch64-linux-gnu-as", str(arm_s), "-o", str(arm_o)], capture_output=True, text=True)
+                self.assertEqual(r2.returncode, 0, r2.stderr)
+                r3 = subprocess.run(["aarch64-linux-gnu-as", str(arm_st), "-o", str(arm_sto)], capture_output=True, text=True)
+                self.assertEqual(r3.returncode, 0, r3.stderr)
+                r4 = subprocess.run(["aarch64-linux-gnu-ld", str(arm_sto), str(arm_o), "-o", str(arm_elf)], capture_output=True, text=True)
+                self.assertEqual(r4.returncode, 0, r4.stderr)
+                rq = subprocess.run(["qemu-aarch64-static", str(arm_elf)], capture_output=True, text=True)
+                self.assertEqual(rq.returncode, 42, f"ARM64 QEMU exit={rq.returncode}, stderr={rq.stderr}")
+
+            # 2. RISC-V 64 Cross-Assemble, Link, and QEMU Execute
+            if shutil.which("riscv64-linux-gnu-as") and shutil.which("qemu-riscv64-static"):
+                rv_s = pathlib.Path(tmp) / "arch_rv64.s"
+                rv_st = pathlib.Path(tmp) / "start_rv64.s"
+                rv_o = pathlib.Path(tmp) / "arch_rv64.o"
+                rv_sto = pathlib.Path(tmp) / "start_rv64.o"
+                rv_elf = pathlib.Path(tmp) / "arch_rv64.elf"
+                rv_st.write_text(riscv64_start, encoding="utf-8")
+                r1 = subprocess.run([str(ZCC_BIN), "--riscv64", "-S", str(ac_path), "-o", str(rv_s)], capture_output=True, text=True)
+                self.assertEqual(r1.returncode, 0, r1.stderr)
+                r2 = subprocess.run(["riscv64-linux-gnu-as", str(rv_s), "-o", str(rv_o)], capture_output=True, text=True)
+                self.assertEqual(r2.returncode, 0, r2.stderr)
+                r3 = subprocess.run(["riscv64-linux-gnu-as", str(rv_st), "-o", str(rv_sto)], capture_output=True, text=True)
+                self.assertEqual(r3.returncode, 0, r3.stderr)
+                r4 = subprocess.run(["riscv64-linux-gnu-gcc", "-nostdlib", "-static", str(rv_sto), str(rv_o), "-o", str(rv_elf)], capture_output=True, text=True)
+                self.assertEqual(r4.returncode, 0, r4.stderr)
+                rq = subprocess.run(["qemu-riscv64-static", str(rv_elf)], capture_output=True, text=True)
+                self.assertEqual(rq.returncode, 42, f"RISC-V64 QEMU exit={rq.returncode}, stderr={rq.stderr}")
+
+            # 3. WASM SIMD128 Loop Auto-Vectorization
+            vc_path = pathlib.Path(tmp) / "autovec.c"
+            vw_path = pathlib.Path(tmp) / "autovec.wasm"
+            vc_path.write_text(autovec_c, encoding="utf-8")
+            rw = subprocess.run([str(ZCC_BIN), "--wasm", str(vc_path), "-o", str(vw_path)], capture_output=True, text=True)
+            self.assertEqual(rw.returncode, 0, rw.stderr)
+            wbytes = vw_path.read_bytes()
+            # Verify 0xFD SIMD128 prefix + v128.load (0xfd 0x00) + v128.store (0xfd 0x0b)
+            self.assertIn(b"\xfd\x00", wbytes, "Missing auto-vectorized v128.load (0xfd 0x00)")
+            self.assertIn(b"\xfd\x0b", wbytes, "Missing auto-vectorized v128.store (0xfd 0x0b)")
+            if shutil.which("wasm-validate"):
+                rv = subprocess.run(["wasm-validate", str(vw_path)], capture_output=True, text=True)
+                self.assertEqual(rv.returncode, 0, rv.stderr)
+            self.assertEqual(run_wasm_node(vw_path), 0)
+            if WASMTIME_BIN.exists():
+                rwt = subprocess.run([str(WASMTIME_BIN), "run", "--invoke", "main", str(vw_path)], capture_output=True, text=True)
+                self.assertEqual(rwt.returncode, 0, rwt.stderr)
+                self.assertEqual(rwt.stdout.strip(), "0")
+
 
 if __name__ == "__main__":
     unittest.main()

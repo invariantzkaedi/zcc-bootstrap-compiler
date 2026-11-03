@@ -679,6 +679,42 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv16_04 && /tmp/x86_mv16_04 && python3 tools/zcc_prove_01.py",
     },
+    {
+        "id": "MV18-01",
+        "desc": "ARM64 prologue allocates frame inside stp [sp, #-aligned_stack]! before mov x29, sp so negative [x29, #-16] locals lie below sp and get clobbered by pushes",
+        "file": "part6_arm.c",
+        "old": '    fprintf(cc->out, "    stp x29, x30, [sp, #-16]!\\n");\n    fprintf(cc->out, "    mov x29, sp\\n");\n    if (aligned_stack <= 4095) {\n        fprintf(cc->out, "    sub sp, sp, #%d\\n", aligned_stack);\n    } else {',
+        "new": '    fprintf(cc->out, "    stp x29, x30, [sp, #-%d]!\\n", aligned_stack);\n    fprintf(cc->out, "    mov x29, sp\\n");\n    if (0) {\n        fprintf(cc->out, "    sub sp, sp, #%d\\n", aligned_stack); /* MV18-01 */\n    } else if (0) {',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_09_arm64_riscv64_qemu_and_wasm_autovec_v128",
+    },
+    {
+        "id": "MV18-02",
+        "desc": "ARM64 aarch64_emit_store emits 64-bit str x1, [x0] for 32-bit int stores, corrupting adjacent int array elements",
+        "file": "part6_arm.c",
+        "old": 'static void aarch64_emit_store(Compiler *cc, Type *type) {\n    if (!type || type->size >= 8 || type->kind == TY_PTR) fprintf(cc->out, "    str x1, [x0]\\n");\n    else if (type->size == 4) fprintf(cc->out, "    str w1, [x0]\\n");',
+        "new": 'static void aarch64_emit_store(Compiler *cc, Type *type) {\n    if (!type || type->size >= 4 || type->kind == TY_PTR) fprintf(cc->out, "    str x1, [x0]\\n"); /* MV18-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_09_arm64_riscv64_qemu_and_wasm_autovec_v128",
+    },
+    {
+        "id": "MV18-03",
+        "desc": "RISC-V 64 prologue sets s0 = sp + 16 so saved ra/s0 at 8(sp)/0(sp) alias -8(s0)/-16(s0) parameter spill slots",
+        "file": "part6_riscv.c",
+        "old": '    fprintf(cc->out, "    sd ra, 8(sp)\\n");\n    fprintf(cc->out, "    sd s0, 0(sp)\\n");\n    fprintf(cc->out, "    mv s0, sp\\n");',
+        "new": '    fprintf(cc->out, "    sd ra, 8(sp)\\n");\n    fprintf(cc->out, "    sd s0, 0(sp)\\n");\n    fprintf(cc->out, "    addi s0, sp, 16\\n"); /* MV18-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_09_arm64_riscv64_qemu_and_wasm_autovec_v128",
+    },
+    {
+        "id": "MV18-04",
+        "desc": "WASM ND_FOR loop auto-vectorizer disabled so canonical 4-lane i32x4/f32x4 array loops fail to emit v128.load/store SIMD128 instructions",
+        "file": "part6_wasm.c",
+        "old": '            wasm_try_autovec_for_loop(cc, mod, fn, lmap, gmap, node);',
+        "new": '            if (0) wasm_try_autovec_for_loop(cc, mod, fn, lmap, gmap, node); /* MV18-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_09_arm64_riscv64_qemu_and_wasm_autovec_v128",
+    },
 ]
 
 

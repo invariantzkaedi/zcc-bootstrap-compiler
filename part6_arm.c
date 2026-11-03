@@ -67,6 +67,8 @@ static void thumb_emit_binary_op(Compiler *cc, int op) {
     /* op matches ND_ADD, ND_SUB, etc.
        r0 = lhs, r1 = rhs
        output -> r0 */
+    int uns = (op >> 8) & 1;
+    op &= 0xFF;
     switch (op) {
         case ND_ADD:
             fprintf(cc->out, "    adds r0, r0, r1\n");
@@ -99,6 +101,19 @@ static void thumb_emit_binary_op(Compiler *cc, int op) {
         case ND_SHR:
             fprintf(cc->out, "    asrs r0, r0, r1\n"); /* arithmetic shift right */
             break;
+        case ND_EQ: case ND_NE: case ND_LT: case ND_LE: case ND_GT: case ND_GE: {
+            int lbl_true = new_label(cc);
+            int lbl_end = new_label(cc);
+            const char *br = "beq";
+            if (op == ND_NE) br = "bne";
+            else if (op == ND_LT) br = uns ? "blo" : "blt";
+            else if (op == ND_LE) br = uns ? "bls" : "ble";
+            else if (op == ND_GT) br = uns ? "bhi" : "bgt";
+            else if (op == ND_GE) br = uns ? "bhs" : "bge";
+            fprintf(cc->out, "    cmp r0, r1\n    %s .L%d\n    movs r0, #0\n    b .L%d\n.L%d:\n    movs r0, #1\n.L%d:\n",
+                    br, lbl_true, lbl_end, lbl_true, lbl_end);
+            break;
+        }
     }
 }
 
@@ -300,6 +315,8 @@ static void cm4_emit_prologue(Compiler *cc, Node *func) {
 }
 
 static void cm4_emit_binary_op(Compiler *cc, int op) {
+    int uns = (op >> 8) & 1;
+    op &= 0xFF;
     switch (op) {
         case ND_ADD:  fprintf(cc->out, "    add r0, r0, r1\n"); break;
         case ND_SUB:  fprintf(cc->out, "    sub r0, r0, r1\n"); break;
@@ -314,6 +331,19 @@ static void cm4_emit_binary_op(Compiler *cc, int op) {
         case ND_BXOR: fprintf(cc->out, "    eor r0, r0, r1\n"); break;
         case ND_SHL:  fprintf(cc->out, "    lsl r0, r0, r1\n"); break;
         case ND_SHR:  fprintf(cc->out, "    asr r0, r0, r1\n"); break;
+        case ND_EQ: case ND_NE: case ND_LT: case ND_LE: case ND_GT: case ND_GE: {
+            int lbl_true = new_label(cc);
+            int lbl_end = new_label(cc);
+            const char *br = "beq";
+            if (op == ND_NE) br = "bne";
+            else if (op == ND_LT) br = uns ? "blo" : "blt";
+            else if (op == ND_LE) br = uns ? "bls" : "ble";
+            else if (op == ND_GT) br = uns ? "bhi" : "bgt";
+            else if (op == ND_GE) br = uns ? "bhs" : "bge";
+            fprintf(cc->out, "    cmp r0, r1\n    %s .L%d\n    movs r0, #0\n    b .L%d\n.L%d:\n    movs r0, #1\n.L%d:\n",
+                    br, lbl_true, lbl_end, lbl_true, lbl_end);
+            break;
+        }
     }
 }
 
@@ -452,10 +482,16 @@ static void aarch64_emit_prologue(Compiler *cc, Node *func) {
     }
     fprintf(cc->out, "    .type %s, %%function\n", func->func_def_name);
     fprintf(cc->out, "%s:\n", func->func_def_name);
-    fprintf(cc->out, "    stp x29, x30, [sp, #-%d]!\n", aligned_stack);
+    fprintf(cc->out, "    stp x29, x30, [sp, #-16]!\n");
     fprintf(cc->out, "    mov x29, sp\n");
+    if (aligned_stack <= 4095) {
+        fprintf(cc->out, "    sub sp, sp, #%d\n", aligned_stack);
+    } else {
+        fprintf(cc->out, "    ldr x16, =%d\n", aligned_stack);
+        fprintf(cc->out, "    sub sp, sp, x16\n");
+    }
 
-    /* AAPCS64: Parameter passing in x0-x7 spilled to local frame slots */
+    /* AAPCS64: Parameter passing in x0-x7 spilled to local frame slots below x29 */
     int i;
     for (i = 0; i < func->num_params && i < 8; i++) {
         int off = -(i * 8 + 8);
@@ -464,12 +500,10 @@ static void aarch64_emit_prologue(Compiler *cc, Node *func) {
 }
 
 static void aarch64_emit_epilogue(Compiler *cc, Node *func) {
-    int raw_stack = func->stack_size + 64;
-    if (raw_stack < 256) raw_stack = 256;
-    int aligned_stack = (raw_stack + 15) & ~15;
-
+    (void)func;
     fprintf(cc->out, ".Lfunc_end_%d:\n", cc->func_end_label);
-    fprintf(cc->out, "    ldp x29, x30, [sp], #%d\n", aligned_stack);
+    fprintf(cc->out, "    mov sp, x29\n");
+    fprintf(cc->out, "    ldp x29, x30, [sp], #16\n");
     fprintf(cc->out, "    ret\n");
 }
 
@@ -478,6 +512,8 @@ static void aarch64_emit_call(Compiler *cc, Node *func) {
 }
 
 static void aarch64_emit_binary_op(Compiler *cc, int op) {
+    int uns = (op >> 8) & 1;
+    op &= 0xFF;
     switch (op) {
         case ND_ADD:
             fprintf(cc->out, "    add x0, x0, x1\n");
@@ -510,18 +546,37 @@ static void aarch64_emit_binary_op(Compiler *cc, int op) {
         case ND_SHR:
             fprintf(cc->out, "    asr x0, x0, x1\n");
             break;
+        case ND_EQ:
+            fprintf(cc->out, "    cmp x0, x1\n    cset x0, eq\n");
+            break;
+        case ND_NE:
+            fprintf(cc->out, "    cmp x0, x1\n    cset x0, ne\n");
+            break;
+        case ND_LT:
+            fprintf(cc->out, "    cmp x0, x1\n    cset x0, %s\n", uns ? "lo" : "lt");
+            break;
+        case ND_LE:
+            fprintf(cc->out, "    cmp x0, x1\n    cset x0, %s\n", uns ? "ls" : "le");
+            break;
+        case ND_GT:
+            fprintf(cc->out, "    cmp x0, x1\n    cset x0, %s\n", uns ? "hi" : "gt");
+            break;
+        case ND_GE:
+            fprintf(cc->out, "    cmp x0, x1\n    cset x0, %s\n", uns ? "hs" : "ge");
+            break;
     }
 }
 
 static const char *aarch64_map_reg(const char *reg) {
     if (!reg) return "x0";
-    if (strcmp(reg, "rax") == 0 || strcmp(reg, "eax") == 0 || strcmp(reg, "r0") == 0) return "x0";
-    if (strcmp(reg, "rdi") == 0 || strcmp(reg, "edi") == 0 || strcmp(reg, "r1") == 0 || strcmp(reg, "r11") == 0) return "x1";
-    if (strcmp(reg, "rsi") == 0 || strcmp(reg, "esi") == 0 || strcmp(reg, "r2") == 0) return "x2";
-    if (strcmp(reg, "rdx") == 0 || strcmp(reg, "edx") == 0 || strcmp(reg, "r3") == 0) return "x3";
-    if (strcmp(reg, "rcx") == 0 || strcmp(reg, "ecx") == 0 || strcmp(reg, "r4") == 0) return "x4";
-    if (strcmp(reg, "r8") == 0 || strcmp(reg, "r5") == 0) return "x5";
-    if (strcmp(reg, "r9") == 0 || strcmp(reg, "r6") == 0) return "x6";
+    if (reg[0] == '%') reg++;
+    if (strcmp(reg, "rax") == 0 || strcmp(reg, "eax") == 0 || strcmp(reg, "ax") == 0 || strcmp(reg, "al") == 0 || strcmp(reg, "r0") == 0) return "x0";
+    if (strcmp(reg, "rdi") == 0 || strcmp(reg, "edi") == 0 || strcmp(reg, "di") == 0 || strcmp(reg, "dil") == 0 || strcmp(reg, "r1") == 0 || strcmp(reg, "r11") == 0) return "x1";
+    if (strcmp(reg, "rsi") == 0 || strcmp(reg, "esi") == 0 || strcmp(reg, "si") == 0 || strcmp(reg, "sil") == 0 || strcmp(reg, "r2") == 0) return "x2";
+    if (strcmp(reg, "rdx") == 0 || strcmp(reg, "edx") == 0 || strcmp(reg, "dx") == 0 || strcmp(reg, "dl") == 0 || strcmp(reg, "r3") == 0) return "x3";
+    if (strcmp(reg, "rcx") == 0 || strcmp(reg, "ecx") == 0 || strcmp(reg, "cx") == 0 || strcmp(reg, "cl") == 0 || strcmp(reg, "r4") == 0) return "x4";
+    if (strcmp(reg, "r8") == 0 || strcmp(reg, "r8d") == 0 || strcmp(reg, "r5") == 0) return "x5";
+    if (strcmp(reg, "r9") == 0 || strcmp(reg, "r9d") == 0 || strcmp(reg, "r6") == 0) return "x6";
     return reg;
 }
 
@@ -529,10 +584,10 @@ static void aarch64_emit_load_stack(Compiler *cc, int offset, const char *reg) {
     const char *r = aarch64_map_reg(reg);
     if (offset >= -256 && offset < 0) {
         fprintf(cc->out, "    ldur %s, [x29, #%d]\n", r, offset);
-    } else if (offset >= 0 && offset <= 4095) {
+    } else if (offset >= 0 && offset <= 4095 && (offset % 8 == 0)) {
         fprintf(cc->out, "    ldr %s, [x29, #%d]\n", r, offset);
     } else {
-        fprintf(cc->out, "    mov x16, #%d\n", offset);
+        fprintf(cc->out, "    ldr x16, =%d\n", offset);
         fprintf(cc->out, "    ldr %s, [x29, x16]\n", r);
     }
 }
@@ -541,10 +596,10 @@ static void aarch64_emit_store_stack(Compiler *cc, int offset, const char *reg) 
     const char *r = aarch64_map_reg(reg);
     if (offset >= -256 && offset < 0) {
         fprintf(cc->out, "    stur %s, [x29, #%d]\n", r, offset);
-    } else if (offset >= 0 && offset <= 4095) {
+    } else if (offset >= 0 && offset <= 4095 && (offset % 8 == 0)) {
         fprintf(cc->out, "    str %s, [x29, #%d]\n", r, offset);
     } else {
-        fprintf(cc->out, "    mov x16, #%d\n", offset);
+        fprintf(cc->out, "    ldr x16, =%d\n", offset);
         fprintf(cc->out, "    str %s, [x29, x16]\n", r);
     }
 }
@@ -569,13 +624,15 @@ static void aarch64_emit_pop(Compiler *cc, const char *reg) {
 }
 
 static void aarch64_emit_load(Compiler *cc, Type *type) {
-    if (!type || type->size >= 4 || type->kind == TY_PTR) fprintf(cc->out, "    ldr x0, [x0]\n");
+    if (!type || type->size >= 8 || type->kind == TY_PTR) fprintf(cc->out, "    ldr x0, [x0]\n");
+    else if (type->size == 4) fprintf(cc->out, is_unsigned_type(type) ? "    ldr w0, [x0]\n" : "    ldrsw x0, [x0]\n");
     else if (type->size == 1) fprintf(cc->out, is_unsigned_type(type) ? "    ldrb w0, [x0]\n" : "    ldrsb x0, [x0]\n");
     else if (type->size == 2) fprintf(cc->out, is_unsigned_type(type) ? "    ldrh w0, [x0]\n" : "    ldrsh x0, [x0]\n");
 }
 
 static void aarch64_emit_store(Compiler *cc, Type *type) {
-    if (!type || type->size >= 4 || type->kind == TY_PTR) fprintf(cc->out, "    str x1, [x0]\n");
+    if (!type || type->size >= 8 || type->kind == TY_PTR) fprintf(cc->out, "    str x1, [x0]\n");
+    else if (type->size == 4) fprintf(cc->out, "    str w1, [x0]\n");
     else if (type->size == 1) fprintf(cc->out, "    strb w1, [x0]\n");
     else if (type->size == 2) fprintf(cc->out, "    strh w1, [x0]\n");
     fprintf(cc->out, "    mov x0, x1\n");

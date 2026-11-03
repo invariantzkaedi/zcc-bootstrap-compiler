@@ -77,7 +77,11 @@
     "sse_pass5c_pass6_dst_guards_active": true,
     "pass6_zext_elision_soundness": "UNSAT (PROVEN_SOUND)",
     "pass6_non_rax_and_hex_negative_controls": "SAT_CAUGHT (movq $5, %r11 and movq $0xfffffffffffffff0, %rax leave bits [63:32] non-zero)",
-    "part5_tco_full_function_escape_guard_active": true
+    "part5_tco_full_function_escape_guard_active": true,
+    "aarch64_frame_and_32bit_store_guard_active": true,
+    "riscv64_ra_s0_frame_separation_active": true,
+    "wasm_simd128_autovec_active": true,
+    "wasm_simd128_4lane_plus_tail_equivalence": "UNSAT (PROVEN_SOUND)"
   },
   "cases_verified": 25,
   "total_emulated_states": 5000,

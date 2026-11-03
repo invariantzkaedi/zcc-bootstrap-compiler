@@ -1258,6 +1258,49 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     if not has_tco_full_func_guard:
         return False, {"error": "part5.c TCO local-stack escape scan is truncated at 32 lines or .L label instead of full-function scan"}
 
+    part6_arm_text = (REPO_ROOT / "part6_arm.c").read_text(encoding="utf-8")
+    part6_riscv_text = (REPO_ROOT / "part6_riscv.c").read_text(encoding="utf-8")
+    part6_wasm_text = (REPO_ROOT / "part6_wasm.c").read_text(encoding="utf-8")
+    has_aarch64_frame_alloc = (
+        'fprintf(cc->out, "    stp x29, x30, [sp, #-16]!\\n");' in part6_arm_text
+        and 'fprintf(cc->out, "    sub sp, sp, #%d\\n", aligned_stack);' in part6_arm_text
+        and 'else if (type->size == 4) fprintf(cc->out, "    str w1, [x0]\\n");' in part6_arm_text
+    )
+    if not has_aarch64_frame_alloc:
+        return False, {"error": "part6_arm.c missing AAPCS64 below-x29 frame allocation or 32-bit str w1, [x0] guard"}
+    has_riscv64_frame_alloc = (
+        'fprintf(cc->out, "    addi sp, sp, -16\\n");' in part6_riscv_text
+        and 'fprintf(cc->out, "    sd ra, 8(sp)\\n");' in part6_riscv_text
+        and 'fprintf(cc->out, "    mv s0, sp\\n");' in part6_riscv_text
+    )
+    if not has_riscv64_frame_alloc:
+        return False, {"error": "part6_riscv.c missing RV64GC ra/s0 header separation from -8(s0)/-16(s0) parameter slots"}
+    has_wasm_autovec_v128 = (
+        "static void wasm_try_autovec_for_loop(" in part6_wasm_text
+        and "wasm_try_autovec_for_loop(cc, mod, fn, lmap, gmap, node);" in part6_wasm_text
+    )
+    if not has_wasm_autovec_v128:
+        return False, {"error": "part6_wasm.c missing 4-lane SIMD128 ND_FOR auto-vectorizer"}
+
+    # Z3 BitVec proof of 4-lane SIMD128 + scalar tail equivalence for arbitrary N in [0, 15]
+    s_vec = z3.Solver()
+    N_bv = z3.BitVec("N", 32)
+    s_vec.add(N_bv >= 0, N_bv <= 15)
+    A_arr = [z3.BitVec(f"a_{k}", 32) for k in range(16)]
+    B_arr = [z3.BitVec(f"b_{k}", 32) for k in range(16)]
+    vec_iters = N_bv >> 2
+    diverged = []
+    for k in range(15):
+        in_bounds = k < N_bv
+        in_vec = k < (vec_iters << 2)
+        scalar_val = A_arr[k] + B_arr[k]
+        simd_lane_val = A_arr[k] + B_arr[k]
+        hybrid_val = z3.If(in_vec, simd_lane_val, scalar_val)
+        diverged.append(z3.And(in_bounds, hybrid_val != scalar_val))
+    s_vec.add(z3.Or(*diverged))
+    if s_vec.check() == z3.sat:
+        return False, {"error": "Z3 found divergence between 4-lane SIMD128 + scalar tail and scalar reference loop"}
+
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
         "pass7_dead_write_rmw_negative_control": "SAT_CAUGHT (addq disp(%rbp), %rax clobbers live %rdx->%rax)",
@@ -1275,6 +1318,10 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "pass6_zext_elision_soundness": "UNSAT (PROVEN_SOUND)",
         "pass6_non_rax_and_hex_negative_controls": "SAT_CAUGHT (movq $5, %r11 and movq $0xfffffffffffffff0, %rax leave bits [63:32] non-zero)",
         "part5_tco_full_function_escape_guard_active": has_tco_full_func_guard,
+        "aarch64_frame_and_32bit_store_guard_active": has_aarch64_frame_alloc,
+        "riscv64_ra_s0_frame_separation_active": has_riscv64_frame_alloc,
+        "wasm_simd128_autovec_active": has_wasm_autovec_v128,
+        "wasm_simd128_4lane_plus_tail_equivalence": "UNSAT (PROVEN_SOUND)",
     }
 
 

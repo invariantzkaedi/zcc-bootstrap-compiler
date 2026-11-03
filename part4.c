@@ -3092,40 +3092,14 @@ void codegen_expr(Compiler *cc, Node *node) {
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
     if (backend_ops) {
-        fprintf(cc->out, "    mov r1, r0\n");
+        if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc);
+        else fprintf(cc->out, "    mov r1, r0\n");
     } else {
-        if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
-      else fprintf(cc->out, "    movq %%rax, %%r11\n");
+        fprintf(cc->out, "    movq %%rax, %%r11\n");
     }
     pop_reg(cc, "rax");
-    if (backend_ops) {
-        fprintf(cc->out, "    cmp r0, r1\n");
-        int lbl_true = new_label(cc);
-        int lbl_end = new_label(cc);
-        if (uns) {
-            switch (node->kind) {
-            case ND_EQ: fprintf(cc->out, "    beq .L%d\n", lbl_true); break;
-            case ND_NE: fprintf(cc->out, "    bne .L%d\n", lbl_true); break;
-            case ND_LT: fprintf(cc->out, "    blo .L%d\n", lbl_true); break;
-            case ND_LE: fprintf(cc->out, "    bls .L%d\n", lbl_true); break;
-            case ND_GT: fprintf(cc->out, "    bhi .L%d\n", lbl_true); break;
-            case ND_GE: fprintf(cc->out, "    bhs .L%d\n", lbl_true); break;
-            }
-        } else {
-            switch (node->kind) {
-            case ND_EQ: fprintf(cc->out, "    beq .L%d\n", lbl_true); break;
-            case ND_NE: fprintf(cc->out, "    bne .L%d\n", lbl_true); break;
-            case ND_LT: fprintf(cc->out, "    blt .L%d\n", lbl_true); break;
-            case ND_LE: fprintf(cc->out, "    ble .L%d\n", lbl_true); break;
-            case ND_GT: fprintf(cc->out, "    bgt .L%d\n", lbl_true); break;
-            case ND_GE: fprintf(cc->out, "    bge .L%d\n", lbl_true); break;
-            }
-        }
-        fprintf(cc->out, "    movs r0, #0\n");
-        fprintf(cc->out, "    b .L%d\n", lbl_end);
-        fprintf(cc->out, ".L%d:\n", lbl_true);
-        fprintf(cc->out, "    movs r0, #1\n");
-        fprintf(cc->out, ".L%d:\n", lbl_end);
+    if (backend_ops && backend_ops->emit_binary_op) {
+        backend_ops->emit_binary_op(cc, node->kind | (uns ? 256 : 0));
     } else {
         if (use32)
           fprintf(cc->out,

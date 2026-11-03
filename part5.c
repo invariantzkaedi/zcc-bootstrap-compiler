@@ -670,7 +670,11 @@ static void peephole_optimize(char *filename) {
   fclose(fp);
 
   int pass;
-  for (pass = 0; pass < 2; pass++) {
+  if (backend_ops) {
+    extern void backend_normalize_asm(char **line_ptrs, int nlines);
+    backend_normalize_asm(line_ptrs, nlines);
+  }
+  for (pass = 0; !backend_ops && pass < 2; pass++) {
     int active = 0;
     for (i = 0; i < nlines; i++) {
       if (line_ptrs[i][0] != 0) {
@@ -1073,7 +1077,7 @@ static void peephole_optimize(char *filename) {
     i++;
     }
   }
-  {
+  if (!backend_ops) {
     extern int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr);
     eliminated += zcc_x86_peephole_boost(line_ptrs, &nlines);
   }
