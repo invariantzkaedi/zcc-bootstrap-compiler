@@ -614,8 +614,12 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                             if (!touched) {
                                 int nk = j + 2;
                                 while (nk < nlines && (line_ptrs[nk][0] == 0 || strncmp(line_ptrs[nk], "    .loc ", 9) == 0 || strncmp(line_ptrs[nk], "    .file ", 10) == 0 || strncmp(line_ptrs[nk], "    movaps ", 11) == 0)) nk++;
-                                if (nk < nlines && (strcmp(line_ptrs[nk], "    popq %rax\n") == 0 || strncmp(line_ptrs[nk], "    movl $", 10) == 0 || strcmp(line_ptrs[nk], "    xorl %eax, %eax\n") == 0)) {
-                                    found_j = j;
+                                if (nk < nlines) {
+                                    int nk_len = (int)strlen(line_ptrs[nk]);
+                                    if (strcmp(line_ptrs[nk], "    popq %rax\n") == 0 || strcmp(line_ptrs[nk], "    xorl %eax, %eax\n") == 0 ||
+                                        (nk_len > 16 && strncmp(line_ptrs[nk], "    movl $", 10) == 0 && strcmp(line_ptrs[nk] + nk_len - 7, ", %eax\n") == 0)) {
+                                        found_j = j;
+                                    }
                                 }
                             }
                         }
@@ -664,9 +668,10 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                         if (strcmp(nl, "    movq %xmm0, %rax\n") == 0 || strcmp(nl, "    movd %xmm0, %eax\n") == 0 ||
                             strncmp(nl, "    set", 7) == 0 || strncmp(nl, "    cvttss2si ", 14) == 0 || strncmp(nl, "    cvttsd2si ", 14) == 0 ||
                             strcmp(nl, "    xorl %eax, %eax\n") == 0 || strcmp(nl, "    xorq %rax, %rax\n") == 0 ||
-                            strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0 ||
                             (nlen >= 7 && (strcmp(nl + nlen - 7, ", %rax\n") == 0 || strcmp(nl + nlen - 7, ", %eax\n") == 0) &&
-                             !strstr(nl, "(%rax)") && !strstr(nl, "(%eax)") && (strncmp(nl, "    mov", 7) == 0 || strncmp(nl, "    lea", 7) == 0))) {
+                             !strstr(nl, "(%rax)") && !strstr(nl, "(%eax)") &&
+                             (strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0 ||
+                              ((strncmp(nl, "    mov", 7) == 0 || strncmp(nl, "    lea", 7) == 0) && (strstr(nl, "(%rbp)") || strstr(nl, "(%rip)")))))) {
                             line_ptrs[i][0] = 0; eliminated += 1; i += 1; continue;
                         }
                     }
@@ -717,10 +722,12 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                         while (k2 < nlines && (line_ptrs[k2][0] == 0 || strncmp(line_ptrs[k2], "    .loc ", 9) == 0 || strncmp(line_ptrs[k2], "    .file ", 10) == 0)) k2++;
                         if (k2 < nlines) {
                             char *nl = line_ptrs[k2];
+                            int nlen = (int)strlen(nl);
                             if ((strncmp(nl, "    leaq ", 9) == 0 && (strstr(nl, "(%rbp), %rax\n") || strstr(nl, "(%rip), %rax\n"))) ||
                                 (strncmp(nl, "    movq ", 9) == 0 && (strstr(nl, "(%rbp), %rax\n") || strstr(nl, "(%rip), %rax\n"))) ||
                                 (strncmp(nl, "    movslq ", 11) == 0 && (strstr(nl, "(%rbp), %rax\n") || strstr(nl, "(%rip), %rax\n"))) ||
-                                strncmp(nl, "    movq $", 10) == 0 || strcmp(nl, "    xorl %eax, %eax\n") == 0 ||
+                                (nlen > 16 && strncmp(nl, "    movq $", 10) == 0 && strcmp(nl + nlen - 7, ", %rax\n") == 0) ||
+                                strcmp(nl, "    xorl %eax, %eax\n") == 0 ||
                                 strcmp(nl, "    popq %rax\n") == 0) {
                                 memcpy(l1 + l1_len - 7, ", %r11\n", 7);
                                 line_ptrs[k1][0] = 0;
@@ -732,10 +739,12 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                         while (k2 < nlines && (line_ptrs[k2][0] == 0 || strncmp(line_ptrs[k2], "    .loc ", 9) == 0 || strncmp(line_ptrs[k2], "    .file ", 10) == 0)) k2++;
                         if (k2 < nlines) {
                             char *nl = line_ptrs[k2];
+                            int nlen = (int)strlen(nl);
                             if ((strncmp(nl, "    leaq ", 9) == 0 && (strstr(nl, "(%rbp), %rax\n") || strstr(nl, "(%rip), %rax\n"))) ||
                                 (strncmp(nl, "    movq ", 9) == 0 && (strstr(nl, "(%rbp), %rax\n") || strstr(nl, "(%rip), %rax\n"))) ||
                                 (strncmp(nl, "    movslq ", 11) == 0 && (strstr(nl, "(%rbp), %rax\n") || strstr(nl, "(%rip), %rax\n"))) ||
-                                strncmp(nl, "    movq $", 10) == 0 || strcmp(nl, "    xorl %eax, %eax\n") == 0) {
+                                (nlen > 16 && strncmp(nl, "    movq $", 10) == 0 && strcmp(nl + nlen - 7, ", %rax\n") == 0) ||
+                                strcmp(nl, "    xorl %eax, %eax\n") == 0) {
                                 int k3 = k2 + 1;
                                 while (k3 < nlines && (line_ptrs[k3][0] == 0 || strncmp(line_ptrs[k3], "    .loc ", 9) == 0 || strncmp(line_ptrs[k3], "    .file ", 10) == 0)) k3++;
                                 if (k3 < nlines && strncmp(line_ptrs[k3], "    addq $", 10) == 0 && strstr(line_ptrs[k3], ", %rax\n")) {

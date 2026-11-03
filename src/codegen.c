@@ -2954,7 +2954,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
           unsigned char zero[8] = {0, 0, 0, 0, 0, 0, 0, 0};
           seg_append(CUR_DATA_SEG, zero, 8);
         } else {
-          val = strtoll(arg, NULL, 0);
+          val = (*arg == '-') ? strtoll(arg, NULL, 0) : (long long)strtoull(arg, NULL, 0);
           unsigned char b[8];
           int i;
           for (i = 0; i < 8; i++) {
@@ -4243,7 +4243,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
                    strcmp(mnemonic, "orq") == 0 ||
                    strcmp(mnemonic, "xorq") == 0) {
           if (op1[0] == '$') {
-            long long imm = strtoll(op1 + 1, NULL, 0);
+            long long imm = (op1[1] == '-') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);
             if (strcmp(mnemonic, "imulq") == 0) {
               unsigned char rex = 0x48;
               unsigned char opcode = 0x69;
@@ -4458,7 +4458,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
                    strcmp(mnemonic, "subl") == 0 ||
                    strcmp(mnemonic, "cmpl") == 0) {
           if (op1[0] == '$') {
-            long long imm = strtoll(op1 + 1, NULL, 0);
+            long long imm = (op1[1] == '-') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);
             unsigned char rex = 0x40;
             unsigned char opcode = 0x81;
             unsigned char modrm = 0xc0;
@@ -4514,7 +4514,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
                    strcmp(mnemonic, "andl") == 0 ||
                    strcmp(mnemonic, "orl") == 0) {
           if (op1[0] == '$') {
-            long long imm = strtoll(op1 + 1, NULL, 0);
+            long long imm = (op1[1] == '-') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);
             unsigned char rex = 0x40;
             unsigned char opcode = 0x81;
             unsigned char modrm = 0xc0;

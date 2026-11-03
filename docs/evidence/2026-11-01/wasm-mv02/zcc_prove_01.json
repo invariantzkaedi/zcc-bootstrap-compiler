@@ -74,6 +74,7 @@
     "sse_pass8_label_jump_guard_active": true,
     "sse_parse_imm_helper_active": true,
     "codegen_movq_u64_imm_active": true,
+    "sse_pass5c_pass6_dst_guards_active": true,
     "pass6_zext_elision_soundness": "UNSAT (PROVEN_SOUND)",
     "pass6_non_rax_and_hex_negative_controls": "SAT_CAUGHT (movq $5, %r11 and movq $0xfffffffffffffff0, %rax leave bits [63:32] non-zero)",
     "part5_tco_full_function_escape_guard_active": true

@@ -667,6 +667,41 @@ int classify_mv14_pass6_and_hex_imm(void) {
     return 168;
 }
 
+/* MV-15 + ZCC-PROVE-07:
+ *   1) `zcc_x86_peephole_boost` Pass 5c (`ZCC_OPT=1`):
+ *      - `movq $5, %r11` (or `movl $5, -40(%rbp)`) after `addsd %xmm0, %xmm0` must NOT be treated
+ *        as a `%rax` overwrite, so `movq %xmm0, %rax` before `addsd %xmm0, %xmm0` is preserved.
+ *   2) `zcc_x86_peephole_boost` Pass 6 (`ZCC_OPT=1`):
+ *      - `movq -32(%rbp), %rax` followed by `movq %rax, %r11` and `movq $99, -40(%rbp)` must NOT
+ *        rewrite `movq -32(%rbp), %rax` to `, %r11` and drop `movq %rax, %r11`, because `movq $99, -40(%rbp)`
+ *        does not overwrite `%rax`.
+ *   3) `src/codegen.c`:
+ *      - `addq $0xfffffffffffffff0, %rax` encodes `imm == -16` (`84`), NOT saturated `LLONG_MAX` (`-1` -> `99`).
+ */
+int classify_mv15_pass5c_pass6_and_addq_hex(void) {
+    long long rax_p5c = 0, rax_p6 = 0, r11_p6 = 0, rax_addq = 0;
+#ifdef __ZCC__
+    asm("movq $0x42424242, %rax\n    movq %rax, %xmm0\n    xorl %eax, %eax\n    movq %xmm0, %rax\n    addsd %xmm0, %xmm0\n    movq $5, %r11");
+    asm("movq %%rax, %0" : "=r"(rax_p5c));
+
+    asm("movq $42, -32(%rbp)\n    movq -32(%rbp), %rax\n    movq %rax, %r11\n    movq $99, -40(%rbp)");
+    asm("movq %%rax, %0" : "=r"(rax_p6));
+    asm("movq %%r11, %0" : "=r"(r11_p6));
+
+    asm("movq $100, %rax\n    addq $0xfffffffffffffff0, %rax");
+    asm("movq %%rax, %0" : "=r"(rax_addq));
+#else
+    rax_p5c = 0x42424242LL;
+    rax_p6 = 42LL;
+    r11_p6 = 42LL;
+    rax_addq = 84LL;
+#endif
+    if (rax_p5c != 0x42424242LL) return -170;
+    if (rax_p6 != 42LL || r11_p6 != 42LL) return -171;
+    if (rax_addq != 84LL) return -172;
+    return 178;
+}
+
 int main(void) {
     if (classify(4294967296LL) != 7) return 1;
     if (classify(-4294967296LL) != 9) return 2;
@@ -690,5 +725,6 @@ int main(void) {
     if (classify_mv12_boost_and_tco() != 148) return 20;
     if (classify_mv13_pass8_and_pass5c() != 158) return 21;
     if (classify_mv14_pass6_and_hex_imm() != 168) return 22;
+    if (classify_mv15_pass5c_pass6_and_addq_hex() != 178) return 23;
     return 0;
 }

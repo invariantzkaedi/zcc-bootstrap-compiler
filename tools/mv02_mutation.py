@@ -607,6 +607,42 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "python3 tools/zcc_prove_01.py",
     },
+    {
+        "id": "MV15-01",
+        "desc": "Peephole boost Pass 5c elides live movq %xmm0, %rax before addsd %xmm0, %xmm0 + movq $5, %r11 when movq $ is not guarded by , %rax destination check",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                            strcmp(nl, "    xorl %eax, %eax\\n") == 0 || strcmp(nl, "    xorq %rax, %rax\\n") == 0 ||\n                            (nlen >= 7 && (strcmp(nl + nlen - 7, ", %rax\\n") == 0 || strcmp(nl + nlen - 7, ", %eax\\n") == 0) &&',
+        "new": '                            strcmp(nl, "    xorl %eax, %eax\\n") == 0 || strcmp(nl, "    xorq %rax, %rax\\n") == 0 ||\n                            strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0 ||\n                            (nlen >= 7 && (strcmp(nl + nlen - 7, ", %rax\\n") == 0 || strcmp(nl + nlen - 7, ", %eax\\n") == 0) && /* MV15-01 */',
+        "build": "make zcc",
+        "test": "ZCC_OPT=1 ./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv15_01 && /tmp/x86_mv15_01",
+    },
+    {
+        "id": "MV15-02",
+        "desc": "Peephole boost Pass 6 reverse-coupled back-propagation rewrites movq -32(%rbp), %rax to %r11 before movq $99, -40(%rbp) when movq $ lacks , %rax suffix check",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                                (nlen > 16 && strncmp(nl, "    movq $", 10) == 0 && strcmp(nl + nlen - 7, ", %rax\\n") == 0) ||\n                                strcmp(nl, "    xorl %eax, %eax\\n") == 0 ||\n                                strcmp(nl, "    popq %rax\\n") == 0) {',
+        "new": '                                strncmp(nl, "    movq $", 10) == 0 ||\n                                strcmp(nl, "    xorl %eax, %eax\\n") == 0 ||\n                                strcmp(nl, "    popq %rax\\n") == 0) { /* MV15-02 */',
+        "build": "make zcc",
+        "test": "ZCC_OPT=1 ./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv15_02 && /tmp/x86_mv15_02",
+    },
+    {
+        "id": "MV15-03",
+        "desc": "Internal ELF assembler src/codegen.c saturates addq $0xfffffffffffffff0, %rax to -1 (LLONG_MAX) when strtoll is used instead of strtoull",
+        "file": "src/codegen.c",
+        "old": '                   strcmp(mnemonic, "xorq") == 0) {\n          if (op1[0] == \'$\') {\n            long long imm = (op1[1] == \'-\') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);',
+        "new": '                   strcmp(mnemonic, "xorq") == 0) {\n          if (op1[0] == \'$\') {\n            long long imm = strtoll(op1 + 1, NULL, 0); /* MV15-03 */',
+        "build": "make zcc",
+        "test": "ZCC_OPT=1 ./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv15_03 && /tmp/x86_mv15_03",
+    },
+    {
+        "id": "MV15-04",
+        "desc": "ZCC-PROVE-07 verifier rejects src/x86_codegen_sse.c when Pass 5c XMM call-arg bypass movl $ destination suffix guard is removed",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                                        (nk_len > 16 && strncmp(line_ptrs[nk], "    movl $", 10) == 0 && strcmp(line_ptrs[nk] + nk_len - 7, ", %eax\\n") == 0)) {',
+        "new": '                                        strncmp(line_ptrs[nk], "    movl $", 10) == 0) { /* MV15-04 */',
+        "build": "make zcc",
+        "test": "python3 tools/zcc_prove_01.py",
+    },
 ]
 
 

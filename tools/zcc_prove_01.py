@@ -1144,6 +1144,13 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     has_codegen_movq_u64_imm = (
         'long long imm = (op1[1] == \'-\') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);'
         in codegen_text[codegen_text.find('if (strcmp(mnemonic, "movq") == 0'):codegen_text.find('if (strcmp(mnemonic, "movabsq") == 0')]
+        and 'long long imm = (op1[1] == \'-\') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);'
+        in codegen_text[codegen_text.find('strcmp(mnemonic, "addq") == 0'):codegen_text.find('strcmp(mnemonic, "sarq") == 0')]
+    )
+    has_sse_pass5c_pass6_dst_guards = (
+        '(strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0 ||' in sse_text
+        and '(nlen > 16 && strncmp(nl, "    movq $", 10) == 0 && strcmp(nl + nlen - 7, ", %rax\\n") == 0)' in sse_text
+        and 'strcmp(line_ptrs[nk] + nk_len - 7, ", %eax\\n") == 0' in sse_text
     )
     if (
         not has_sse_pass0a_hex_guard
@@ -1153,9 +1160,10 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         or not has_sse_pass5c_overwrite_guard
         or not has_sse_parse_imm_helper
         or not has_codegen_movq_u64_imm
+        or not has_sse_pass5c_pass6_dst_guards
     ):
         return False, {
-            "error": "src/x86_codegen_sse.c or src/codegen.c Pass 0a / Pass 3 / Pass 5c / Pass 6 / Pass 7 / Pass 8 / movq u64 guard missing",
+            "error": "src/x86_codegen_sse.c or src/codegen.c Pass 0a / Pass 3 / Pass 5c / Pass 6 / Pass 7 / Pass 8 / movq+addq u64 guard missing",
             "has_sse_pass0a_hex_guard": has_sse_pass0a_hex_guard,
             "has_sse_pass5c_overwrite_guard": has_sse_pass5c_overwrite_guard,
             "has_sse_pass7_mov_guard": has_sse_pass7_mov_guard,
@@ -1163,6 +1171,7 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
             "has_sse_pass8_label_jump_guard": has_sse_pass8_label_jump_guard,
             "has_sse_parse_imm_helper": has_sse_parse_imm_helper,
             "has_codegen_movq_u64_imm": has_codegen_movq_u64_imm,
+            "has_sse_pass5c_pass6_dst_guards": has_sse_pass5c_pass6_dst_guards,
         }
 
     # ZCC-PROVE-06: Pass 6 movl %eax, %eax Zero-Extension Elision Soundness & Negative Controls
@@ -1240,6 +1249,7 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "sse_pass8_label_jump_guard_active": has_sse_pass8_label_jump_guard,
         "sse_parse_imm_helper_active": has_sse_parse_imm_helper,
         "codegen_movq_u64_imm_active": has_codegen_movq_u64_imm,
+        "sse_pass5c_pass6_dst_guards_active": has_sse_pass5c_pass6_dst_guards,
         "pass6_zext_elision_soundness": "UNSAT (PROVEN_SOUND)",
         "pass6_non_rax_and_hex_negative_controls": "SAT_CAUGHT (movq $5, %r11 and movq $0xfffffffffffffff0, %rax leave bits [63:32] non-zero)",
         "part5_tco_full_function_escape_guard_active": has_tco_full_func_guard,
