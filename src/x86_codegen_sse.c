@@ -641,7 +641,25 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                     strncmp(l2, "    cvtss2sd ", 13) == 0 || strncmp(l2, "    cvtsd2ss ", 13) == 0 ||
                     (strcmp(l2, "    subq $8, %rsp\n") == 0 && i + 2 < nlines &&
                      (strcmp(line_ptrs[i + 2], "    movss %xmm0, (%rsp)\n") == 0 || strcmp(line_ptrs[i + 2], "    movsd %xmm0, (%rsp)\n") == 0))) {
-                    line_ptrs[i][0] = 0; eliminated += 1; i += 1; continue;
+                    int k = i + 2;
+                    while (k < nlines && (line_ptrs[k][0] == 0 || strncmp(line_ptrs[k], "    .loc ", 9) == 0 || strncmp(line_ptrs[k], "    .file ", 10) == 0 ||
+                           strncmp(line_ptrs[k], "    movaps ", 11) == 0 || strncmp(line_ptrs[k], "    movss ", 10) == 0 || strncmp(line_ptrs[k], "    movsd ", 10) == 0 ||
+                           strncmp(line_ptrs[k], "    addss ", 10) == 0 || strncmp(line_ptrs[k], "    subss ", 10) == 0 || strncmp(line_ptrs[k], "    mulss ", 10) == 0 || strncmp(line_ptrs[k], "    divss ", 10) == 0 ||
+                           strncmp(line_ptrs[k], "    addsd ", 10) == 0 || strncmp(line_ptrs[k], "    subsd ", 10) == 0 || strncmp(line_ptrs[k], "    mulsd ", 10) == 0 || strncmp(line_ptrs[k], "    divsd ", 10) == 0 ||
+                           strncmp(line_ptrs[k], "    ucomiss ", 12) == 0 || strncmp(line_ptrs[k], "    ucomisd ", 12) == 0 || strncmp(line_ptrs[k], "    cvtss2sd ", 13) == 0 || strncmp(line_ptrs[k], "    cvtsd2ss ", 13) == 0 ||
+                           strcmp(line_ptrs[k], "    pxor %xmm0, %xmm0\n") == 0 || strcmp(line_ptrs[k], "    subq $8, %rsp\n") == 0 || strcmp(line_ptrs[k], "    addq $8, %rsp\n") == 0)) k++;
+                    if (k < nlines) {
+                        char *nl = line_ptrs[k];
+                        int nlen = (int)strlen(nl);
+                        if (strcmp(nl, "    movq %xmm0, %rax\n") == 0 || strcmp(nl, "    movd %xmm0, %eax\n") == 0 ||
+                            strncmp(nl, "    set", 7) == 0 || strncmp(nl, "    cvttss2si ", 14) == 0 || strncmp(nl, "    cvttsd2si ", 14) == 0 ||
+                            strcmp(nl, "    xorl %eax, %eax\n") == 0 || strcmp(nl, "    xorq %rax, %rax\n") == 0 ||
+                            strncmp(nl, "    movq $", 10) == 0 || strncmp(nl, "    movl $", 10) == 0 ||
+                            (nlen >= 7 && (strcmp(nl + nlen - 7, ", %rax\n") == 0 || strcmp(nl + nlen - 7, ", %eax\n") == 0) &&
+                             !strstr(nl, "(%rax)") && !strstr(nl, "(%eax)") && (strncmp(nl, "    mov", 7) == 0 || strncmp(nl, "    lea", 7) == 0))) {
+                            line_ptrs[i][0] = 0; eliminated += 1; i += 1; continue;
+                        }
+                    }
                 }
             }
 
@@ -815,8 +833,9 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                     rsp_depth += 8;
                 } else if (strncmp(l, "    popq ", 9) == 0 && strcmp(l, "    popq %rbp\n") != 0) {
                     rsp_depth -= 8;
-                } else if (strstr(l, "%rsp") && strncmp(l, "    .", 5) != 0 && !strstr(l, "(%rsp)") &&
-                           strcmp(l, "    movq %rsp, %r11\n") != 0 && strcmp(l, "    cmpq %r11, %rsp\n") != 0) {
+                } else if (strchr(l, ':') != NULL || strncmp(l, "    j", 5) == 0 || strncmp(l, "    ret", 7) == 0 ||
+                           (strstr(l, "%rsp") && strncmp(l, "    .", 5) != 0 && !strstr(l, "(%rsp)") &&
+                            strcmp(l, "    movq %rsp, %r11\n") != 0 && strcmp(l, "    cmpq %r11, %rsp\n") != 0)) {
                     rsp_depth = -1;
                 }
             }

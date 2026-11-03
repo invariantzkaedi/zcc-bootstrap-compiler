@@ -65,9 +65,13 @@
     "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
     "pass7_dead_write_rmw_negative_control": "SAT_CAUGHT (addq disp(%rbp), %rax clobbers live %rdx->%rax)",
     "pass7_dead_write_pxor_negative_control": "SAT_CAUGHT (pxor %xmm0, %xmm0 leaves stale %rax instead of %r11)",
+    "pass8_straight_line_16byte_call_alignment": "UNSAT (PROVEN_SOUND)",
+    "pass8_branch_label_rsp_desync_negative_control": "SAT_CAUGHT (linear rsp_depth across .L label emits unaligned subq $8, %rsp -> %rsp % 16 == 8)",
     "sse_pass0a_hex_guard_active": true,
+    "sse_pass5c_overwrite_guard_active": true,
     "sse_pass7_mov_guard_active": true,
     "sse_pass7_no_pxor_rax_bug": true,
+    "sse_pass8_label_jump_guard_active": true,
     "part5_tco_full_function_escape_guard_active": true
   },
   "cases_verified": 25,

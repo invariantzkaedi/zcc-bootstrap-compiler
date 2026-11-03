@@ -2239,6 +2239,183 @@ classify_mv12_boost_and_tco:
     ret
     .cfi_endproc
     .text
+    .globl mv13_check_rsp_alignment
+mv13_check_rsp_alignment:
+    .cfi_startproc
+    pushq %rbp
+    .cfi_def_cfa_offset 16
+    .cfi_offset %rbp, -16
+    movq %rsp, %rbp
+    .cfi_def_cfa_register %rbp
+    subq $320, %rsp
+    .loc 1 599
+    .loc 1 600
+    xorl %eax, %eax
+    cltq
+    movq %rax, %r11
+    movq %r11, -8(%rbp)
+    movq %r11, %rax
+    .loc 1 602
+    movq %rbp, %rax
+    movq %rax, -8(%rbp)
+    .loc 1 604
+    movq -8(%rbp), %rax
+    pushq %rax
+    movq $15, %rax
+    popq %r11
+    andq %r11, %rax
+    pushq %rax
+    xorl %eax, %eax
+    cltq
+    movq %rax, %r11
+    popq %rax
+    cmpq %r11, %rax
+    sete %al
+    movzbl %al, %eax
+    testl %eax, %eax
+    je .L194
+    xorl %eax, %eax
+    jmp .L195
+.L194:
+    movq $-150, %rax
+.L195:
+.Lfunc_end_193:
+    movq %rbp, %rsp
+    popq %rbp
+    .cfi_def_cfa %rsp, 8
+    ret
+    .cfi_endproc
+    .text
+    .globl mv13_pass8_branch_caller
+mv13_pass8_branch_caller:
+    .cfi_startproc
+    pushq %rbp
+    .cfi_def_cfa_offset 16
+    .cfi_offset %rbp, -16
+    movq %rsp, %rbp
+    .cfi_def_cfa_register %rbp
+    subq $320, %rsp
+    movq %rdi, -8(%rbp)
+    .loc 1 607
+    .loc 1 608
+    xorl %eax, %eax
+    movq %rax, %r11
+    leaq -16(%rbp), %rax
+    movl %r11d, (%rax)
+    .loc 1 610
+    movl -8(%rbp), %eax
+    .loc 1 611
+    testl %eax, %eax
+    .loc 1 612
+    jne .Lmv13_pass8_join
+    .loc 1 613
+    pushq %rax
+    .loc 1 614
+    jmp .Lmv13_pass8_done
+    .loc 1 615
+    .Lmv13_pass8_join:
+    .loc 1 616
+    xorl %eax, %eax
+    movq %rsp, %r11
+    andq $15, %r11
+    testq %r11, %r11
+    je .Lcall_aligned_197
+    subq $8, %rsp
+    call mv13_check_rsp_alignment
+    addq $8, %rsp
+    jmp .Lcall_end_197
+.Lcall_aligned_197:
+    call mv13_check_rsp_alignment
+.Lcall_end_197:
+    cltq
+    movq %rax, %r11
+    movl %r11d, -16(%rbp)
+    movq %r11, %rax
+    .loc 1 617
+    .Lmv13_pass8_done:
+    .loc 1 622
+    movslq -16(%rbp), %rax
+.Lfunc_end_196:
+    movq %rbp, %rsp
+    popq %rbp
+    .cfi_def_cfa %rsp, 8
+    ret
+    .cfi_endproc
+    .text
+    .globl classify_mv13_pass8_and_pass5c
+classify_mv13_pass8_and_pass5c:
+    .cfi_startproc
+    pushq %rbp
+    .cfi_def_cfa_offset 16
+    .cfi_offset %rbp, -16
+    movq %rsp, %rbp
+    .cfi_def_cfa_register %rbp
+    subq $320, %rsp
+    .loc 1 625
+    .loc 1 626
+    movq $1, %rax
+    movq %rax, %rdi
+    xorl %eax, %eax
+    movq %rsp, %r11
+    andq $15, %r11
+    testq %r11, %r11
+    je .Lcall_aligned_199
+    subq $8, %rsp
+    call mv13_pass8_branch_caller
+    addq $8, %rsp
+    jmp .Lcall_end_199
+.Lcall_aligned_199:
+    call mv13_pass8_branch_caller
+.Lcall_end_199:
+    cltq
+    movq %rax, %r11
+    leaq -8(%rbp), %rax
+    movl %r11d, (%rax)
+    .loc 1 627
+    xorl %eax, %eax
+    cltq
+    movq %rax, %r11
+    leaq -16(%rbp), %rax
+    movq %r11, (%rax)
+    .loc 1 629
+    movq $0x42424242, %rax
+    movq %rax, %xmm0
+    xorl %eax, %eax
+    movq %xmm0, %rax
+    addsd %xmm0, %xmm0
+    .loc 1 630
+    movq %rax, -16(%rbp)
+    .loc 1 634
+    movslq -8(%rbp), %rax
+    xorq %r11, %r11
+    cmpl %r11d, %eax
+    setne %al
+    movzbl %al, %eax
+    testl %eax, %eax
+    je .L200
+    movq $-151, %rax
+    jmp .Lfunc_end_198
+.L200:
+    .loc 1 635
+    movq -16(%rbp), %rax
+    movq $1111638594, %r11
+    cmpq %r11, %rax
+    setne %al
+    movzbl %al, %eax
+    testl %eax, %eax
+    je .L201
+    movq $-152, %rax
+    jmp .Lfunc_end_198
+.L201:
+    .loc 1 636
+    movq $158, %rax
+.Lfunc_end_198:
+    movq %rbp, %rsp
+    popq %rbp
+    .cfi_def_cfa %rsp, 8
+    ret
+    .cfi_endproc
+    .text
     .globl main
 main:
     .cfi_startproc
@@ -2248,58 +2425,58 @@ main:
     movq %rsp, %rbp
     .cfi_def_cfa_register %rbp
     subq $304, %rsp
-    .loc 1 590
-    .loc 1 591
+    .loc 1 639
+    .loc 1 640
     movabsq $4294967296, %rax
     movq %rax, %rdi
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_195
+    je .Lcall_aligned_204
     subq $8, %rsp
     call classify
     addq $8, %rsp
-    jmp .Lcall_end_195
-.Lcall_aligned_195:
+    jmp .Lcall_end_204
+.Lcall_aligned_204:
     call classify
-.Lcall_end_195:
+.Lcall_end_204:
     cltq
     movq $7, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L194
+    je .L203
     movq $1, %rax
-    jmp .Lfunc_end_193
-.L194:
-    .loc 1 592
+    jmp .Lfunc_end_202
+.L203:
+    .loc 1 641
     movabsq $-4294967296, %rax
     movq %rax, %rdi
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_197
+    je .Lcall_aligned_206
     subq $8, %rsp
     call classify
     addq $8, %rsp
-    jmp .Lcall_end_197
-.Lcall_aligned_197:
+    jmp .Lcall_end_206
+.Lcall_aligned_206:
     call classify
-.Lcall_end_197:
+.Lcall_end_206:
     cltq
     movq $9, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L196
+    je .L205
     movq $2, %rax
-    jmp .Lfunc_end_193
-.L196:
-    .loc 1 593
+    jmp .Lfunc_end_202
+.L205:
+    .loc 1 642
     xorl %eax, %eax
     cltq
     movq %rax, %rdi
@@ -2307,75 +2484,75 @@ main:
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_199
+    je .Lcall_aligned_208
     subq $8, %rsp
     call classify
     addq $8, %rsp
-    jmp .Lcall_end_199
-.Lcall_aligned_199:
+    jmp .Lcall_end_208
+.Lcall_aligned_208:
     call classify
-.Lcall_end_199:
+.Lcall_end_208:
     cltq
     movq $3, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L198
+    je .L207
     movq $3, %rax
-    jmp .Lfunc_end_193
-.L198:
-    .loc 1 594
+    jmp .Lfunc_end_202
+.L207:
+    .loc 1 643
     movabsq $4294967296, %rax
     movq %rax, %rdi
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_201
+    je .Lcall_aligned_210
     subq $8, %rsp
     call classify_live_r11
     addq $8, %rsp
-    jmp .Lcall_end_201
-.Lcall_aligned_201:
+    jmp .Lcall_end_210
+.Lcall_aligned_210:
     call classify_live_r11
-.Lcall_end_201:
+.Lcall_end_210:
     cltq
     movq $7, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L200
+    je .L209
     movq $4, %rax
-    jmp .Lfunc_end_193
-.L200:
-    .loc 1 595
+    jmp .Lfunc_end_202
+.L209:
+    .loc 1 644
     movabsq $-4294967296, %rax
     movq %rax, %rdi
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_203
+    je .Lcall_aligned_212
     subq $8, %rsp
     call classify_live_r11
     addq $8, %rsp
-    jmp .Lcall_end_203
-.Lcall_aligned_203:
+    jmp .Lcall_end_212
+.Lcall_aligned_212:
     call classify_live_r11
-.Lcall_end_203:
+.Lcall_end_212:
     cltq
     movq $9, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L202
+    je .L211
     movq $5, %rax
-    jmp .Lfunc_end_193
-.L202:
-    .loc 1 596
+    jmp .Lfunc_end_202
+.L211:
+    .loc 1 645
     xorl %eax, %eax
     cltq
     movq %rax, %rdi
@@ -2383,209 +2560,209 @@ main:
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_205
+    je .Lcall_aligned_214
     subq $8, %rsp
     call classify_live_r11
     addq $8, %rsp
-    jmp .Lcall_end_205
-.Lcall_aligned_205:
+    jmp .Lcall_end_214
+.Lcall_aligned_214:
     call classify_live_r11
-.Lcall_end_205:
+.Lcall_end_214:
     cltq
     movq $3, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L204
+    je .L213
     movq $6, %rax
-    jmp .Lfunc_end_193
-.L204:
-    .loc 1 597
+    jmp .Lfunc_end_202
+.L213:
+    .loc 1 646
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_207
+    je .Lcall_aligned_216
     subq $8, %rsp
     call classify_alias_r11
     addq $8, %rsp
-    jmp .Lcall_end_207
-.Lcall_aligned_207:
+    jmp .Lcall_end_216
+.Lcall_aligned_216:
     call classify_alias_r11
-.Lcall_end_207:
+.Lcall_end_216:
     cltq
     movq $11, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L206
+    je .L215
     movq $7, %rax
-    jmp .Lfunc_end_193
-.L206:
-    .loc 1 598
+    jmp .Lfunc_end_202
+.L215:
+    .loc 1 647
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_209
+    je .Lcall_aligned_218
     subq $8, %rsp
     call classify_rsp_relative
     addq $8, %rsp
-    jmp .Lcall_end_209
-.Lcall_aligned_209:
+    jmp .Lcall_end_218
+.Lcall_aligned_218:
     call classify_rsp_relative
-.Lcall_end_209:
+.Lcall_end_218:
     cltq
     movq $22, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L208
+    je .L217
     movq $8, %rax
-    jmp .Lfunc_end_193
-.L208:
-    .loc 1 599
+    jmp .Lfunc_end_202
+.L217:
+    .loc 1 648
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_211
+    je .Lcall_aligned_220
     subq $8, %rsp
     call classify_mem_r11_base
     addq $8, %rsp
-    jmp .Lcall_end_211
-.Lcall_aligned_211:
+    jmp .Lcall_end_220
+.Lcall_aligned_220:
     call classify_mem_r11_base
-.Lcall_end_211:
+.Lcall_end_220:
     cltq
     movq $33, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L210
+    je .L219
     movq $9, %rax
-    jmp .Lfunc_end_193
-.L210:
-    .loc 1 600
+    jmp .Lfunc_end_202
+.L219:
+    .loc 1 649
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_213
+    je .Lcall_aligned_222
     subq $8, %rsp
     call classify_mem_r11_r10_sib
     addq $8, %rsp
-    jmp .Lcall_end_213
-.Lcall_aligned_213:
+    jmp .Lcall_end_222
+.Lcall_aligned_222:
     call classify_mem_r11_r10_sib
-.Lcall_end_213:
+.Lcall_end_222:
     cltq
     movq $44, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L212
+    je .L221
     movq $10, %rax
-    jmp .Lfunc_end_193
-.L212:
-    .loc 1 601
+    jmp .Lfunc_end_202
+.L221:
+    .loc 1 650
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_215
+    je .Lcall_aligned_224
     subq $8, %rsp
     call classify_rsp_indexed
     addq $8, %rsp
-    jmp .Lcall_end_215
-.Lcall_aligned_215:
+    jmp .Lcall_end_224
+.Lcall_aligned_224:
     call classify_rsp_indexed
-.Lcall_end_215:
+.Lcall_end_224:
     cltq
     movq $55, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L214
+    je .L223
     movq $11, %rax
-    jmp .Lfunc_end_193
-.L214:
-    .loc 1 602
+    jmp .Lfunc_end_202
+.L223:
+    .loc 1 651
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_217
+    je .Lcall_aligned_226
     subq $8, %rsp
     call classify_redzone_rsp
     addq $8, %rsp
-    jmp .Lcall_end_217
-.Lcall_aligned_217:
+    jmp .Lcall_end_226
+.Lcall_aligned_226:
     call classify_redzone_rsp
-.Lcall_end_217:
+.Lcall_end_226:
     cltq
     movq $66, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L216
+    je .L225
     movq $12, %rax
-    jmp .Lfunc_end_193
-.L216:
-    .loc 1 603
+    jmp .Lfunc_end_202
+.L225:
+    .loc 1 652
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_219
+    je .Lcall_aligned_228
     subq $8, %rsp
     call classify_direct_rsp
     addq $8, %rsp
-    jmp .Lcall_end_219
-.Lcall_aligned_219:
+    jmp .Lcall_end_228
+.Lcall_aligned_228:
     call classify_direct_rsp
-.Lcall_end_219:
+.Lcall_end_228:
     cltq
     movq $77, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L218
+    je .L227
     movq $13, %rax
-    jmp .Lfunc_end_193
-.L218:
-    .loc 1 604
+    jmp .Lfunc_end_202
+.L227:
+    .loc 1 653
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_221
+    je .Lcall_aligned_230
     subq $8, %rsp
     call classify_frame_scratch_alias
     addq $8, %rsp
-    jmp .Lcall_end_221
-.Lcall_aligned_221:
+    jmp .Lcall_end_230
+.Lcall_aligned_230:
     call classify_frame_scratch_alias
-.Lcall_end_221:
+.Lcall_end_230:
     cltq
     movq $88, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L220
+    je .L229
     movq $14, %rax
-    jmp .Lfunc_end_193
-.L220:
-    .loc 1 605
+    jmp .Lfunc_end_202
+.L229:
+    .loc 1 654
     movq $200, %rax
     pushq %rax
     movq $100, %rax
@@ -2598,144 +2775,167 @@ main:
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_223
+    je .Lcall_aligned_232
     subq $8, %rsp
     call classify_variadic_scratch
     addq $8, %rsp
-    jmp .Lcall_end_223
-.Lcall_aligned_223:
+    jmp .Lcall_end_232
+.Lcall_aligned_232:
     call classify_variadic_scratch
-.Lcall_end_223:
+.Lcall_end_232:
     cltq
     movq $99, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L222
+    je .L231
     movq $15, %rax
-    jmp .Lfunc_end_193
-.L222:
-    .loc 1 606
+    jmp .Lfunc_end_202
+.L231:
+    .loc 1 655
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_225
+    je .Lcall_aligned_234
     subq $8, %rsp
     call classify_xmm15_128bit_liveness
     addq $8, %rsp
-    jmp .Lcall_end_225
-.Lcall_aligned_225:
+    jmp .Lcall_end_234
+.Lcall_aligned_234:
     call classify_xmm15_128bit_liveness
-.Lcall_end_225:
+.Lcall_end_234:
     cltq
     movq $108, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L224
+    je .L233
     movq $16, %rax
-    jmp .Lfunc_end_193
-.L224:
-    .loc 1 607
+    jmp .Lfunc_end_202
+.L233:
+    .loc 1 656
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_227
+    je .Lcall_aligned_236
     subq $8, %rsp
     call classify_mv10_backward_loop_xmm15
     addq $8, %rsp
-    jmp .Lcall_end_227
-.Lcall_aligned_227:
+    jmp .Lcall_end_236
+.Lcall_aligned_236:
     call classify_mv10_backward_loop_xmm15
-.Lcall_end_227:
+.Lcall_end_236:
     cltq
     movq $118, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L226
+    je .L235
     movq $17, %rax
-    jmp .Lfunc_end_193
-.L226:
-    .loc 1 608
+    jmp .Lfunc_end_202
+.L235:
+    .loc 1 657
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_229
+    je .Lcall_aligned_238
     subq $8, %rsp
     call classify_mv10_xmm12_and_eflags
     addq $8, %rsp
-    jmp .Lcall_end_229
-.Lcall_aligned_229:
+    jmp .Lcall_end_238
+.Lcall_aligned_238:
     call classify_mv10_xmm12_and_eflags
-.Lcall_end_229:
+.Lcall_end_238:
     cltq
     movq $128, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L228
+    je .L237
     movq $18, %rax
-    jmp .Lfunc_end_193
-.L228:
-    .loc 1 609
+    jmp .Lfunc_end_202
+.L237:
+    .loc 1 658
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_231
+    je .Lcall_aligned_240
     subq $8, %rsp
     call classify_mv11_rmw_and_u64_imm
     addq $8, %rsp
-    jmp .Lcall_end_231
-.Lcall_aligned_231:
+    jmp .Lcall_end_240
+.Lcall_aligned_240:
     call classify_mv11_rmw_and_u64_imm
-.Lcall_end_231:
+.Lcall_end_240:
     cltq
     movq $138, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L230
+    je .L239
     movq $19, %rax
-    jmp .Lfunc_end_193
-.L230:
-    .loc 1 610
+    jmp .Lfunc_end_202
+.L239:
+    .loc 1 659
     xorl %eax, %eax
     movq %rsp, %r11
     andq $15, %r11
     testq %r11, %r11
-    je .Lcall_aligned_233
+    je .Lcall_aligned_242
     subq $8, %rsp
     call classify_mv12_boost_and_tco
     addq $8, %rsp
-    jmp .Lcall_end_233
-.Lcall_aligned_233:
+    jmp .Lcall_end_242
+.Lcall_aligned_242:
     call classify_mv12_boost_and_tco
-.Lcall_end_233:
+.Lcall_end_242:
     cltq
     movq $148, %r11
     cmpl %r11d, %eax
     setne %al
     movzbl %al, %eax
     testl %eax, %eax
-    je .L232
+    je .L241
     movq $20, %rax
-    jmp .Lfunc_end_193
-.L232:
-    .loc 1 611
+    jmp .Lfunc_end_202
+.L241:
+    .loc 1 660
     xorl %eax, %eax
-    jmp .Lfunc_end_193
+    movq %rsp, %r11
+    andq $15, %r11
+    testq %r11, %r11
+    je .Lcall_aligned_244
+    subq $8, %rsp
+    call classify_mv13_pass8_and_pass5c
+    addq $8, %rsp
+    jmp .Lcall_end_244
+.Lcall_aligned_244:
+    call classify_mv13_pass8_and_pass5c
+.Lcall_end_244:
+    cltq
+    movq $158, %r11
+    cmpl %r11d, %eax
+    setne %al
+    movzbl %al, %eax
+    testl %eax, %eax
+    je .L243
+    movq $21, %rax
+    jmp .Lfunc_end_202
+.L243:
+    .loc 1 661
     xorl %eax, %eax
-.Lfunc_end_193:
+    jmp .Lfunc_end_202
+    xorl %eax, %eax
+.Lfunc_end_202:
     movq %rbp, %rsp
     popq %rbp
     .cfi_def_cfa %rsp, 8

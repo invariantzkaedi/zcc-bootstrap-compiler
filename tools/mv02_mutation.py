@@ -535,6 +535,42 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv12_04 && /tmp/x86_mv12_04 && python3 tools/zcc_prove_01.py",
     },
+    {
+        "id": "MV13-01",
+        "desc": "zcc_x86_peephole_boost Pass 8 tracks rsp_depth linearly across .L labels and jumps, injecting unaligned subq $8, %rsp before call",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                } else if (strchr(l, \':\') != NULL || strncmp(l, "    j", 5) == 0 || strncmp(l, "    ret", 7) == 0 ||\n                           (strstr(l, "%rsp") && strncmp(l, "    .", 5) != 0 && !strstr(l, "(%rsp)") &&',
+        "new": '                } else if ((strstr(l, "%rsp") && strncmp(l, "    .", 5) != 0 && !strstr(l, "(%rsp)") && /* MV13-01 */',
+        "build": "make zcc",
+        "test": "ZCC_OPT=1 ./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv13_01 && /tmp/x86_mv13_01",
+    },
+    {
+        "id": "MV13-02",
+        "desc": "zcc_x86_peephole_boost Pass 5c elides movq %xmm0, %rax before addsd %xmm0, %xmm0 without checking if %rax is overwritten before being read",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                        if (strcmp(nl, "    movq %xmm0, %rax\\n") == 0 || strcmp(nl, "    movd %xmm0, %eax\\n") == 0 ||',
+        "new": '                        if (1 || strcmp(nl, "    movq %xmm0, %rax\\n") == 0 || strcmp(nl, "    movd %xmm0, %eax\\n") == 0 || /* MV13-02 */',
+        "build": "make zcc",
+        "test": "ZCC_OPT=1 ./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv13_02 && /tmp/x86_mv13_02",
+    },
+    {
+        "id": "MV13-03",
+        "desc": "ZCC-PROVE-05 verifier rejects src/x86_codegen_sse.c when Pass 8 label/jump rsp_depth invalidation guard is removed",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                } else if (strchr(l, \':\') != NULL || strncmp(l, "    j", 5) == 0 || strncmp(l, "    ret", 7) == 0 ||\n                           (strstr(l, "%rsp") && strncmp(l, "    .", 5) != 0 && !strstr(l, "(%rsp)") &&',
+        "new": '                } else if ((strstr(l, "%rsp") && strncmp(l, "    .", 5) != 0 && !strstr(l, "(%rsp)") && /* MV13-03 */',
+        "build": "make zcc",
+        "test": "python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV13-04",
+        "desc": "ZCC-PROVE-05 verifier rejects src/x86_codegen_sse.c when Pass 5c %rax overwrite lookahead guard is removed",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                        strncmp(nl, "    set", 7) == 0 || strncmp(nl, "    cvttss2si ", 14) == 0 || strncmp(nl, "    cvttsd2si ", 14) == 0 ||',
+        "new": '                        strncmp(nl, "    set", 7) == 0 || /* MV13-04 */',
+        "build": "make zcc",
+        "test": "python3 tools/zcc_prove_01.py",
+    },
 ]
 
 

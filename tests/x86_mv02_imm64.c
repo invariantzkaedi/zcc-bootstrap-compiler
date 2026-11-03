@@ -587,6 +587,55 @@ int classify_mv12_boost_and_tco(void) {
     return 148;
 }
 
+/* MV-13 + ZCC-PROVE-05:
+ *   1) `zcc_x86_peephole_boost` Pass 8 (`ZCC_OPT=1`, `nlines >= 600`):
+ *      Verifies `rsp_depth` is invalidated (`rsp_depth = -1`) at control-flow labels (`.L...`)
+ *      and jumps (`jmp`/`jne`), preventing linear `pushq` accumulation across unreachable/branched
+ *      blocks from injecting an unaligned `subq $8, %rsp` before `call mv13_check_rsp_alignment`.
+ *   2) `zcc_x86_peephole_boost` Pass 5c (`ZCC_OPT=1`):
+ *      Verifies `movq %xmm0, %rax` before `addsd %xmm0, %xmm0` is NOT elided when `%rax` is
+ *      read afterward without an intervening `%rax` overwrite.
+ */
+int mv13_check_rsp_alignment(void) {
+    long long rsp_val = 0;
+#ifdef __ZCC__
+    asm("movq %%rbp, %0" : "=r"(rsp_val));
+#endif
+    return (rsp_val & 15LL) == 0 ? 0 : -150;
+}
+
+int mv13_pass8_branch_caller(int cond) {
+    int res = 0;
+#ifdef __ZCC__
+    asm("movl -8(%rbp), %eax");
+    asm("testl %eax, %eax");
+    asm("jne .Lmv13_pass8_join");
+    asm("pushq %rax");
+    asm("jmp .Lmv13_pass8_done");
+    asm(".Lmv13_pass8_join:");
+    res = mv13_check_rsp_alignment();
+    asm(".Lmv13_pass8_done:");
+#else
+    (void)cond;
+    res = 0;
+#endif
+    return res;
+}
+
+int classify_mv13_pass8_and_pass5c(void) {
+    int r_align = mv13_pass8_branch_caller(1);
+    long long rax_bits = 0;
+#ifdef __ZCC__
+    asm("movq $0x42424242, %rax\n    movq %rax, %xmm0\n    xorl %eax, %eax\n    movq %xmm0, %rax\n    addsd %xmm0, %xmm0");
+    asm("movq %%rax, %0" : "=r"(rax_bits));
+#else
+    rax_bits = 0x42424242LL;
+#endif
+    if (r_align != 0) return -151;
+    if (rax_bits != 0x42424242LL) return -152;
+    return 158;
+}
+
 int main(void) {
     if (classify(4294967296LL) != 7) return 1;
     if (classify(-4294967296LL) != 9) return 2;
@@ -608,5 +657,6 @@ int main(void) {
     if (classify_mv10_xmm12_and_eflags() != 128) return 18;
     if (classify_mv11_rmw_and_u64_imm() != 138) return 19;
     if (classify_mv12_boost_and_tco() != 148) return 20;
+    if (classify_mv13_pass8_and_pass5c() != 158) return 21;
     return 0;
 }

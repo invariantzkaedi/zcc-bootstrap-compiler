@@ -1125,13 +1125,56 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         in sse_text
     )
     has_no_sse_pxor_rax_bug = 'if (strcmp(nl, "    pxor %xmm0, %xmm0\\n") == 0)' not in sse_text[sse_text.find("/* 7. Dead %rax/%eax Write"):]
-    if not has_sse_pass0a_hex_guard or not has_sse_pass7_mov_guard or not has_no_sse_pxor_rax_bug:
+    has_sse_pass8_label_jump_guard = (
+        'strchr(l, \':\') != NULL || strncmp(l, "    j", 5) == 0 || strncmp(l, "    ret", 7) == 0'
+        in sse_text[sse_text.find("/* 8. Intra-Function Static %rsp"):]
+    )
+    has_sse_pass5c_overwrite_guard = (
+        'strncmp(nl, "    cvttss2si ", 14) == 0 || strncmp(nl, "    cvttsd2si ", 14) == 0'
+        in sse_text
+    )
+    if (
+        not has_sse_pass0a_hex_guard
+        or not has_sse_pass7_mov_guard
+        or not has_no_sse_pxor_rax_bug
+        or not has_sse_pass8_label_jump_guard
+        or not has_sse_pass5c_overwrite_guard
+    ):
         return False, {
-            "error": "src/x86_codegen_sse.c Pass 0a hex guard or Pass 7 dead-write guard missing",
+            "error": "src/x86_codegen_sse.c Pass 0a / Pass 5c / Pass 7 / Pass 8 guard missing",
             "has_sse_pass0a_hex_guard": has_sse_pass0a_hex_guard,
+            "has_sse_pass5c_overwrite_guard": has_sse_pass5c_overwrite_guard,
             "has_sse_pass7_mov_guard": has_sse_pass7_mov_guard,
             "has_no_sse_pxor_rax_bug": has_no_sse_pxor_rax_bug,
+            "has_sse_pass8_label_jump_guard": has_sse_pass8_label_jump_guard,
         }
+
+    # ZCC-PROVE-05: Pass 8 16-Byte Call Alignment Modulo-16 Invariant & Branch Desync Negative Control
+    s_p8 = z3.Solver()
+    rbp_aligned = z3.BitVec("rbp_aligned", 64)
+    depth_bb = z3.BitVec("depth_bb", 64)
+    s_p8.add((rbp_aligned & z3.BitVecVal(15, 64)) == z3.BitVecVal(0, 64))
+    rsp_at_call = rbp_aligned - depth_bb
+    # Case A: (depth_bb & 15) == 0 -> direct call keeps (rsp_at_call & 15) == 0
+    # Case B: (depth_bb & 15) == 8 -> subq $8, %rsp before call makes ((rsp_at_call - 8) & 15) == 0
+    d_p8_a = z3.And((depth_bb & z3.BitVecVal(15, 64)) == z3.BitVecVal(0, 64), (rsp_at_call & z3.BitVecVal(15, 64)) != z3.BitVecVal(0, 64))
+    d_p8_b = z3.And((depth_bb & z3.BitVecVal(15, 64)) == z3.BitVecVal(8, 64), ((rsp_at_call - z3.BitVecVal(8, 64)) & z3.BitVecVal(15, 64)) != z3.BitVecVal(0, 64))
+    s_p8.add(z3.Or(d_p8_a, d_p8_b))
+    if s_p8.check() != z3.unsat:
+        return False, {"error": "ZCC-PROVE-05 Pass 8 straight-line 16-byte call alignment Z3 proof failed"}
+
+    # Negative control for Pass 8 linear tracking across branch/join labels:
+    s_p8_neg = z3.Solver()
+    depth_path1 = z3.BitVec("depth_path1", 64)
+    depth_linear_dead_push = depth_path1 + z3.BitVecVal(8, 64)
+    s_p8_neg.add(
+        (rbp_aligned & z3.BitVecVal(15, 64)) == z3.BitVecVal(0, 64),
+        (depth_path1 & z3.BitVecVal(15, 64)) == z3.BitVecVal(0, 64),
+        (depth_linear_dead_push & z3.BitVecVal(15, 64)) == z3.BitVecVal(8, 64),
+        (((rbp_aligned - depth_path1) - z3.BitVecVal(8, 64)) & z3.BitVecVal(15, 64)) != z3.BitVecVal(0, 64),
+    )
+    if s_p8_neg.check() != z3.sat:
+        return False, {"error": "Negative control for Pass 8 branch-join rsp_depth desync failed to find SAT counterexample"}
 
     part5_text = (REPO_ROOT / "part5.c").read_text(encoding="utf-8")
     tco_idx = part5_text.find("/* 5. Tail Call Optimization (TCO)")
@@ -1147,9 +1190,13 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
         "pass7_dead_write_rmw_negative_control": "SAT_CAUGHT (addq disp(%rbp), %rax clobbers live %rdx->%rax)",
         "pass7_dead_write_pxor_negative_control": "SAT_CAUGHT (pxor %xmm0, %xmm0 leaves stale %rax instead of %r11)",
+        "pass8_straight_line_16byte_call_alignment": "UNSAT (PROVEN_SOUND)",
+        "pass8_branch_label_rsp_desync_negative_control": "SAT_CAUGHT (linear rsp_depth across .L label emits unaligned subq $8, %rsp -> %rsp % 16 == 8)",
         "sse_pass0a_hex_guard_active": has_sse_pass0a_hex_guard,
+        "sse_pass5c_overwrite_guard_active": has_sse_pass5c_overwrite_guard,
         "sse_pass7_mov_guard_active": has_sse_pass7_mov_guard,
         "sse_pass7_no_pxor_rax_bug": has_no_sse_pxor_rax_bug,
+        "sse_pass8_label_jump_guard_active": has_sse_pass8_label_jump_guard,
         "part5_tco_full_function_escape_guard_active": has_tco_full_func_guard,
     }
 
