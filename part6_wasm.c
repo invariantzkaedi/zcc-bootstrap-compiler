@@ -1299,6 +1299,72 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
         }
 
         case ND_CALL: {
+            if (strncmp(node->func_name, "__zcc_wasm_", 11) == 0) {
+                const char *sname = node->func_name + 11;
+                uint32_t simd_op = 0;
+                int is_bin_mem = 0, is_splat_mem = 0;
+                if (strcmp(sname, "i32x4_add_mem") == 0) { simd_op = WASM_SIMD_I32X4_ADD; is_bin_mem = 1; }
+                else if (strcmp(sname, "i32x4_sub_mem") == 0) { simd_op = WASM_SIMD_I32X4_SUB; is_bin_mem = 1; }
+                else if (strcmp(sname, "i32x4_mul_mem") == 0) { simd_op = WASM_SIMD_I32X4_MUL; is_bin_mem = 1; }
+                else if (strcmp(sname, "i32x4_dot_i16x8_s_mem") == 0) { simd_op = WASM_SIMD_I32X4_DOT_I16X8_S; is_bin_mem = 1; }
+                else if (strcmp(sname, "f32x4_add_mem") == 0) { simd_op = WASM_SIMD_F32X4_ADD; is_bin_mem = 1; }
+                else if (strcmp(sname, "f32x4_sub_mem") == 0) { simd_op = WASM_SIMD_F32X4_SUB; is_bin_mem = 1; }
+                else if (strcmp(sname, "f32x4_mul_mem") == 0) { simd_op = WASM_SIMD_F32X4_MUL; is_bin_mem = 1; }
+                else if (strcmp(sname, "v128_and_mem") == 0) { simd_op = WASM_SIMD_V128_AND; is_bin_mem = 1; }
+                else if (strcmp(sname, "v128_or_mem") == 0) { simd_op = WASM_SIMD_V128_OR; is_bin_mem = 1; }
+                else if (strcmp(sname, "v128_xor_mem") == 0) { simd_op = WASM_SIMD_V128_XOR; is_bin_mem = 1; }
+                else if (strcmp(sname, "i32x4_splat_mem") == 0) { simd_op = WASM_SIMD_I32X4_SPLAT; is_splat_mem = 1; }
+                else if (strcmp(sname, "f32x4_splat_mem") == 0) { simd_op = WASM_SIMD_F32X4_SPLAT; is_splat_mem = 2; }
+
+                if (is_bin_mem && node->num_args == 3) {
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_int);
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_int);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+                    wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
+                    wasm_emit_memarg_safe(&fn->body, 4, 0);
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[2]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[2]), node->args[2]->type, WASM_TYPE_I32, cc->ty_int);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+                    wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
+                    wasm_emit_memarg_safe(&fn->body, 4, 0);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+                    wasm_buf_append_uleb128(&fn->body, simd_op);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+                    wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_STORE);
+                    wasm_emit_memarg_safe(&fn->body, 4, 0);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 0);
+                    break;
+                } else if (is_splat_mem && node->num_args == 2) {
+                    uint8_t lane_vt = (is_splat_mem == 2) ? WASM_TYPE_F32 : WASM_TYPE_I32;
+                    Type *lane_ty = (is_splat_mem == 2) ? cc->ty_float : cc->ty_int;
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_int);
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, lane_vt, lane_ty);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+                    wasm_buf_append_uleb128(&fn->body, simd_op);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+                    wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_STORE);
+                    wasm_emit_memarg_safe(&fn->body, 4, 0);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 0);
+                    break;
+                } else if (strcmp(sname, "i32x4_extract_lane_mem") == 0 && node->num_args == 2) {
+                    int lane_idx = (node->args[1] && node->args[1]->kind == ND_NUM) ? ((int)node->args[1]->int_val & 3) : 0;
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_int);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+                    wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
+                    wasm_emit_memarg_safe(&fn->body, 4, 0);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+                    wasm_buf_append_uleb128(&fn->body, WASM_SIMD_I32X4_EXTRACT_LANE);
+                    wasm_buf_append_u8(&fn->body, (uint8_t)lane_idx);
+                    break;
+                }
+            }
             int callee_idx = node->func_name[0] ? wasm_find_func_idx(mod, node->func_name) : -1;
             int a;
             for (a = 0; a < node->num_args; a++) {

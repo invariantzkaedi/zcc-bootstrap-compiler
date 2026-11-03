@@ -3825,28 +3825,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
                         is_mem1 ? disp1 : disp2);
           }
         } else if (strcmp(mnemonic, "leaq") == 0) {
-          int sib_b = -1, sib_i = -1, sib_s = 0;
-          char b_str[16], i_str[16];
-          if (op1[0] == '(' &&
-              sscanf(op1, "(%15[^,],%15[^,],%d)", b_str, i_str, &sib_s) == 3) {
-            sib_b = parse_reg(b_str);
-            sib_i = parse_reg(i_str);
-          }
-          if (sib_b >= 0 && sib_i >= 0 && (sib_b & 7) != 5 && sib_i != 4 &&
-              (sib_s == 1 || sib_s == 2 || sib_s == 4 || sib_s == 8)) {
-            int ss = (sib_s == 2)   ? 1
-                     : (sib_s == 4) ? 2
-                     : (sib_s == 8) ? 3
-                                    : 0;
-            unsigned char rex =
-                (unsigned char)(0x48 | (((reg2 >> 3) & 1) << 2) |
-                                (((sib_i >> 3) & 1) << 1) | ((sib_b >> 3) & 1));
-            unsigned char modrm = (unsigned char)(0x04 | ((reg2 & 7) << 3));
-            unsigned char sib =
-                (unsigned char)((ss << 6) | ((sib_i & 7) << 3) | (sib_b & 7));
-            unsigned char bytes[4] = {rex, 0x8D, modrm, sib};
-            seg_append(&text_seg, bytes, 4);
-          } else if (strstr(op1, "(%rip)")) {
+          if (strstr(op1, "(%rip)")) {
             char lbl[128];
             char *rip = strstr(op1, "(%rip)");
             *rip = '\0';
@@ -3894,6 +3873,8 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
             r.type = R_X86_64_TPOFF32;
             r.addend = extra;
             add_reloc(r);
+          } else if (strchr(op1, ',') != NULL && strchr(op1, '(') != NULL) {
+            encode_cmpq_mem(&text_seg, op1, reg2, 0x8D);
           } else {
             int is_mem1 = 0;
             long long disp1 = 0;
@@ -4574,7 +4555,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
                    strcmp(mnemonic, "subb") == 0 ||
                    strcmp(mnemonic, "cmpb") == 0) {
           if (op1[0] == '$') {
-            long long imm = strtoll(op1 + 1, NULL, 0);
+            long long imm = (op1[1] == '-') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);
             unsigned char rex = 0x40;
             unsigned char opcode = 0x80;
             unsigned char modrm = 0xc0;

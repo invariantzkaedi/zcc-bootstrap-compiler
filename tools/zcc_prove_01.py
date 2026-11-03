@@ -1152,6 +1152,22 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         and '(nlen > 16 && strncmp(nl, "    movq $", 10) == 0 && strcmp(nl + nlen - 7, ", %rax\\n") == 0)' in sse_text
         and 'strcmp(line_ptrs[nk] + nk_len - 7, ", %eax\\n") == 0' in sse_text
     )
+    has_sse_mv16_guards = (
+        'strncmp(line_ptrs[k], "    set", 7) != 0 && strncmp(line_ptrs[k], "    cmov", 8) != 0' in sse_text
+        and 'strcmp(lbl_buf, ref_lbl) != 0' in sse_text
+        and 'if (l2_len > 16 && strncmp(l2, "    movq $", 10) == 0 && strcmp(l2 + l2_len - 7, ", %rax\\n") == 0)' in sse_text
+        and 'strcmp(line_ptrs[i + 1] + strlen(line_ptrs[i + 1]) - 7, ", %rax\\n") == 0' in sse_text
+    )
+    has_codegen_mv17_leaq_and_addb = (
+        '} else if (strchr(op1, \',\') != NULL && strchr(op1, \'(\') != NULL) {\n            encode_cmpq_mem(&text_seg, op1, reg2, 0x8D);' in codegen_text
+        and 'long long imm = (op1[1] == \'-\') ? strtoll(op1 + 1, NULL, 0) : (long long)strtoull(op1 + 1, NULL, 0);'
+        in codegen_text[codegen_text.find('strcmp(mnemonic, "xorb") == 0'):codegen_text.find('strcmp(mnemonic, "testq") == 0')]
+    )
+    part5_text = (REPO_ROOT / "part5.c").read_text(encoding="utf-8")
+    has_part5_rule3b_rax_guard = (
+        'if (l2_len > 16 && strncmp(l2, "    movq $", 10) == 0 && strcmp(l2 + l2_len - 7, ", %rax\\n") == 0)'
+        in part5_text
+    )
     if (
         not has_sse_pass0a_hex_guard
         or not has_sse_pass7_mov_guard
@@ -1161,9 +1177,12 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         or not has_sse_parse_imm_helper
         or not has_codegen_movq_u64_imm
         or not has_sse_pass5c_pass6_dst_guards
+        or not has_sse_mv16_guards
+        or not has_codegen_mv17_leaq_and_addb
+        or not has_part5_rule3b_rax_guard
     ):
         return False, {
-            "error": "src/x86_codegen_sse.c or src/codegen.c Pass 0a / Pass 3 / Pass 5c / Pass 6 / Pass 7 / Pass 8 / movq+addq u64 guard missing",
+            "error": "src/x86_codegen_sse.c, part5.c, or src/codegen.c Pass 0a/0b/2/3/5c/6/7/8 / leaq SIB / movq+addq+addb u64 guard missing",
             "has_sse_pass0a_hex_guard": has_sse_pass0a_hex_guard,
             "has_sse_pass5c_overwrite_guard": has_sse_pass5c_overwrite_guard,
             "has_sse_pass7_mov_guard": has_sse_pass7_mov_guard,
@@ -1172,6 +1191,9 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
             "has_sse_parse_imm_helper": has_sse_parse_imm_helper,
             "has_codegen_movq_u64_imm": has_codegen_movq_u64_imm,
             "has_sse_pass5c_pass6_dst_guards": has_sse_pass5c_pass6_dst_guards,
+            "has_sse_mv16_guards": has_sse_mv16_guards,
+            "has_codegen_mv17_leaq_and_addb": has_codegen_mv17_leaq_and_addb,
+            "has_part5_rule3b_rax_guard": has_part5_rule3b_rax_guard,
         }
 
     # ZCC-PROVE-06: Pass 6 movl %eax, %eax Zero-Extension Elision Soundness & Negative Controls

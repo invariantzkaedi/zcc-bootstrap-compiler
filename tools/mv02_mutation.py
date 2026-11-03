@@ -643,6 +643,42 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "python3 tools/zcc_prove_01.py",
     },
+    {
+        "id": "MV16-01",
+        "desc": "Peephole boost Pass 0a rewrites movabsq $0, %rax to xorl %eax, %eax before sete %cl when EFLAGS lookahead guard is omitted",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                        if (k >= nlines || (strncmp(line_ptrs[k], "    set", 7) != 0 && strncmp(line_ptrs[k], "    cmov", 8) != 0 &&\n                            (strncmp(line_ptrs[k], "    j", 5) != 0 || strncmp(line_ptrs[k], "    jmp", 7) == 0))) {',
+        "new": '                        if (1 || k >= nlines) { /* MV16-01 */',
+        "build": "make zcc",
+        "test": "ZCC_OPT=1 ./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv16_01 && /tmp/x86_mv16_01",
+    },
+    {
+        "id": "MV16-02",
+        "desc": "Peephole boost Pass 0b deletes unrelated .LS_flit_N .rodata symbol when lbl_buf == ref_lbl identity check is omitted",
+        "file": "src/x86_codegen_sse.c",
+        "old": '                strcmp(lbl_buf, ref_lbl) != 0 ||',
+        "new": '                0 || /* MV16-02 */',
+        "build": "make zcc",
+        "test": "ZCC_OPT=1 ./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv16_02 && /tmp/x86_mv16_02",
+    },
+    {
+        "id": "MV16-03",
+        "desc": "part5.c Rule 3b Push/Imm/Mov/Pop quad deletes movq $99, %rdx and overwrites %r11 when , %rax suffix check is omitted",
+        "file": "part5.c",
+        "old": '        if (l2_len > 16 && strncmp(l2, "    movq $", 10) == 0 && strcmp(l2 + l2_len - 7, ", %rax\\n") == 0) {',
+        "new": '        if (strncmp(l2, "    movq $", 10) == 0) { /* MV16-03 */',
+        "build": "make zcc",
+        "test": "./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv16_03 && /tmp/x86_mv16_03",
+    },
+    {
+        "id": "MV16-04",
+        "desc": "Internal ELF assembler src/codegen.c fails on leaq 16(%rax,%rcx,8), %rdx and saturates addb $0xfffffffffffffff0, %al (killed by runtime & ZCC-PROVE-08)",
+        "file": "src/codegen.c",
+        "old": '          } else if (strchr(op1, \',\') != NULL && strchr(op1, \'(\') != NULL) {\n            encode_cmpq_mem(&text_seg, op1, reg2, 0x8D);',
+        "new": '          } else if (op1[0] == \'(\' && strchr(op1, \',\') != NULL) {\n            encode_cmpq_mem(&text_seg, op1, reg2, 0x8D); /* MV16-04 */',
+        "build": "make zcc",
+        "test": "./zcc tests/x86_mv02_imm64.c -o /tmp/x86_mv16_04 && /tmp/x86_mv16_04 && python3 tools/zcc_prove_01.py",
+    },
 ]
 
 

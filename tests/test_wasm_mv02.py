@@ -3,15 +3,18 @@
 tests/test_wasm_mv02.py — Adversarial Semantic, Register-Liveness, Typedef & Seed Sensitivity Suite (WASM-MV-02)
 """
 import hashlib
+import json
 import os
 import pathlib
 import random
+import shutil
 import subprocess
 import tempfile
 import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 ZCC_BIN = REPO_ROOT / "zcc"
+WASMTIME_BIN = pathlib.Path.home() / ".wasmtime" / "bin" / "wasmtime"
 
 # Harness Meta-Verification Guards (targeted by MV02-08 and MV02-09)
 EXECUTED_VECTOR_COUNT_GUARD = True
@@ -361,6 +364,141 @@ int main(void) { return 0; }
             run_gcc = subprocess.run([str(gcc_bin)], capture_output=True, text=True)
             self.assertEqual(run_zcc.returncode, 0)
             self.assertEqual(run_gcc.returncode, 0)
+
+    def test_08_wasm_v128_simd128_and_x86_mv16_assembler_oracle(self):
+        """
+        WASM-SIMD128 + MV-17:
+          1) Compiles C source using `__zcc_wasm_*` 128-bit SIMD intrinsics (`0xFD` prefix,
+             `v128.load`, `v128.store`, `i32x4.splat`, `i32x4.add`, `i32x4.sub`, `i32x4.mul`,
+             `i32x4.dot_i16x8_s`, `f32x4.add`, `f32x4.mul`, `v128.xor`, `i32x4.extract_lane`)
+             to `.wasm`, validates with `wasm-validate`, and executes on both Node.js V8 and Wasmtime.
+          2) Verifies ZCC internal ELF assembler (`src/codegen.c`) produces byte-identical machine
+             code to GNU `as --64` for `leaq 16(%rax,%rcx,8), %rdx`, `leaq -32(%rbp,%r11,4), %r10`,
+             and `addb $0xfffffffffffffff0, %al`.
+        """
+        wasm_c = r"""
+void __zcc_wasm_i32x4_splat_mem(void *dst, int val);
+void __zcc_wasm_i32x4_add_mem(void *dst, const void *a, const void *b);
+void __zcc_wasm_i32x4_sub_mem(void *dst, const void *a, const void *b);
+void __zcc_wasm_i32x4_mul_mem(void *dst, const void *a, const void *b);
+void __zcc_wasm_i32x4_dot_i16x8_s_mem(void *dst, const void *a, const void *b);
+void __zcc_wasm_f32x4_add_mem(void *dst, const void *a, const void *b);
+void __zcc_wasm_f32x4_mul_mem(void *dst, const void *a, const void *b);
+void __zcc_wasm_v128_xor_mem(void *dst, const void *a, const void *b);
+int __zcc_wasm_i32x4_extract_lane_mem(const void *src, int lane);
+
+int main(void) {
+    int a[4];
+    int b[4];
+    int c[4];
+    int d[4];
+    short sa[8];
+    short sb[8];
+    float fa[4];
+    float fb[4];
+    float fc[4];
+    __zcc_wasm_i32x4_splat_mem(a, 10);
+    b[0] = 1; b[1] = 2; b[2] = 3; b[3] = 4;
+    __zcc_wasm_i32x4_add_mem(c, a, b);
+    __zcc_wasm_i32x4_mul_mem(d, c, b);
+    if (__zcc_wasm_i32x4_extract_lane_mem(d, 0) != 11) return 1;
+    if (__zcc_wasm_i32x4_extract_lane_mem(d, 1) != 24) return 2;
+    if (__zcc_wasm_i32x4_extract_lane_mem(d, 2) != 39) return 3;
+    if (__zcc_wasm_i32x4_extract_lane_mem(d, 3) != 56) return 4;
+
+    __zcc_wasm_i32x4_sub_mem(c, d, a);
+    if (__zcc_wasm_i32x4_extract_lane_mem(c, 3) != 46) return 5;
+
+    __zcc_wasm_v128_xor_mem(c, d, d);
+    if (__zcc_wasm_i32x4_extract_lane_mem(c, 2) != 0) return 6;
+
+    sa[0] = 2; sa[1] = 3; sa[2] = 4; sa[3] = 5; sa[4] = 6; sa[5] = 7; sa[6] = 8; sa[7] = 9;
+    sb[0] = 10; sb[1] = 20; sb[2] = 30; sb[3] = 40; sb[4] = 1; sb[5] = 2; sb[6] = 3; sb[7] = 4;
+    __zcc_wasm_i32x4_dot_i16x8_s_mem(c, sa, sb);
+    if (c[0] != 80 || c[1] != 320 || c[2] != 20 || c[3] != 60) return 7;
+
+    fa[0] = 1.5f; fa[1] = 2.5f; fa[2] = 3.5f; fa[3] = 4.5f;
+    fb[0] = 2.0f; fb[1] = 4.0f; fb[2] = 6.0f; fb[3] = 8.0f;
+    __zcc_wasm_f32x4_mul_mem(fc, fa, fb);
+    __zcc_wasm_f32x4_add_mem(fc, fc, fb);
+    if ((int)fc[0] != 5 || (int)fc[1] != 14 || (int)fc[2] != 27 || (int)fc[3] != 44) return 8;
+    return 0;
+}
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            wc_path = pathlib.Path(tmp) / "v128_test.c"
+            wasm_path = pathlib.Path(tmp) / "v128_test.wasm"
+            wc_path.write_text(wasm_c, encoding="utf-8")
+
+            rc = subprocess.run([str(ZCC_BIN), "--wasm", str(wc_path), "-o", str(wasm_path)], capture_output=True, text=True)
+            self.assertEqual(rc.returncode, 0, rc.stderr)
+            wasm_bytes = wasm_path.read_bytes()
+            self.assertIn(b"\xfd", wasm_bytes)
+
+            if shutil.which("wasm-validate"):
+                rv = subprocess.run(["wasm-validate", str(wasm_path)], capture_output=True, text=True)
+                self.assertEqual(rv.returncode, 0, rv.stderr)
+
+            rn = subprocess.run(
+                [
+                    "node",
+                    "-e",
+                    f"const fs=require('fs');const b=fs.readFileSync({json.dumps(str(wasm_path))});"
+                    "const m=new WebAssembly.Module(b);const i=new WebAssembly.Instance(m,{});"
+                    "process.exit(i.exports.main());",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(rn.returncode, 0, rn.stderr)
+
+            if WASMTIME_BIN.exists():
+                rw = subprocess.run(
+                    [str(WASMTIME_BIN), "run", "--invoke", "main", str(wasm_path)],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(rw.returncode, 0, rw.stderr)
+                self.assertEqual(rw.stdout.strip(), "0")
+
+            # Verify leaq SIB displacement and 8-bit ALU hex immediate encoding against GNU as --64
+            asm_c = r"""
+void mv16_asm_oracle(void) {
+    asm("leaq 16(%rax, %rcx, 8), %rdx");
+    asm("leaq -32(%rbp, %r11, 4), %r10");
+    asm("leaq 256(%rsp, %rcx, 2), %rax");
+    asm("addb $0xfffffffffffffff0, %dl");
+    asm("subb $0xfffffffffffffffe, %cl");
+}
+int main(void) { return 0; }
+"""
+            ac_path = pathlib.Path(tmp) / "mv16_asm.c"
+            as_path = pathlib.Path(tmp) / "mv16_asm.s"
+            zo_path = pathlib.Path(tmp) / "mv16_zcc.o"
+            go_path = pathlib.Path(tmp) / "mv16_gas.o"
+            ac_path.write_text(asm_c, encoding="utf-8")
+            self.assertEqual(subprocess.run([str(ZCC_BIN), "-S", str(ac_path), "-o", str(as_path)], capture_output=True).returncode, 0)
+            self.assertEqual(subprocess.run([str(ZCC_BIN), "-c", str(ac_path), "-o", str(zo_path)], capture_output=True).returncode, 0)
+            self.assertEqual(subprocess.run(["as", "--64", str(as_path), "-o", str(go_path)], capture_output=True).returncode, 0)
+
+            def extract_fn_bytes(obj_p: pathlib.Path) -> list:
+                r = subprocess.run(["objdump", "-d", str(obj_p)], capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0)
+                out = []
+                for ln in r.stdout.splitlines():
+                    if ":" in ln and "\t" in ln:
+                        pts = ln.split("\t")
+                        if len(pts) >= 3:
+                            dis = pts[2].strip()
+                            if dis.startswith("lea") or (dis.startswith("add") and "%dl" in dis) or (dis.startswith("sub") and "%cl" in dis):
+                                hb = "".join(x for x in pts[1].strip().split() if len(x) == 2 and all(c in "0123456789abcdefABCDEF" for c in x))
+                                out.append(hb.lower())
+                return out
+
+            z_b = extract_fn_bytes(zo_path)
+            g_b = extract_fn_bytes(go_path)
+            self.assertEqual(len(z_b), 5)
+            self.assertEqual(z_b, g_b)
 
 
 if __name__ == "__main__":

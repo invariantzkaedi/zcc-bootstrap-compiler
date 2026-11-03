@@ -702,6 +702,55 @@ int classify_mv15_pass5c_pass6_and_addq_hex(void) {
     return 178;
 }
 
+/* MV-16 + MV-17 + ZCC-PROVE-08:
+ *   1) `zcc_x86_peephole_boost` Pass 0a (`ZCC_OPT=1`):
+ *      - `movabsq $0, %rax` before `sete %cl` must NOT be rewritten to `xorl %eax, %eax`
+ *        when `EFLAGS` are live.
+ *   2) `zcc_x86_peephole_boost` Pass 0b (`ZCC_OPT=1`):
+ *      - `.LS_flit_N:` followed by `.long`/`.quad` and `movss`/`movsd .LS_flit_M(%rip), %xmm0`
+ *        must verify `lbl_buf == ref_lbl` and scalar width (`.long` for `movss`, `.quad` for `movsd`)
+ *        before deleting `.LS_flit_N:`.
+ *   3) `part5.c` Rule 3b & `zcc_x86_peephole_boost` Pass 2:
+ *      - `pushq %rax; movq $99, %rdx; movq %rax, %r11; popq %rax` must NOT fold `movq $99`
+ *        into `%r11` because `l2` does not write `%rax`.
+ *   4) `src/codegen.c`:
+ *      - `leaq 16(%rax,%rcx,8), %rdx` encodes SIB + disp8/disp32 via `encode_cmpq_mem(..., 0x8D)`.
+ *      - `addb $0xfffffffffffffff0, %al` parses unsigned 64-bit hex via `strtoull` (`-16`), not saturated `-1`.
+ */
+int classify_mv16_pass0_pass2_leaq_sib_and_addb_hex(void) {
+    long long zf_keep = 0, rdx_store = 0, r11_keep = 0, addb_res = 0, leaq_res = 0, flit_res = 0;
+#ifdef __ZCC__
+    asm("movq $1, %rcx\n    cmpq $2, %rcx\n    movabsq $0, %rax\n    sete %cl\n    movzbq %cl, %rcx");
+    asm("movq %%rcx, %0" : "=r"(zf_keep));
+
+    asm("movq $77, %rax\n    pushq %rax\n    movq $99, %rdx\n    movq %rax, %r11\n    popq %rax");
+    asm("movq %%rdx, %0" : "=r"(rdx_store));
+    asm("movq %%r11, %0" : "=r"(r11_keep));
+
+    asm("movq $100, %rax\n    addb $0xfffffffffffffff0, %al");
+    asm("movq %%rax, %0" : "=r"(addb_res));
+
+    asm("movq $1000, %rax\n    movq $3, %rcx\n    leaq 16(%rax,%rcx,8), %rdx");
+    asm("movq %%rdx, %0" : "=r"(leaq_res));
+
+    asm(".section .rodata\n    .p2align 2\n.LS_flit_other_mv16:\n    .long 1065353216\n    .text\n    .section .rodata\n    .p2align 2\n.LS_flit_victim_mv16:\n    .long 0\n    .text\n    movss .LS_flit_other_mv16(%rip), %xmm0\n    leaq .LS_flit_victim_mv16(%rip), %rax\n    movslq (%rax), %rax");
+    asm("movq %%rax, %0" : "=r"(flit_res));
+#else
+    zf_keep = 0LL;
+    rdx_store = 99LL;
+    r11_keep = 77LL;
+    addb_res = 84LL;
+    leaq_res = 1040LL;
+    flit_res = 0LL;
+#endif
+    if (zf_keep != 0LL) return -180;
+    if (rdx_store != 99LL || r11_keep != 77LL) return -181;
+    if (addb_res != 84LL) return -182;
+    if (leaq_res != 1040LL) return -183;
+    if (flit_res != 0LL) return -184;
+    return 188;
+}
+
 int main(void) {
     if (classify(4294967296LL) != 7) return 1;
     if (classify(-4294967296LL) != 9) return 2;
@@ -726,5 +775,6 @@ int main(void) {
     if (classify_mv13_pass8_and_pass5c() != 158) return 21;
     if (classify_mv14_pass6_and_hex_imm() != 168) return 22;
     if (classify_mv15_pass5c_pass6_and_addq_hex() != 178) return 23;
+    if (classify_mv16_pass0_pass2_leaq_sib_and_addb_hex() != 188) return 24;
     return 0;
 }

@@ -122,7 +122,7 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
 
     nlines = compact_peep_lines_ex(line_ptrs, nlines, hoist_loc);
 
-    /* Pass 0a: Normalize 32-bit movabsq $imm, %rax -> movq $imm, %rax (and $0 -> xorl) */
+    /* Pass 0a: Normalize 32-bit movabsq $imm, %rax -> movq $imm, %rax (and $0 -> xorl when EFLAGS not live) */
     if (pmask & 0x001U) {
         for (int i = 0; i < nlines; i++) {
             if (strncmp(line_ptrs[i], "    movabsq $", 13) == 0 && strcmp(line_ptrs[i] + strlen(line_ptrs[i]) - 7, ", %rax\n") == 0) {
@@ -132,7 +132,14 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                 if (endp && endp > p && strcmp(endp, ", %rax\n") == 0 &&
                     imm >= -2147483648LL && imm <= 2147483647LL) {
                     if (imm == 0) {
-                        sprintf(line_ptrs[i], "    xorl %%eax, %%eax\n");
+                        int k = i + 1;
+                        while (k < nlines && (line_ptrs[k][0] == 0 || strncmp(line_ptrs[k], "    .loc ", 9) == 0 || strncmp(line_ptrs[k], "    .file ", 10) == 0)) k++;
+                        if (k >= nlines || (strncmp(line_ptrs[k], "    set", 7) != 0 && strncmp(line_ptrs[k], "    cmov", 8) != 0 &&
+                            (strncmp(line_ptrs[k], "    j", 5) != 0 || strncmp(line_ptrs[k], "    jmp", 7) == 0))) {
+                            sprintf(line_ptrs[i], "    xorl %%eax, %%eax\n");
+                        } else {
+                            sprintf(line_ptrs[i], "    movq $0, %%rax\n");
+                        }
                     } else {
                         sprintf(line_ptrs[i], "    movq $%lld, %%rax\n", imm);
                     }
@@ -150,6 +157,15 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
             strcmp(line_ptrs[i + 4], "    .text\n") == 0 &&
             (strncmp(line_ptrs[i + 5], "    movss .LS_flit_", 19) == 0 || strncmp(line_ptrs[i + 5], "    movsd .LS_flit_", 19) == 0) &&
             strstr(line_ptrs[i + 5], "(%rip), %xmm0\n") != NULL) {
+
+            char lbl_buf[32], ref_lbl[32], mop_buf[16];
+            if (sscanf(line_ptrs[i + 2], "%31[^:]:", lbl_buf) != 1 ||
+                sscanf(line_ptrs[i + 5], "    %15s %31[^(](%%rip), %%xmm0", mop_buf, ref_lbl) != 2 ||
+                strcmp(lbl_buf, ref_lbl) != 0 ||
+                (strcmp(mop_buf, "movss") == 0 && strncmp(line_ptrs[i + 3], "    .long ", 10) != 0) ||
+                (strcmp(mop_buf, "movsd") == 0 && strncmp(line_ptrs[i + 3], "    .quad ", 10) != 0)) {
+                continue;
+            }
 
             if (strcmp(line_ptrs[i + 3], "    .long 0\n") == 0 || strcmp(line_ptrs[i + 3], "    .quad 0\n") == 0) {
                 sprintf(line_ptrs[i], "    pxor %%xmm0, %%xmm0\n");
@@ -182,12 +198,9 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                 i += 5;
                 continue;
             } else if (pool_count < 256 && strlen(line_ptrs[i + 3]) < 47) {
-                char lbl_buf[32];
-                if (sscanf(line_ptrs[i + 2], "%31[^:]:", lbl_buf) == 1) {
-                    strcpy(flit_pool[pool_count].val_line, line_ptrs[i + 3]);
-                    strcpy(flit_pool[pool_count].label, lbl_buf);
-                    pool_count++;
-                }
+                strcpy(flit_pool[pool_count].val_line, line_ptrs[i + 3]);
+                strcpy(flit_pool[pool_count].label, lbl_buf);
+                pool_count++;
             }
         }
     }
@@ -270,7 +283,8 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                 if (i + 3 < nlines && strcmp(line_ptrs[i + 2], "    movq %rax, %r11\n") == 0 &&
                     strcmp(line_ptrs[i + 3], "    popq %rax\n") == 0) {
                     char *l2 = line_ptrs[i + 1];
-                    if (strncmp(l2, "    movq $", 10) == 0) {
+                    int l2_len = (int)strlen(l2);
+                    if (l2_len > 16 && strncmp(l2, "    movq $", 10) == 0 && strcmp(l2 + l2_len - 7, ", %rax\n") == 0) {
                         char imm[64];
                         if (sscanf(l2, "    movq %63[^,]", imm) == 1) {
                             sprintf(line_ptrs[i], "    movq %s, %%r11\n", imm);
@@ -298,6 +312,8 @@ int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr) {
                     }
                 }
                 if (i + 3 < nlines && strncmp(line_ptrs[i + 1], "    movq $", 10) == 0 &&
+                    strlen(line_ptrs[i + 1]) > 16 &&
+                    strcmp(line_ptrs[i + 1] + strlen(line_ptrs[i + 1]) - 7, ", %rax\n") == 0 &&
                     strcmp(line_ptrs[i + 2], "    movq %rax, %rcx\n") == 0 &&
                     strcmp(line_ptrs[i + 3], "    popq %rax\n") == 0) {
                     char imm[64];

@@ -38,6 +38,7 @@ typedef enum {
     WASM_TYPE_I64  = 0x7E,
     WASM_TYPE_F32  = 0x7D,
     WASM_TYPE_F64  = 0x7C,
+    WASM_TYPE_V128 = 0x7B,
     WASM_TYPE_FUNC = 0x60,
     WASM_TYPE_VOID = 0x40
 } WASMValueType;
@@ -206,8 +207,34 @@ typedef enum {
     WASM_OP_F64_CONVERT_I32_U = 0xB8,
     WASM_OP_F64_CONVERT_I64_S = 0xB9,
     WASM_OP_F64_CONVERT_I64_U = 0xBA,
-    WASM_OP_F64_PROMOTE_F32 = 0xBB
+    WASM_OP_F64_PROMOTE_F32 = 0xBB,
+    WASM_OP_SIMD_PREFIX  = 0xFD
 } WASMOpcode;
+
+/* WebAssembly 128-Bit SIMD (0xFD Prefix) Sub-Opcodes */
+typedef enum {
+    WASM_SIMD_V128_LOAD         = 0x00,
+    WASM_SIMD_V128_STORE        = 0x0B,
+    WASM_SIMD_V128_CONST        = 0x0C,
+    WASM_SIMD_I8X16_SHUFFLE     = 0x0D,
+    WASM_SIMD_I32X4_SPLAT       = 0x11,
+    WASM_SIMD_I64X2_SPLAT       = 0x12,
+    WASM_SIMD_F32X4_SPLAT       = 0x13,
+    WASM_SIMD_F64X2_SPLAT       = 0x14,
+    WASM_SIMD_I32X4_EXTRACT_LANE = 0x1B,
+    WASM_SIMD_I32X4_REPLACE_LANE = 0x1C,
+    WASM_SIMD_V128_NOT          = 0x4D,
+    WASM_SIMD_V128_AND          = 0x4E,
+    WASM_SIMD_V128_OR           = 0x50,
+    WASM_SIMD_V128_XOR          = 0x51,
+    WASM_SIMD_I32X4_ADD         = 0xAE,
+    WASM_SIMD_I32X4_SUB         = 0xB1,
+    WASM_SIMD_I32X4_MUL         = 0xB5,
+    WASM_SIMD_I32X4_DOT_I16X8_S = 0xBA,
+    WASM_SIMD_F32X4_ADD         = 0xE4,
+    WASM_SIMD_F32X4_SUB         = 0xE5,
+    WASM_SIMD_F32X4_MUL         = 0xE6
+} WASMSimdOpcode;
 
 /* Dynamic Byte Buffer for Section Construction */
 typedef struct {

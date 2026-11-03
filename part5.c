@@ -835,7 +835,8 @@ static void peephole_optimize(char *filename) {
       char *l3 = line_ptrs[i + 2];
       char *l4 = line_ptrs[i + 3];
       if (strcmp(l3, "    movq %rax, %r11\n") == 0 && strcmp(l4, "    popq %rax\n") == 0) {
-        if (strncmp(l2, "    movq $", 10) == 0) {
+        int l2_len = (int)strlen(l2);
+        if (l2_len > 16 && strncmp(l2, "    movq $", 10) == 0 && strcmp(l2 + l2_len - 7, ", %rax\n") == 0) {
           char imm[64];
           if (sscanf(l2, "    movq %63[^,]", imm) == 1) {
             sprintf(line_ptrs[i], "    movq %s, %%r11\n", imm);
