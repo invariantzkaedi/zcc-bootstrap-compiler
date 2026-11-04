@@ -1,0 +1,4 @@
+python3 /mnt/c/Users/zkaed/.gemini/antigravity/brain/363b8fa0-5979-44ee-a9f7-cccf00e52f25/scratch/probe_mv22.py
+make zcc
+python3 /mnt/c/Users/zkaed/.gemini/antigravity/brain/363b8fa0-5979-44ee-a9f7-cccf00e52f25/scratch/probe_mv22.py
+bash scripts/run_mv02_gate.sh

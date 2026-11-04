@@ -823,6 +823,42 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "python3 tools/zcc_prove_01.py",
     },
+    {
+        "id": "MV22-01",
+        "desc": "part5.c zcc_emit_bit_builtin_call omits addl $1, %%eax on x86-64 __builtin_ffs, returning ctz(x) instead of ctz(x)+1",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    testl %%%s, %%%s\\n    je .Lx86_ffs32_z_%d\\n    bsfl %%%s, %%eax\\n    addl $1, %%eax\\n    jmp .Lx86_ffs32_d_%d\\n"',
+        "new": '      fprintf(cc->out, "    testl %%%s, %%%s\\n    je .Lx86_ffs32_z_%d\\n    bsfl %%%s, %%eax\\n    jmp .Lx86_ffs32_d_%d\\n" /* MV22-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_13_ffs_parity_quad_isa_v128_accum_and_compound_assign",
+    },
+    {
+        "id": "MV22-02",
+        "desc": "part5.c zcc_emit_bit_builtin_call omits and w0, w0, #1 on ARM64 __builtin_parity, returning full popcount instead of parity",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    fmov s0, w0\\n    cnt v0.8b, v0.8b\\n    uaddlv h0, v0.8b\\n    fmov w0, s0\\n    and w0, w0, #1\\n");',
+        "new": '      fprintf(cc->out, "    fmov s0, w0\\n    cnt v0.8b, v0.8b\\n    uaddlv h0, v0.8b\\n    fmov w0, s0\\n"); /* MV22-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_13_ffs_parity_quad_isa_v128_accum_and_compound_assign",
+    },
+    {
+        "id": "MV22-03",
+        "desc": "part4.c ND_COMPOUND_ASSIGN omits backend_ops->emit_store routing on ARM64/RISC-V 64, falling back to ARM32 str r1, [r0]",
+        "file": "part4.c",
+        "old": '    } else if (backend_ops && backend_ops->emit_store) {',
+        "new": '    } else if (0 && backend_ops && backend_ops->emit_store) { /* MV22-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_13_ffs_parity_quad_isa_v128_accum_and_compound_assign && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV22-04",
+        "desc": "part6_wasm.c omits WASM32 __builtin_parity lowering, breaking Quad-ISA parity execution and ZCC-PROVE-13",
+        "file": "part6_wasm.c",
+        "old": '                if (strcmp(bfn, "parity") == 0) {',
+        "new": '                if (0 && strcmp(bfn, "parity") == 0) { /* MV22-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_13_ffs_parity_quad_isa_v128_accum_and_compound_assign && python3 tools/zcc_prove_01.py",
+    },
 ]
 
 

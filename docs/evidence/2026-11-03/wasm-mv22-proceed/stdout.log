@@ -1,0 +1,1836 @@
+Command exited with code 0.
+
+Command output:
+ZKAEDI PRIME ONLINE
+ZCC: H:\__DOWNLOADS\zcc_github_upload\zcc
+=== [WASM-MV-02] Gate 1: Full 3-Stage Self-Host Bootstrap ===
+=== Checking Workspace Lexicons ===
+python3 scripts/zcc_template_recognizer.py
+[ZCC TEMPLATE RECOGNIZER] Scanning repository templates...
+
+[RECOGNIZED & VALIDATED] templates/PLAYBOOK.md (Matches ZCC Protocol Signature)
+[RECOGNIZED & VALIDATED] templates/COMMIT_TEMPLATE.md (Matches ZCC Protocol Signature)
+[RECOGNIZED & VALIDATED] templates/GATE_CHECKLIST.md (Matches ZCC Protocol Signature)
+[RECOGNIZED & VALIDATED] templates/FAULT_INJECTION_GUIDE.md (Matches ZCC Protocol Signature)
+[RECOGNIZED & VALIDATED] templates/INCIDENT_REPORT.md (Matches ZCC Protocol Signature)
+
+==================================================
+[SUMMARY] 5 / 5 Templates Recognized & Validated
+==================================================
+cat part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c part6_riscv.c part6_wasm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c > zcc.c
+# Tripwire: reject hand-edited zcc.c — parts are the source of truth.
+# Bypass with: ZCC_MUTATION_SANDBOX=1 make zcc  (Oneirogenesis daemon)
+# or:          touch .mutation_sandbox && make zcc
+cc -O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Iinclude -I. -Dmain=zcc_main -o zcc zcc.c compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c src/opt/q_licm_pass.c src/opt/cap_tripwire.c src/evm/evm2native_pass.c src/evm/evm2native_fuzzer.c src/zk/zk_air_trace.c src/zk/zk_witness_bridge.c src/zk/zk_stark_emit.c src/codegen/avxzkd_jit_x86.c src/engine/zcc_hyper_engine.c src/ai/bare_gguf_jit.c src/optics/optiqpu_emitter.c src/dynamic/oneiro_kernel.c src/crypto/fhe_encrypted_ssa.c src/crypto/lattice_guard.c src/concurrency/chrono_spec.c src/neuromorphic/zcc_neuromorphic.c src/vector/zcc_hyper_vector_db.c src/quantum/zcc_topological_qpu.c src/physics/zcc_celestial_nbody.c src/zk/zcc_pq_light_client.c src/security/zcc_enclave_seal.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c src/zcc_binary_vector_engine.c -lm -Wl,-s
+python3 zcc_quest.py --cmd "bash gate.sh" --mode prime
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:00 (eta --:--)
+ ║ Hamiltonian Energy: H=5.2218 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.0 ln/s
+ ║ [────────────────────────────┼────────────────────────────┼────────────────────────────]   0%
+ ║ [⠙ S1:BOOT] ━▶ [· S2:STAGE2] ━▶ [· S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ░·                          ┊                  ·░▒▓██████ ║ H_t Spark: ······················▁  ║
+ ║               ··░▒▒▓▓▓██████▓▓▓▒░∙··               ·░▒███ ║ Stage2 SHA: pending...              ║
+ ║        ·∙░▓███████████████████████████▓░·            ·∙▒▓ ║ Stage3 SHA: pending...              ║
+ ║     ·░▒█████████▓▒░···      ·∙▒█████████▓▒·           ·∙▒ ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ┈┈·∙▒▓███████▓░·┈┈┈┈┈┈┈┈┈┈·▒⊙▒██████████▓░·┈┈┈┈┈┈┈┈┈┈┈·∙▒ ║ Pins: [▄ █ █ █] ══ ∿∿∿▸             ║
+ ║   ·░▒███████▓▒∙·         ·░▓████████▓▒∙·             ·░▓█ ║ T0 Stage2==Stage3  [○ PIN  ]        ║
+ ║    ·∙▒▓███████▓░··          ┊                    ✦∙▒▓████ ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║      ··░▓█████████▓▒░∙··    ┊             ··∙░▒▓█████████ ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║           ·∙▒▓██████████████████████████████████████▓▒░·· ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 0 │ files: 0 │ warnings: 0 │ errors: 0)
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:05 (eta 03:02)
+ ║ Hamiltonian Energy: H=7.6647 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  1.2 ln/s
+ ║ [██▎─────────────────────────┼────────────────────────────┼────────────────────────────]   2%
+ ║ [⠦ S1:BOOT] ━▶ [· S2:STAGE2] ━▶ [· S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ███▓▒∙·                     ┊             ·∙▒███·████████ ║ H_t Spark: ▃▅▃▆▆▅▆▆██▇▄▂▄▇▅▄▅▁▁▃▅▃  ║
+ ║ ·                      ···· ┊                  ·░▓███████ ║ Stage2 SHA: pending...              ║
+ ║            ·∙▓█████████████████████▓∙             •░█████ ║ Stage3 SHA: pending...              ║
+ ║        ·░██████████████▓▓▓▓███████████▓·           ·░████ ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ┈┈┈┈┈·░▓█████████▓∙┈┈┈┈┈┈┈┈┈⊙█████████▒·┈┈┈┈┈┈┈┈┈┈┈·▒████ ║ Pins: [▄ █ █ █] ══  ∿∿∿▸            ║
+ ║      ·▒█████████▓░·         ┊······              •░▓█████ ║ T0 Stage2==Stage3  [○ PIN  ]        ║
+ ║       ·░▓██████████▒·       ┊                ·░▓█████████ ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║          ·░▓██████████████▓▒░░∙∙∙∙∙░░▒▓▓████████★█████▓▒· ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║               ·∙▒▓██████████████████████████████▓░·       ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 6 │ files: 0 │ warnings: 0 │ errors: 0)
+ ◈ ================================================================================
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:10 (eta 03:02)
+ ║ Hamiltonian Energy: H=7.3508 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.6 ln/s
+ ║ [████▍───────────────────────┼────────────────────────────┼────────────────────────────]   5%
+ ║ [⠙ S1:BOOT] ━▶ [· S2:STAGE2] ━▶ [· S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ████████▓▒∙·                ┊        ·░▒▓████████████▒∙·  ║ H_t Spark: █▅▇▄▁▂▃▆▇▄▆▃▄▄▄▅▆▅▅▅▃▂▁  ║
+ ║ ██▒∙·                       ┊              ·∙▒███·██████▓ ║ Stage2 SHA: pending...              ║
+ ║                 ·░▒▓██████████▓▒∙·             ·▒████████ ║ Stage3 SHA: pending...              ║
+ ║            ∙▓██████████████████████▓∙           ·░███████ ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ┈┈┈┈┈┈┈┈·░▓█████████▓░·┈┈┈┈┈⊙██████▒·┈┈┈┈┈┈┈┈┈┈┈··███████ ║ Pins: [▄ █ █ █] ══   ∿∿∿▸           ║
+ ║         ·▒██████████░·      ┊                ·∙▒█████████ ║ T0 Stage2==Stage3  [○ PIN  ]        ║
+ ║           ∙▓███████████▒░·  ┊          ··░▒█████·██████▒· ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║              ·░▓██████████████████████████████████▓░·     ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║ ▓░·                 ·∙▒▓▓███████████████▓▓▒∙··            ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 6 │ files: 0 │ warnings: 0 │ errors: 0)
+ ◈ ================================================================================
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:15 (eta 03:02)
+ ║ Hamiltonian Energy: H=7.1181 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.4 ln/s
+ ║ [██████▌─────────────────────┼────────────────────────────┼────────────────────────────]   7%
+ ║ [⠦ S1:BOOT] ━▶ [· S2:STAGE2] ━▶ [· S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ██████████████▓▒▒░∙···········∙░▒▓▓██████████████▒∙·      ║ H_t Spark: █▅▃▅▇▆▆▇▅▂▂▄▂▃▃▃▄▄▇▅▃▁▁  ║
+ ║ ██████▒░·                   ┊          ·∙▒██████████▓▒·   ║ Stage2 SHA: pending...              ║
+ ║ █▓░·                  ······┊              ·░▓█████████▒· ║ Stage3 SHA: pending...              ║
+ ║ ·             ·▒████████████████▓░           ·▒█████████▒ ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ┈┈┈┈┈┈┈┈┈┈┈·░███████████▒·┈┈⊙███▒·┈┈┈┈┈┈┈┈┈┈·∙▓█████████░ ║ Pins: [▄ █ █ █] ══∿∿∿▸              ║
+ ║            ·▒██████████▒·   ┊            ·∙▒██████████▒∙  ║ T0 Stage2==Stage3  [○ PIN  ]        ║
+ ║              ·▒█████████████▓▓▒▒▒▒▒▓▓██████████████▒∙·    ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║ ▓░·              ·░▓█████████████████████████▓░··         ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║ ████▒·                      ········          ·           ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 6 │ files: 0 │ warnings: 0 │ errors: 0)
+ ◈ ================================================================================
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:20 (eta 03:02)
+ ║ Hamiltonian Energy: H=7.1628 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.3 ln/s
+ ║ [████████▌───────────────────┼────────────────────────────┼────────────────────────────]   9%
+ ║ [⠙ S1:BOOT] ━▶ [· S2:STAGE2] ━▶ [· S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ·∙▒▓████████████████████████████████████████▓░·           ║ H_t Spark: ▆█▅▅▁▁▂▅█▆▆▅▇█▆▂▅▄▆▄█▃▆  ║
+ ║ ██████████▓▒░··             ┊     ·∙▒▓███████████▒∙       ║ Stage2 SHA: pending...              ║
+ ║ █████▓∙·                    ┊           ·▒██████████░·    ║ Stage3 SHA: pending...              ║
+ ║ ██▒∙   ✦          ∙▒▓████████▓░·          ∙▓█████████▒·   ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ █░·┈┈┈┈┈┈┈┈┈┈┈·░███████████▒⊙▒·┈┈┈┈┈┈┈┈┈┈·░█████████▓░·┈┈ ║ Pins: [▄ █ █ █] ══ ∿∿∿▸             ║
+ ║ ▓░·           ·▒██████████▒·┊        ·░▓███████████▒·     ║ T0 Stage2==Stage3  [○ PIN  ]        ║
+ ║ █▓░·    ★       ·▒█████████████████████████████▓░·        ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║ ████▒·                ·░▒▓████████████▓▓▒∙·               ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║ ███████▓▒·★                 ┊                          ·░ ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 6 │ files: 0 │ warnings: 0 │ errors: 0)
+ ◈ ================================================================================
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:25 (eta 03:02)
+ ║ Hamiltonian Energy: H=6.8216 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.2 ln/s
+ ║ [██████████▍─────────────────┼────────────────────────────┼────────────────────────────]  12%
+ ║ [⠦ S1:BOOT] ━▶ [· S2:STAGE2] ━▶ [· S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║      ··░▒★█████████████████████████████▓▒∙·               ║ H_t Spark: ▄▅███▂▅▆▄▃▄█▄▃▆▄▃▃▁▃▁▃▃  ║
+ ║ ·▒▓██████████████▓▒░░∙∙∙∙∙∙∙░▒▒▓█████████████▓░·          ║ Stage2 SHA: pending...              ║
+ ║ ████████★▒░·                ┊       ·▒▓█████████▓░·       ║ Stage3 SHA: pending...              ║
+ ║ █████▓░·              ··∙∙··┊         ·░▓█████████░·      ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ████░·┈┈•┈┈┈┈┈┈┈┈·▒█████████⊙┈┈┈┈┈┈┈┈┈∙▒█████████▓░·┈┈┈┈┈ ║ Pins: [▄ █ █ █] ══  ∿∿∿▸            ║
+ ║ ███▓░·           ·▓███████████▓▓▓▓▓████████████▓░·        ║ T0 Stage2==Stage3  [○ PIN  ]        ║
+ ║ ████▓░·            ·∙▒█████████████████████▒∙·            ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║ ███████▒∙•                  ┊······                     · ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║ ███████████▓▒∙·             ┊                     ··▒▓███ ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 6 │ files: 0 │ warnings: 0 │ errors: 0)
+ ◈ ================================================================================
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:30 (eta 03:03)
+ ║ Hamiltonian Energy: H=6.7759 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.2 ln/s
+ ║ [████████████▏───────────────┼────────────────────────────┼────────────────────────────]  14%
+ ║ [⠙ S1:BOOT] ━▶ [· S2:STAGE2] ━▶ [· S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║            •·∙▒▒▓███████████████▓▒░∙·                 ·∙▓ ║ H_t Spark: █▄▄▅█▃▅▆▇▇▅▃▁▃▃▆▃▄▁▁▂▄▅  ║
+ ║     ·░▒██•███████████████████████████████▓░·              ║ Stage2 SHA: pending...              ║
+ ║ ·▒▓██████████▓▒░··          ┊  ·∙▒███████████▓∙           ║ Stage3 SHA: pending...              ║
+ ║ ████████·▒∙·                ┊      ·░▓█████████▒·         ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ███████▒·┈┈┈┈┈┈┈┈┈┈┈·▒██████⊙┈┈┈┈┈·░▓█████████▓░·┈┈┈┈┈┈┈┈ ║ Pins: [▄ █ █ █] ══   ∿∿∿▸           ║
+ ║ ██████▓░·           ∙▓██████████████████████▓∙·           ║ T0 Stage2==Stage3  [○ PIN  ]        ║
+ ║ ████████▒·             ·∙▒▓██████████▓▒░··                ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║ ▓██████████▒∙·              ┊                       ·∙▒██ ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║  ·∙▒██████·█████▓▒∙·        ┊                ·∙▒▓████████ ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 6 │ files: 0 │ warnings: 0 │ errors: 0)
+ ◈ ================================================================================
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:35 (eta 01:03)
+ ║ Hamiltonian Energy: H=4.7519 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.2 ln/s
+ ║ [████████████████████████████┃█▋──────────────────────────┼────────────────────────────]  35%
+ ║ [✔ S1:BOOT] ━▶ [✔ S2:a96dfa] ━▶ [⠦ S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║           ·        ···········                    ··░▓███ ║ H_t Spark: ██████████████████▇▃▂▁▁  ║
+ ║         ··░▒▓▓█████████████████████▓▓▒∙·              ·∙▒ ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║    ·∙░▓██·████████▓▓▒▒░░░░▒▒▒▓███████████▓░··           · ║ Stage3 SHA: pending...              ║
+ ║ ·∙░▓███████▓▒░∙·            ┊   ·░▓████████▓░·            ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ░▒▓██████▓▒∙·┈┈┈┈┈┈┈┈┈··▒▓██⊙┈··░▓█████████▓░·┈┈┈┈┈┈┈┈┈┈┈ ║ Pins: [▄ █ █ █] ══∿∿∿▸              ║
+ ║ ░▓███████▓░·          ·░▓███████████████▓░··            · ║ T0 Stage2==Stage3  [⠦ RAKE ]        ║
+ ║ ·░▓███████▓▒∙·              ········                 ·∙▒▓ ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║   ·░▒▓███████▓▒░∙·          ┊                   ·∙░▒▓████ ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║      ·∙░▒▓██████████▓▓▒░░∙·············∙░░▒▓▓████████████ ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 7 │ files: 1 │ warnings: 0 │ errors: 0)
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ✔ NLOADS/zcc_github_upload/zcc.c via /tmp/zcc-tx-zcc-omega-1793777919-232-7d6e53363572d6d6/zc…
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:40 (eta 01:12)
+ ║ Hamiltonian Energy: H=4.9315 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.2 ln/s
+ ║ [████████████████████████████┃█▋──────────────────────────┼────────────────────────────]  35%
+ ║ [✔ S1:BOOT] ━▶ [✔ S2:a96dfa] ━▶ [⠙ S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ∙·                 ·        ┊        ★  ★     ··░▒▓██████ ║ H_t Spark: ▂▄▃▁▃▃▂▄▅▃▄▆▃▄▄█▂▄▃▃▇▅█  ║
+ ║              ··∙░▒▒▓▓▓██████▓▓▓▒░∙··               ·░▒███ ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║        ·∙▒▓███████████████████████████▓░· ✦          ·∙▒▓ ║ Stage3 SHA: pending...              ║
+ ║     ·░▓█████████▓▒░··       ·∙▒▓████████▓▒·           ·∙▒ ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ┈┈·∙▒████████▓░·┈┈┈┈┈┈┈┈┈┈·▒⊙▒▓█████████▓░·┈┈┈┈┈┈┈┈┈┈┈·∙▒ ║ Pins: [▄ █ █ █] ══ ∿∿∿▸             ║
+ ║   ·░▓███████▓▒∙·         ·░▒████████▓▒∙·            ··░▓█ ║ T0 Stage2==Stage3  [⠙ RAKE ]        ║
+ ║    ·░▒████████▓░··          ┊                    ·∙▒▓████ ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║      ·∙░▓█████████▓▒░∙··    ┊             ··∙░▒▓█████████ ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║          ··░▒▓██████████████████▓███████████████████▓▒░∙· ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 7 │ files: 1 │ warnings: 0 │ errors: 0)
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ✔ NLOADS/zcc_github_upload/zcc.c via /tmp/zcc-tx-zcc-omega-1793777919-232-7d6e53363572d6d6/zc…
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:45 (eta 01:21)
+ ║ Hamiltonian Energy: H=4.8022 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.2 ln/s
+ ║ [████████████████████████████┃█▋──────────────────────────┼────────────────────────────]  35%
+ ║ [✔ S1:BOOT] ━▶ [✔ S2:a96dfa] ━▶ [⠦ S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ██▓▒░··                     ┊          •  ·∙░▒▓█████████▓ ║ H_t Spark: ▃▂▃▃▄▁▅▄▆▃▄█▄▂▂▄▅▆▄▁▂▅▅  ║
+ ║ ·                   ·········            •     ·∙░▓██████ ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║            ·∙▒▓███████████████████▓▒∙·            ·∙▒▓███ ║ Stage3 SHA: pending...              ║
+ ║        ·░▒▓██████████▓▓▒▒▒▒▓██████████▒∙· ★        ·∙▒▓██ ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ┈┈┈┈┈·∙▒████████▓▒∙·┈┈┈┈┈┈┈┈⊙████████▓░·┈┈┈┈┈┈┈┈┈┈┈·░▒███ ║ Pins: [▄ █ █ █] ══  ∿∿∿▸            ║
+ ║      ·░▓███████▓▒∙·         ··∙∙∙···      ★      ·∙▒▓████ ║ T0 Stage2==Stage3  [⠦ RAKE ]        ║
+ ║       ·∙▒▓███████▓▒░··      ┊            ✦   ·∙░▓▓███████ ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║          ·∙▒▓██████████▓▓▒▒░░∙∙···∙∙∙░░▒▒▓▓██████████▓▒░· ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║               ··░▒▓▓█████████████████████████▓▓▒▒∙··      ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 7 │ files: 1 │ warnings: 0 │ errors: 0)
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ✔ NLOADS/zcc_github_upload/zcc.c via /tmp/zcc-tx-zcc-omega-1793777919-232-7d6e53363572d6d6/zc…
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:50 (eta 01:30)
+ ║ Hamiltonian Energy: H=4.6726 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.1 ln/s
+ ║ [████████████████████████████┃█▋──────────────────────────┼────────────────────────────]  35%
+ ║ [✔ S1:BOOT] ━▶ [✔ S2:a96dfa] ━▶ [⠙ S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ██████▓▓▒░···               ┊       ···░·▓▓████████▓▓░∙·  ║ H_t Spark: ▆█▇▆▃▂▄▅▅▄▂▂▂▄▁▂▄▇▅▆▄▃▃  ║
+ ║ ▓▒░··                       ┊              ··░▒▓███████▓▒ ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ·              ··░▒▒▓▓██████▓▓▒░∙·        ·    ·░▒▓██████ ║ Stage3 SHA: pending...              ║
+ ║           ·∙▒▓█████████████████████▒∙·          ·∙▒▓█████ ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ┈┈┈┈┈┈┈┈·∙▒█████████▒░·┈┈┈┈┈⊙█████▓▒·┈┈┈┈┈•┈┈┈┈┈·░▓██████ ║ Pins: [▄ █ █ █] ══   ∿∿∿▸           ║
+ ║         ·░▓████████▓░·      ┊            •   ··░▓███████▓ ║ T0 Stage2==Stage3  [⠙ RAKE ]        ║
+ ║          ·∙▒▓████████▓▓░∙·· ┊          ··∙░▒▓████████▓▒░· ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║              ·░▒▓███████████████████████★███████▓▓▒∙··    ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║ ▒∙·                ··∙░░▒▒▓▓▓▓█████▓▓★▓▒▒░░∙··            ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 7 │ files: 1 │ warnings: 0 │ errors: 0)
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ✔ NLOADS/zcc_github_upload/zcc.c via /tmp/zcc-tx-zcc-omega-1793777919-232-7d6e53363572d6d6/zc…
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 00:55 (eta 01:39)
+ ║ Hamiltonian Energy: H=4.7475 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.1 ln/s
+ ║ [████████████████████████████┃█▋──────────────────────────┼────────────────────────────]  35%
+ ║ [✔ S1:BOOT] ━▶ [✔ S2:a96dfa] ━▶ [⠦ S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ████████████▓▓▒░░∙·············∙░░▒▓▓██████████▓▒░∙·      ║ H_t Spark: ▅█▆▅▅▄▇▇▄▃▄▅▃▁▁▂▃▄▃▂▁▃▄  ║
+ ║ ████▓▒░∙·                   ┊          ·∙░▒▓███████▓▒░··  ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ▓▒∙·                 ········              ·∙▒▓███████▓░· ║ Stage3 SHA: pending...              ║
+ ║ ·            ··░▓███████████████▓░·       ·  ·░▓███████▓░ ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ┈┈┈┈┈┈┈┈┈┈┈·░▓█████████▓░··┈⊙██▓▒··┈┈┈┈┈┈┈┈┈·∙▒▓██████▓▒░ ║ Pins: [▄ █ █ █] ══∿∿∿▸              ║
+ ║            ·░▓████████▓░·   ┊            ··░▒▓███████▓▒∙· ║ T0 Stage2==Stage3  [⠦ RAKE ]        ║
+ ║ ·           ··░▓███████████▓▒▒▒░░░░▒▒▓▓█·█████████▓░∙·    ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║ ▒∙·             ··∙▒▓▓█████████████████████▓▓▒░··         ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║ ███▓░··                    ···········•                   ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 7 │ files: 1 │ warnings: 0 │ errors: 0)
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ✔ NLOADS/zcc_github_upload/zcc.c via /tmp/zcc-tx-zcc-omega-1793777919-232-7d6e53363572d6d6/zc…
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 01:00 (eta 01:48)
+ ║ Hamiltonian Energy: H=4.8708 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.1 ln/s
+ ║ [████████████████████████████┃█▋──────────────────────────┼────────────────────────────]  35%
+ ║ [✔ S1:BOOT] ━▶ [✔ S2:a96dfa] ━▶ [⠙ S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ·∙░▒▓█████████████████▓▓▓▓█████████████████▓▒░··          ║ H_t Spark: ▆█▆▄▄▄▁▄▅▄▄▅█▇▅▄▅▃▄▅███  ║
+ ║ █████████▓▒░∙··             ┊    ··∙░▒▓█████████▓▒∙·      ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ████▓░∙·                    ┊          ··░▓████████▒░·    ║ Stage3 SHA: pending...              ║
+ ║ █▓░··            ·∙▒▓████████▓░·         ·∙▒▓███████▓░·   ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ▒∙·┈┈┈┈┈┈┈┈┈┈┈·░▓█████████▓▒⊙▒··┈┈┈┈┈┈┈┈┈·░▒████████▒∙·┈┈ ║ Pins: [▄ █ █ █] ══ ∿∿∿▸             ║
+ ║ ▒∙·           ·▒▓████████▓▒∙·       ··░▒▓█████████▓░·     ║ T0 Stage2==Stage3  [⠙ RAKE ]        ║
+ ║ ▓▒∙·            ·░▓███████████████████████████▓▒∙·        ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║ ███▒░·         ✦     ··∙░▒▓▓▓██████▓▓▓▒·░∙··              ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║ ██████▓▒░··       ★         ┊       ·                  ·∙ ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 7 │ files: 1 │ warnings: 0 │ errors: 0)
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ✔ NLOADS/zcc_github_upload/zcc.c via /tmp/zcc-tx-zcc-omega-1793777919-232-7d6e53363572d6d6/zc…
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 01:05 (eta 01:57)
+ ║ Hamiltonian Energy: H=4.7885 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.1 ln/s
+ ║ [████████████████████████████┃█▋──────────────────────────┼────────────────────────────]  35%
+ ║ [✔ S1:BOOT] ━▶ [✔ S2:a96dfa] ━▶ [⠦ S3:STAGE3] ━▶ [· GATE1:CMP] ━▶ [· ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║      ··░▒▒▓██████████████████████████▓▓▒░∙·               ║ H_t Spark: ▂▄▄▃▇▆▁▄▃▃▄▅▁▁▄▆██▂▄▁▅▅  ║
+ ║ ·░▒▓██████████▓▓▒▒░░∙∙····∙∙∙░▒▒▓▓██████████▓▒∙·          ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ███████▓▓░∙· ✦              ┊      ··░▒▓███████▓▒∙·       ║ Stage3 SHA: pending...              ║
+ ║ ████▓▒∙·             ··∙∙∙∙··         ·∙▒▓███████▓░·      ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ██▓▒░·┈┈┈┈┈┈┈★┈┈┈·░▓████████⊙┈┈┈┈┈┈┈┈·∙▒▓████████▒∙·┈┈┈┈┈ ║ Pins: [▄ █ █ █] ══  ∿∿∿▸            ║
+ ║ ██▓▒∙·          ·∙▒██████████▓▒▒▒▒▓▓███████████▒░·        ║ T0 Stage2==Stage3  [⠦ RAKE ]        ║
+ ║ ███▓▒∙·       ★    ·∙▒▓███████████████████▓▒∙·            ║ T1 GCC Semantic    [○ PIN  ]        ║
+ ║ ██████▓░∙·      •           ·········                   · ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║ ▓█████████▓▒░··    •        ┊                     ··░▒▓██ ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 7 │ files: 1 │ warnings: 0 │ errors: 0)
+ │    🚀 ZCC SUPERCHARGED DETERMINISM & ABI VERIFICATION GATE (v3.3 OMEGA / MV1.3b)
+ ◈ ================================================================================
+ │ Run ID: zcc-omega-1793777919-232-7d6e53363572d6d6 (Staging Arena: /tmp/zcc-tx-zcc-omega-179…
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ✔ NLOADS/zcc_github_upload/zcc.c via /tmp/zcc-tx-zcc-omega-1793777919-232-7d6e53363572d6d6/zc…
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 01:10 (eta 00:39)
+ ║ Hamiltonian Energy: H=2.6285 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  0.2 ln/s
+ ║ [████████████████████████████┃██████████████████████████──┼────────────────────────────]  64%
+ ║ [✔ S1:BOOT] ━▶ [✔ S2:a96dfa] ━▶ [✔ S3:a96dfa] ━▶ [✔ GATE1:CMP] ━▶ [⠙ ABI+SEM] ━▶ [· ARGON-4]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║          ·····∙∙░░░░▒▒▒▒▒▒▒▒▒▒░░░∙∙····              ··∙░ ║ H_t Spark: ████████████████████▃▁▁  ║
+ ║   ···∙∙░▒▒▒▓▓▓▓▓▓▓▓▓▒▒✦▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▒▒░∙··             ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ·∙░▒▒▓▓▓▓▓▒▒▒░∙∙····★★    ······∙░░▒▓▓▓▓▓▓▓▒▒░··          ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ▒▒▓▓▓▓▒▒░∙···•           ·  ┊    ···░▒▒▓▓██▓▓▒░∙··        ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ▒▓▓▓▒▒░∙··┈┈┈┈┈┈┈┈··∙░▒▓████⟐┈┈┈···░▒▒▓▓███▓▓▒░∙··┈┈┈┈┈┈┈ ║ Pins: [▀ ▄ █ █] ══   ∿∿∿▸           ║
+ ║ ▓▓▓▓▒▒░∙··   •    ··∙▒▓▓████████████████▓▓▓▒░∙··          ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ▒▓▓▓▓▒▒░∙··          ···∙░░▒▒▒▓▓▓▓▒▒▒░░∙···             · ║ T1 GCC Semantic    [⠙ RAKE ]        ║
+ ║ ░▒▒▓▓▓▓▓▒▒░∙····            ┊                      ···∙░▒ ║ T2 SystemV ABI     [○ PIN  ]        ║
+ ║ ··∙░░▒▒▓▓▓▓▓▒▒▒░░·····      ┊              ····∙░░▒▒▓▓▓▓▓ ║ T3 ARGON-4 Suite   [○ PIN  ]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 11 │ files: 2 │ warnings: 0 │ errors: 0)
+ ◈ ═══ EXECUTING DETERMINISTIC SELF-HOST PIPELINE ═══
+ ✔ NLOADS/zcc_github_upload/zcc.c via /tmp/zcc-tx-zcc-omega-1793777919-232-7d6e53363572d6d6/zc…
+ ✔ zcc_github_upload/zcc.c via /tmp/zcc-tx-zcc-omega-1793777919-232-7d6e53363572d6d6/stage2.bi…
+ ◈ ═══ [GATE 1] SELF-HOST IDENTITY VERIFICATION ═══
+ ✔   ✓ Gate 1 PASS: Assembly byte-identical (cmp stage2.s stage3.s).
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME I: η-FIELD SHAPING] │ ⏱ 01:15 (eta 00:42)
+ ║ Hamiltonian Energy: H=2.4701 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:0 │ F_echo:1.000000000000 │  2.4 ln/s
+ ║ [████████████████████████████┃██████████████████████████──┼────────────────────────────]  64%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[⠦ ARGON:5/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║                  ·········★·✦····                ···∙░▒▒▓ ║ H_t Spark: ▃▅▄▅▄▅▅▄▂▁▁▁▄▄▆█▅▁▂▃▁▂▃  ║
+ ║        ···∙∙░░▒▒▒▓▓▓▓▓•★▓▓▓▓▓▓▓▓▓▒▒▒░░∙···           ···░ ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║   ···∙░▒▒▒▓▓▓▓▓▒▒▒▒░•░░░░░░░░▒▒▒▓▓▓▓▓▓▓▓▒░∙··           · ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ··∙░▒▒▓▓▓▒▒▒░∙∙··· ·        ┊···∙░▒▓▓▓██▓▓▒▒∙··           ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ∙░▒▒▒▓▓▒▒░░∙··┈┈┈┈┈·┈··∙░▒▓█⟐··∙░▒▓▓████▓▓▒░∙··┈┈┈┈┈┈┈┈┈┈ ║ Pins: [▀ ▀ ▀ ▄] ══∿∿∿▸              ║
+ ║ ∙░▒▒▓▓▓▒▒░∙··       ···░▒▓▓██████████▓▓▒▒░···          ·· ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ·∙░▒▒▒▓▓▒▒░∙···          ······∙·······             ···░░ ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║ ···∙░▒▒▒▓▓▒▒▒░░∙···         ┊                  ···∙░░▒▒▓▓ ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║     ···∙░░▒▒▒▓▓▓▒▒▒▒░░░∙∙···············∙∙∙░░▒▒▒▒▓▓▓▓▓▓▒▒ ║ T3 ARGON-4 Suite   [⠦ 5/6]          ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 184 │ files: 2 │ warnings: 0 │ errors: 0)
+ │ Verdict: Verdict.SHIP
+ │ Summary: 4/4 tumblers seated → SHIP
+ │ ✅ GATE PASSED — SHIP AUTHORIZED
+ ◈ === [ARGON 4] 5/6 Gate M5-2 Independent Verifier & 12 Adversarial Negative Controls ===
+ │ python3 tools/verify_m5_2_noise_bootstrap.py
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME II: SCAR+ε NAV] │ ⏱ 01:20 (eta 00:01)
+ ║ Hamiltonian Energy: H=2.2958 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:13 │ F_echo:1.000000000000 │  3.5 ln/s
+ ║ [████████████████████████████┃████████████████████████████┃██████████████████████████▎─]  98%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[⠙ ARGON:6/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ∙···                        ┊                ···∙░▒▒▒▓▓▓▓ ║ H_t Spark: ▇██▇▇█▇████▂▁▁▁▁▁▄█▅█▇▇  ║
+ ║            ····∙∙░░░▒▒▒▒▒▒▒▒▒▒░░░∙····            ··∙░▒▒▓ ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║      ···∙░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░∙···         ··∙░░ ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║   ···∙░▒▒▓▓▓▓▓▒▒░░∙∙·······★✦∙░▒▒▓▓██▓▓▓▒░∙··        ··∙░ ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ┈··∙░▒▒▓▓▓▓▒▒░∙···┈┈┈┈┈···∙★⟐░▒▓▓████▓▓▒▒░··┈┈┈┈┈┈┈┈┈··∙░ ║ Pins: [▀ ▀ ▀ ▄] ══ ∿∿∿▸             ║
+ ║  ··∙░▒▒▓▓▓▒▒░░∙··      ···░░▒▓▓▓▓▓▒▒▒░∙···         ···∙░▒ ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║   ··∙░▒▒▓▓▓▓▒▒░∙····   •    ┊   ·              ····∙░▒▒▓▓ ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║     ··∙░░▒▒▒▓▓▓▒▒▒░░∙∙···•· · ·        ·····∙∙░░▒▒▒▓▓▓▓▒▒ ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║        ····∙░░▒▒▒▒▓▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▒▒▒▒░░∙∙· ║ T3 ARGON-4 Suite   [⠙ 6/6]          ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 281 │ files: 3 │ warnings: 13 │ errors: 0)
+ │ [Phase 2] AST Topological Generation... OK
+ │ [Phase 3] Native AST Constant Folding... OK
+ │ [Phase 4] SystemV ABI X86-64 Codegen... OK
+ │ [Phase 5] Native C Peephole Optimization... OK (144 elided)
+ │ [OK] ZCC Engine Compilation Terminated Successfully.
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME II: SCAR+ε NAV] │ ⏱ 01:25 (eta 00:01)
+ ║ Hamiltonian Energy: H=0.1308 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:36 │ F_echo:1.000000000000 │  5.0 ln/s
+ ║ [████████████████████████████┃████████████████████████████┃██████████████████████████▎─]  98%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[⠦ ARGON:6/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ∙∙····················································∙∙∙ ║ H_t Spark: ▁▄█▃▁▁▁▁▁▁▂█▅▃▅▅▅▂▂▂▁▁▁  ║
+ ║ ························································· ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙··················· ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ············∙∙∙∙∙∙∙∙∙░░░░░░·✦░░░░░░░░∙∙∙∙∙··············· ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ···········∙∙∙∙∙∙∙∙∙∙░░░░░░·⟐░░░░░░░░░∙∙∙∙∙·············· ║ Pins: [▀ ▀ ▀ ▄] ══  ∿∿∿▸            ║
+ ║ ············∙∙∙∙∙∙∙∙∙∙∙∙∙░░░░░░░░░∙∙∙∙∙∙∙················ ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ················∙∙∙∙∙∙∙·∙∙∙∙∙∙∙∙∙∙∙∙····················· ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║ ························································· ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║ ························································· ║ T3 ARGON-4 Suite   [⠦ 6/6]          ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 427 │ files: 12 │ warnings: 36 │ errors: 0)
+ │ [Phase 5] Native C Peephole Optimization... OK (2230 elided)
+ │ [Phase 6] GCC Assembly/Linker Binding... OK
+ │ [OK] ZCC Engine Compilation Terminated Successfully.
+ ✔ [PASS] Target 11 (--svg-to-sdf): [ZCC-SVG-SDF-VERIFY] primitives=256 center_d=-600.0000 min…
+ ◈ === [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ===
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME II: SCAR+ε NAV] │ ⏱ 01:30 (eta 00:01)
+ ║ Hamiltonian Energy: H=0.1812 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:36 │ F_echo:1.000000000000 │  4.7 ln/s
+ ║ [████████████████████████████┃████████████████████████████┃██████████████████████████▎─]  98%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[⠙ ARGON:6/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ∙∙∙∙····················································· ║ H_t Spark: ▅▂▅▆▇█▅▅▅█▃▅▃▁▁▂▆▄▄▃▅▃▆  ║
+ ║ ························································· ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ·················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙···················· ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ·············∙∙∙∙∙∙░░░░░░░░··░░░░░░░∙∙∙∙∙················ ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ···········∙∙∙∙∙∙∙░░░░░░░░░·⟐░░░░░░░░∙∙∙∙∙··············· ║ Pins: [▀ ▀ ▀ ▄] ══   ∿∿∿▸           ║
+ ║ ············∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙░░░∙∙∙∙∙∙∙∙∙∙················ ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ··············∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙··················· ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║ ······················∙∙∙∙∙∙∙∙∙∙························· ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║ ∙························································ ║ T3 ARGON-4 Suite   [⠙ 6/6]          ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 427 │ files: 12 │ warnings: 36 │ errors: 0)
+ │ [Phase 5] Native C Peephole Optimization... OK (2230 elided)
+ │ [Phase 6] GCC Assembly/Linker Binding... OK
+ │ [OK] ZCC Engine Compilation Terminated Successfully.
+ ✔ [PASS] Target 11 (--svg-to-sdf): [ZCC-SVG-SDF-VERIFY] primitives=256 center_d=-600.0000 min…
+ ◈ === [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ===
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME II: SCAR+ε NAV] │ ⏱ 01:35 (eta 00:01)
+ ║ Hamiltonian Energy: H=0.1587 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:36 │ F_echo:1.000000000000 │  4.5 ln/s
+ ║ [████████████████████████████┃████████████████████████████┃██████████████████████████▎─]  98%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[✔ ARGON:6/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ∙∙∙∙····················································· ║ H_t Spark: ▅▅█▆▂▃▃▆▆▅▇▄▄▅█▅▄▂▆▄▅▁▆  ║
+ ║ ························································· ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ···················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙····················· ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ··············∙∙∙∙∙∙░░░░░░░··░░░░░∙∙∙∙∙∙∙················ ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ············∙∙∙∙∙░░░░░░░░░░·⟐░░░░░░░∙∙∙∙∙∙∙·············· ║ Pins: [▀ ▀ ▀ ▀] ══∿∿∿▸              ║
+ ║ ·············∙∙∙∙∙∙░░░░░░░░░░░∙∙∙∙∙∙∙∙∙∙∙∙∙∙············· ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙··············· ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║ ························∙∙∙∙∙∙∙∙∙∙······················· ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║ ∙∙∙······················································ ║ T3 ARGON-4 Suite   [● SHEAR]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 429 │ files: 12 │ warnings: 36 │ errors: 0)
+ │ [OK] ZCC Engine Compilation Terminated Successfully.
+ ✔ [PASS] Target 11 (--svg-to-sdf): [ZCC-SVG-SDF-VERIFY] primitives=256 center_d=-600.0000 min…
+ ◈ === [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ===
+ │ ASan] (32 seeds, 64 UB-free C99 TUs, 192 executions [ZCC2 + GCC -O0 + GCC UBSan/ASan], 0 di…
+ ◈ === [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ===
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME II: SCAR+ε NAV] │ ⏱ 01:40 (eta 00:02)
+ ║ Hamiltonian Energy: H=0.1172 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:36 │ F_echo:1.000000000000 │  4.3 ln/s
+ ║ [████████████████████████████┃████████████████████████████┃██████████████████████████▎─]  98%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[✔ ARGON:6/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ························································· ║ H_t Spark: ▆▂▄▅▂▇█▁▁▆▂▃▅▆▄▅▃▇▄▅▃▅▄  ║
+ ║ ························································· ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ····················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙··················· ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ···············∙∙∙∙∙∙░░░░░░··░░░░∙∙∙∙∙∙∙∙∙∙∙············· ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ·············∙∙∙∙∙░░░░░░░░░✦⟐░░░░░░∙∙∙∙∙∙∙∙∙∙∙··········· ║ Pins: [▀ ▀ ▀ ▀] ══ ∿∿∿▸             ║
+ ║ ··············∙∙∙∙∙∙░░░░░░░░░░░░░∙∙∙∙∙∙∙∙∙∙∙∙············ ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ·················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙··············· ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║ ························································· ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║ ∙∙∙·····················································∙ ║ T3 ARGON-4 Suite   [● SHEAR]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 429 │ files: 12 │ warnings: 36 │ errors: 0)
+ │ [OK] ZCC Engine Compilation Terminated Successfully.
+ ✔ [PASS] Target 11 (--svg-to-sdf): [ZCC-SVG-SDF-VERIFY] primitives=256 center_d=-600.0000 min…
+ ◈ === [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ===
+ │ ASan] (32 seeds, 64 UB-free C99 TUs, 192 executions [ZCC2 + GCC -O0 + GCC UBSan/ASan], 0 di…
+ ◈ === [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ===
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME II: SCAR+ε NAV] │ ⏱ 01:45 (eta 00:02)
+ ║ Hamiltonian Energy: H=0.0434 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:36 │ F_echo:1.000000000000 │  4.1 ln/s
+ ║ [████████████████████████████┃████████████████████████████┃██████████████████████████▎─]  98%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[✔ ARGON:6/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ························································· ║ H_t Spark: ▆█▆▇▇█▆▆▇▆▃▅▁▄▆█▆▇▅▃▁▂▁  ║
+ ║ ························································· ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ···················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙················· ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ···············∙∙∙∙∙∙∙░░░░░··░░░░░∙∙∙∙∙∙∙∙∙∙············· ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ·············∙∙∙∙∙∙∙░░░░░░░✦⟐░░░░░░░░∙∙∙∙∙∙∙∙············ ║ Pins: [▀ ▀ ▀ ▀] ══  ∿∿∿▸            ║
+ ║ ··············∙∙∙∙∙∙∙░░░░░░░░░░░░░░∙∙∙∙∙∙∙∙∙············· ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ··················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙················· ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║ ························································· ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║ ∙·······················································∙ ║ T3 ARGON-4 Suite   [● SHEAR]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 429 │ files: 12 │ warnings: 36 │ errors: 0)
+ │ [OK] ZCC Engine Compilation Terminated Successfully.
+ ✔ [PASS] Target 11 (--svg-to-sdf): [ZCC-SVG-SDF-VERIFY] primitives=256 center_d=-600.0000 min…
+ ◈ === [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ===
+ │ ASan] (32 seeds, 64 UB-free C99 TUs, 192 executions [ZCC2 + GCC -O0 + GCC UBSan/ASan], 0 di…
+ ◈ === [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ===
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME II: SCAR+ε NAV] │ ⏱ 01:50 (eta 00:02)
+ ║ Hamiltonian Energy: H=0.0955 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:36 │ F_echo:1.000000000000 │  3.9 ln/s
+ ║ [████████████████████████████┃████████████████████████████┃██████████████████████████▎─]  98%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[✔ ARGON:6/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ························································∙ ║ H_t Spark: ▇▆██▅▅▄▁▆█▆▄█▁▅▆▄██▅▅▅▄  ║
+ ║ ························································· ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ··················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙················ ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ···············∙∙∙∙∙∙∙∙∙░░░✦·░░░░░∙∙∙∙∙∙∙∙∙∙············· ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ··············∙∙∙∙∙∙░░░░░░░·⟐░░░░░░░░░∙∙∙∙∙∙∙············ ║ Pins: [▀ ▀ ▀ ▀] ══   ∿∿∿▸           ║
+ ║ ···············∙∙∙∙∙∙░░░░░░░░░░░░░░░░∙∙∙∙∙∙∙············· ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ···················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙················· ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║ ························································· ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║ ·······················································∙∙ ║ T3 ARGON-4 Suite   [● SHEAR]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 429 │ files: 12 │ warnings: 36 │ errors: 0)
+ │ [OK] ZCC Engine Compilation Terminated Successfully.
+ ✔ [PASS] Target 11 (--svg-to-sdf): [ZCC-SVG-SDF-VERIFY] primitives=256 center_d=-600.0000 min…
+ ◈ === [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ===
+ │ ASan] (32 seeds, 64 UB-free C99 TUs, 192 executions [ZCC2 + GCC -O0 + GCC UBSan/ASan], 0 di…
+ ◈ === [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ===
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME II: SCAR+ε NAV] │ ⏱ 01:55 (eta 00:02)
+ ║ Hamiltonian Energy: H=0.2085 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:36 │ F_echo:1.000000000000 │  3.7 ln/s
+ ║ [████████████████████████████┃████████████████████████████┃██████████████████████████▎─]  98%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[✔ ARGON:6/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ······················································∙∙∙ ║ H_t Spark: ▇▆▃██▆▄▃▅▃▄▆▃▇█▃▂▄▃▄▁▄▇  ║
+ ║ ·····················∙∙∙∙∙∙∙∙∙∙∙∙∙······················· ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ··············∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙················ ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ·············∙∙∙∙∙∙∙∙∙∙∙∙∙∙✦·∙░░░░░░░░░∙∙∙∙∙············· ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ···············∙∙∙∙∙∙∙░░░░░·⟐░░░░░░░░░░░∙∙∙∙∙············ ║ Pins: [▀ ▀ ▀ ▀] ══∿∿∿▸              ║
+ ║ ·················∙∙∙∙∙∙░░░░░░░░░░░░░░░∙∙∙∙∙·············· ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ······················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙··················· ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║ ························································∙ ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║ ····················································∙∙∙∙∙ ║ T3 ARGON-4 Suite   [● SHEAR]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 429 │ files: 12 │ warnings: 36 │ errors: 0)
+ │ [OK] ZCC Engine Compilation Terminated Successfully.
+ ✔ [PASS] Target 11 (--svg-to-sdf): [ZCC-SVG-SDF-VERIFY] primitives=256 center_d=-600.0000 min…
+ ◈ === [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ===
+ │ ASan] (32 seeds, 64 UB-free C99 TUs, 192 executions [ZCC2 + GCC -O0 + GCC UBSan/ASan], 0 di…
+ ◈ === [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ===
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME II: SCAR+ε NAV] │ ⏱ 02:00 (eta 00:02)
+ ║ Hamiltonian Energy: H=0.2019 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:36 │ F_echo:1.000000000000 │  3.6 ln/s
+ ║ [████████████████████████████┃████████████████████████████┃██████████████████████████▎─]  98%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[✔ ARGON:6/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ∙····················································∙∙∙∙ ║ H_t Spark: ▁▄▃█▅▃▅▃▁▄▃▄▅▃▄█▂▇▄▂█▅▇  ║
+ ║ ························∙∙∙∙∙∙··························· ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ··············∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙················· ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ···········∙∙∙∙∙∙∙∙∙∙∙∙∙∙░░·✦░░░░░░░░░∙∙∙∙∙·············· ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ··········∙∙∙∙∙∙∙∙∙∙∙∙∙░░░░·⟐░░░░░░░░░░∙∙∙∙·············· ║ Pins: [▀ ▀ ▀ ▀] ══ ∿∿∿▸             ║
+ ║ ············∙∙∙∙∙∙∙∙∙∙∙∙░░░░░░░░░░░░∙∙∙∙∙················ ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ······················∙∙∙∙∙∙∙∙∙∙∙∙∙······················ ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║ ························································· ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║ ························································· ║ T3 ARGON-4 Suite   [● SHEAR]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 429 │ files: 12 │ warnings: 36 │ errors: 0)
+ │ [OK] ZCC Engine Compilation Terminated Successfully.
+ ✔ [PASS] Target 11 (--svg-to-sdf): [ZCC-SVG-SDF-VERIFY] primitives=256 center_d=-600.0000 min…
+ ◈ === [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ===
+ │ ASan] (32 seeds, 64 UB-free C99 TUs, 192 executions [ZCC2 + GCC -O0 + GCC UBSan/ASan], 0 di…
+ ◈ === [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ===
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [REGIME II: SCAR+ε NAV] │ ⏱ 02:05 (eta 00:02)
+ ║ Hamiltonian Energy: H=0.0905 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:36 │ F_echo:1.000000000000 │  3.4 ln/s
+ ║ [████████████████████████████┃████████████████████████████┃██████████████████████████▎─]  98%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[✔ ARGON:6/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ∙∙·····················································∙∙ ║ H_t Spark: ▆▅▂▁▆██▆▄▃▄▃▅▆▄▆▄▆███▂▅  ║
+ ║ ························································· ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙·················· ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ·············∙∙∙∙∙∙∙∙░░░░░░·✦░░░░░░░∙∙∙∙∙∙··············· ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ···········∙∙∙∙∙∙∙∙∙∙░░░░░░·⟐░░░░░░░░░∙∙∙∙∙·············· ║ Pins: [▀ ▀ ▀ ▀] ══  ∿∿∿▸            ║
+ ║ ·············∙∙∙∙∙∙∙∙∙∙∙░░░░░░░░░░░∙∙∙∙∙∙∙··············· ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ·················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙···················· ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║ ························································· ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║ ························································· ║ T3 ARGON-4 Suite   [● SHEAR]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 429 │ files: 12 │ warnings: 36 │ errors: 0)
+ │ [OK] ZCC Engine Compilation Terminated Successfully.
+ ✔ [PASS] Target 11 (--svg-to-sdf): [ZCC-SVG-SDF-VERIFY] primitives=256 center_d=-600.0000 min…
+ ◈ === [ZCC-SVG] ALL 12 SVG COMPILER, CLI, SDF & EVEX TARGETS PASSED ===
+ │ ASan] (32 seeds, 64 UB-free C99 TUs, 192 executions [ZCC2 + GCC -O0 + GCC UBSan/ASan], 0 di…
+ ◈ === [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ===
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+----------------------------------------
+ ╔═════════════════════════════════════════════════════════════════════════════════════════════════╗
+ ║ ⚡ ZKAEDI PRIME v2.0 // HAMILTONIAN PHASE-SPACE OBSERVATORY │ [⟐ H0 FIXED-POINT LOCK] │ ⏱ 02:09 (eta 00:00)
+ ║ Hamiltonian Energy: H=0.0092 │ η=0.4 γ=0.3 β=0.1 ε=0.05 │ Scars:36 │ F_echo:1.000000000000 │  3.4 ln/s
+ ║ [████████████████████████████┃████████████████████████████┃████████████████████████████] 100%
+ ║ [✔ S1:BOOT]▸[✔ S2:a96dfa]▸[✔ S3:a96dfa]▸[✔ GATE1:CMP]▸[✔ ABI+SEM]▸[✔ ARGON:6/6]
+ ╠═══════════════════════════════════════════════════════════╦═════════════════════════════════════╣
+ ║ ◈ 2D COUPLED HAMILTONIAN FIELD H_t(x,y)                   ║ ◈ TELEMETRY & RELEASE TUMBLERS      ║
+ ╟───────────────────────────────────────────────────────────╫─────────────────────────────────────╢
+ ║ ∙·······················································∙ ║ H_t Spark: ▄▅▄▅▇▆▇▂▄▆▇▂▅█▆▆▇▇█▆▆▄▁  ║
+ ║ ························································· ║ Stage2 SHA: a96dfa292ff54a          ║
+ ║ ··················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙·················· ║ Stage3 SHA: a96dfa292ff54a          ║
+ ║ ··············∙∙∙∙∙∙∙∙░░░░░✦·░░░░░░∙∙∙∙∙∙∙∙·············· ║ ── WIPER SNAKE-RAKE TUMBLERS ──     ║
+ ║ ·············∙∙∙∙∙∙∙░░░░░░░·⟐░░░░░░░░∙∙∙∙∙∙∙············· ║ Pins: [▀ ▀ ▀ ▀] ══∿∿∿▸              ║
+ ║ ··············∙∙∙∙∙∙∙∙░░░░░░░░░░░░░∙∙∙∙∙∙∙∙·············· ║ T0 Stage2==Stage3  [● SHEAR]        ║
+ ║ ··················∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙∙·················· ║ T1 GCC Semantic    [● SHEAR]        ║
+ ║ ························································· ║ T2 SystemV ABI     [● SHEAR]        ║
+ ║ ∙·······················································∙ ║ T3 ARGON-4 Suite   [● SHEAR]        ║
+ ╠═══════════════════════════════════════════════════════════╩═════════════════════════════════════╣
+ ║ ┈┈ build output ┈┈  (lines: 436 │ files: 12 │ warnings: 36 │ errors: 0)
+ ◈ ================================================================================
+ ✔    ✨ SELFHOST-MV1.3b PASS
+ │    Bootstrap fixed-point, semantic-canary, and full SystemV ABI constraints satisfied.
+ ◈ ================================================================================
+ │ ained Provenance Ledger: /mnt/h/__DOWNLOADS/zcc_github_upload/evidence/zcc-omega-1793777919…
+ ╚═════════════════════════════════════════════════════════════════════════════════════════════════╝
+ ★ ZKAEDI PRIME FIXED POINT REPO - H0 CONVERGED - exit 0 (scars: 36, ⟐ BYTE-IDENTICAL SEAL ⟐) ★
+----------------------------------------
+zcc_quest: child exit=0 wrapper_exit=0 oracle_verified=True warnings=36 errors=0 elapsed=129.3s (raw output: /tmp/zcc_quest.log.build)
+zcc_quest_provenance: run_id=zcc-omega-1793777919-232-7d6e53363572d6d6 ledger=/mnt/h/__DOWNLOADS/zcc_github_upload/evidence/zcc-omega-1793777919-232-7d6e53363572d6d6/provenance.jsonl
+zcc_quest_sha256: stage2.s=26f30ad9fcb06ad82018ac791bf5cb3a13bc7e4d49197c734a3d74f97333fe8d stage3.s=26f30ad9fcb06ad82018ac791bf5cb3a13bc7e4d49197c734a3d74f97333fe8d
+zcc_quest_sha256: stage2.bin=a96dfa292ff54ab22badd74216c39f453cb8e46749a08dd25eb006e5ad7449ad stage3.bin=a96dfa292ff54ab22badd74216c39f453cb8e46749a08dd25eb006e5ad7449ad
+Gate 1 PASS: zcc2.s == zcc3.s (0 byte delta) and zcc2 == zcc3 (0 byte delta)
+=== [WASM-MV-02] Gate 2: Cross-Toolchain Interoperability ===
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (5 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+codegen: PASS 1 DONE, text_seg.size=105, data_seg.size=48, labels=6, relocs=0
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (12 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+codegen: PASS 1 DONE, text_seg.size=213, data_seg.size=48, labels=10, relocs=7
+Gate 2 PASS: zcc-lib+gcc-main and gcc-lib+zcc-main exit 0
+=== [WASM-MV-02] Gate 3: Native Regression Corpus (zcc_test_suite.sh --quick) ===
+  [PASS] Build environment ready
+── Category 1: Basic Operations ──
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] return_42 (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] arithmetic (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] if_branch (rc=0, 1 IR funcs)
+── Category 2: Loops and Variables (Mem2Reg stress) ──
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (28 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (9 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] for_loop_sum (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (28 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (9 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] while_factorial (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] multi_var (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] shift_mask (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (6 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (2 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] ushort_div_long (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (8 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (2 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] signed_char_cast (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] mixed_unsigned_long (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] signed_char_128 (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] short_wrap (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (4 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] ushort_negative (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] unsigned_char_to_long (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (4 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] char_mod_1023 (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (5 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] int_and_uint (rc=0, 1 IR funcs)
+── Category 3: Pointers and Memory (CG-IR-008/010 regression) ──
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (9 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] pointer_deref (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (16 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func escape_func -> void
+; end escape_func  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] pointer_escape_call (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (19 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func escape_ret -> ptr
+; end escape_ret  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] pointer_escape_ret (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (12 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] pointer_escape_store (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (20 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] pointer_ambiguous (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (9 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (9 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (13 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (3 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] pointer_offset_phi (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (3 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (48 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=6
+
+; func some_external_func -> void
+; end some_external_func  nodes=0
+
+; func test_var_index -> i32
+; end test_var_index  nodes=0
+
+; func test_escape_via_call -> i32
+; end test_escape_via_call  nodes=0
+
+; func test_phi_differing -> i32
+; end test_phi_differing  nodes=0
+
+; func test_chained -> i32
+; end test_chained  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] pointer_offset_extra (rc=0, 6 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=6
+
+; func some_external_func -> void
+; end some_external_func  nodes=0
+
+; func test_var_index -> i32
+; end test_var_index  nodes=0
+
+; func test_escape_via_call -> i32
+; end test_escape_via_call  nodes=0
+
+; func test_phi_differing -> i32
+; end test_phi_differing  nodes=0
+
+; func test_chained -> i32
+; end test_chained  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (22 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (4 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] ptr_arith (rc=0, 1 IR funcs)
+── Category 4: Function Calls (CG-IR-007/013 regression) ──
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (6 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func add -> i32
+; end add  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (2 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] simple_call (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func sum6 -> i32
+; end sum6  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] six_arg_call (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (24 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func fib -> i32
+; end fib  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (1 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] recursive_fib (rc=0, 2 IR funcs)
+── Category 5: Structs and Member Access ──
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (10 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] struct_access (rc=0, 1 IR funcs)
+── Category 6: Switch Statements ──
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (4 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func classify -> i32
+; end classify  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (3 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] switch_stmt (rc=0, 2 IR funcs)
+── Category 7: String and Global Operations ──
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (13 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func inc -> i32
+; end inc  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] global_var (rc=0, 2 IR funcs)
+── Category 8: Complex Control Flow (PHI stress) ──
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (47 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (17 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] nested_loops (rc=0, 1 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (11 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func abs_val -> i32
+; end abs_val  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (3 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] ternary_expr (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (3 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] logical_ops (rc=0, 1 IR funcs)
+── Category 9: Callee-Save Register Pressure (CG-IR-011 regression) ──
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (39 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func heavy -> i32
+; end heavy  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] reg_pressure (rc=0, 2 IR funcs)
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=1
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (0 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] eight_locals (rc=0, 1 IR funcs)
+── Category 10: cc_alloc Pattern (CG-IR-005 regression) ──
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (51 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+; ZCC IR v1.0.0
+; ZCC IR module  funcs=2
+
+; func my_alloc -> ptr
+; end my_alloc  nodes=0
+
+; func main -> i32
+; end main  nodes=0
+
+[Phase 5] Native C Peephole Optimization... OK (8 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+  [PASS] alloc_pattern (rc=0, 2 IR funcs)
+  [SKIP] Selfhost (--quick mode)
+
+══════════════════════════════════════════════════
+  PASS: 37  FAIL: 0  SKIP: 1
+══════════════════════════════════════════════════
+ALL TESTS PASSED
+=== [WASM-MV-02] Gate 4A: WASM i64 & ILP32 Regression Suite (62 tests) ===
+test_01_regression_corpus_six_way_oracle (test_wasm_i64.TestWasmI64Remediation.test_01_regression_corpus_six_way_oracle)
+Compile and execute tests/wasm_i64_regression.c across ZCC-WASM (Node & Wasmtime), Clang-WASM32, GCC, Clang, and ZCC-x86_64. ... zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 180 macros, total is 216
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (656 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+ok
+test_02_sleb128_i64_boundary_constants (test_wasm_i64.TestWasmI64Remediation.test_02_sleb128_i64_boundary_constants)
+Verify 64-bit signed LEB128 encoding for INT64_MIN, INT64_MAX, UINT64_MAX, 2^31, 2^32, -2^32. ... ok
+test_03_wasm32_ilp32_data_model_and_layout_parity_with_clang (test_wasm_i64.TestWasmI64Remediation.test_03_wasm32_ilp32_data_model_and_layout_parity_with_clang)
+HYGIENE-WASM-ILP32: Verify sizeof, _Alignof, offsetof, struct layout, and pointer strides match Clang --target=wasm32. ... ok
+test_04_randomized_nonconstant_and_metamorphic_differential (test_wasm_i64.TestWasmI64Remediation.test_04_randomized_nonconstant_and_metamorphic_differential)
+Execute 50 seeded randomized non-constant 64-bit input vectors across ZCC --wasm and Clang --target=wasm32. ... zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 180 macros, total is 216
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[OK] WebAssembly module emitted to /tmp/tmp7yk4mfcc/rand.zcc.wasm
+ok
+test_05_meta_verification_negative_controls (test_wasm_i64.TestWasmI64Remediation.test_05_meta_verification_negative_controls)
+MV-6 / MV-7: Prove the verification harness fails closed on corrupted/truncated/mutated WASM. ... zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 180 macros, total is 216
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[OK] WebAssembly module emitted to /tmp/tmp6vtrzzqc/clean.wasm
+ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 3.344s
+
+OK
+=== [WASM-MV-02] Gate 4B: WASM-MV-02 Adversarial Semantic Suite ===
+test_01_wasm_mv02_signedness_and_control_flow (test_wasm_mv02.TestWasmMV02Adversarial.test_01_wasm_mv02_signedness_and_control_flow)
+Verify tests/wasm_mv02_signedness.c across ZCC WASM, GCC, and Clang. ... ok
+test_02_x86_mv02_imm64_and_live_r11_preservation (test_wasm_mv02.TestWasmMV02Adversarial.test_02_x86_mv02_imm64_and_live_r11_preservation)
+Verify tests/x86_mv02_imm64.c preserves live %r11/%r10/%r9, %rsp value, and red-zone memory across 64-bit immediate comparison. ... ok
+test_03_typedef_redeclaration_compatibility_and_rejection (test_wasm_mv02.TestWasmMV02Adversarial.test_03_typedef_redeclaration_compatibility_and_rejection)
+Verify compatible typedef redeclaration succeeds and incompatible typedef redeclaration fails closed. ... ok
+test_04_seven_defect_class_seed_sensitivity (test_wasm_mv02.TestWasmMV02Adversarial.test_04_seven_defect_class_seed_sensitivity)
+Verify 50 seeded metamorphic vectors + all 7 defect classes from Section 2.C: ... ok
+test_05_mv04_gnu_as_binary_encoding_equivalence (test_wasm_mv02.TestWasmMV02Adversarial.test_05_mv04_gnu_as_binary_encoding_equivalence)
+MV-04 Independent Assembler Oracle: ... ok
+test_06_zcc_prove_01_peephole_truth_machine (test_wasm_mv02.TestWasmMV02Adversarial.test_06_zcc_prove_01_peephole_truth_machine)
+ZCC-PROVE-01: Formal Z3 SMT + 3,800-state differential machine-state equivalence verifier ... ok
+test_07_mv12_peephole_boost_and_tco_soundness (test_wasm_mv02.TestWasmMV02Adversarial.test_07_mv12_peephole_boost_and_tco_soundness)
+MV-12 + ZCC-PROVE-04: Differential execution of `tests/x86_mv02_imm64.c` under `ZCC_OPT=1` ... ok
+test_08_wasm_v128_simd128_and_x86_mv16_assembler_oracle (test_wasm_mv02.TestWasmMV02Adversarial.test_08_wasm_v128_simd128_and_x86_mv16_assembler_oracle)
+WASM-SIMD128 + MV-17: ... ok
+test_09_arm64_riscv64_qemu_and_wasm_autovec_v128 (test_wasm_mv02.TestWasmMV02Adversarial.test_09_arm64_riscv64_qemu_and_wasm_autovec_v128)
+Verify ARM64 & RISC-V 64-bit native execution under QEMU and WASM SIMD128 loop auto-vectorization (WASM-MV-18). ... ok
+test_10_standalone_arm64_riscv_codegen_cfold_math_and_wasm_autovec_v2 (test_wasm_mv02.TestWasmMV02Adversarial.test_10_standalone_arm64_riscv_codegen_cfold_math_and_wasm_autovec_v2)
+MV-19 / ARCH-AUDIT-02 / CFOLD-MATH-01 / WASM-SIMD128-AUTOVEC-V2: ... ok
+test_11_bit_intrinsics_quad_isa_wasm_reduction_and_prove_section (test_wasm_mv02.TestWasmMV02Adversarial.test_11_bit_intrinsics_quad_isa_wasm_reduction_and_prove_section)
+MV-20 / BITOPS-INTRINSICS-01 / QUAD-ISA-LOCK-01 / WASM-SIMD128-REDUC / WASM-PROVE-SECTION: ... ok
+test_12_harden_zero_clz_ctz_bswap64_quad_isa_and_autovec_alias_guard (test_wasm_mv02.TestWasmMV02Adversarial.test_12_harden_zero_clz_ctz_bswap64_quad_isa_and_autovec_alias_guard)
+MV-21 / BITOPS-HARDEN-01 / ZCC-PROVE-12: ... ok
+test_13_ffs_parity_quad_isa_v128_accum_and_compound_assign (test_wasm_mv02.TestWasmMV02Adversarial.test_13_ffs_parity_quad_isa_v128_accum_and_compound_assign)
+MV-22 / BITOPS-FFS-PARITY-01 / ARCH-CMP-SH-01 / WASM-V128-ACCUM / ZCC-PROVE-13: ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 10.538s
+
+OK
+=== [WASM-MV-02] Gate 4C: Negative-Control Oracle Harness ===
+Executing ZCC Oracle Negative Controls & Verification Gauntlet against: /mnt/h/__DOWNLOADS/zcc_github_upload/zcc_quest.py
+--- [MUTATION SELF-TEST] Verifying harness rejection of non-executing / broken stubs ---
+--- [CONTROL 1 / PROBE A] Counterfeit zero-byte files with marker ---
+[probe_a] FAIL: Expected wrapper exit 0, got 3
+[FAIL] Probe A failed validation.
+--- [CONTROL 1 / PROBE A] Counterfeit zero-byte files with marker ---
+[probe_a] FAIL: Wrapper did not render ordinary command success banner
+[FAIL] Probe A failed validation.
+[PASS] Mutation self-test verified: harness rigorously rejects non-executing / broken stubs.
+--- [CONTROL 1 / PROBE A] Counterfeit zero-byte files with marker ---
+[PASS] Probe A correctly executed with exit 0, rendered ordinary success, and rejected counterfeit files.
+--- [CONTROL 2 / PROBE B] Pre-existing identical files with marker ---
+[PASS] Probe B correctly executed with exit 0, rendered ordinary success, and rejected pre-existing files.
+--- [CONTROL 3 / PROBE C] Fabricated provenance with shell comment injection ---
+[PASS] Probe C correctly executed with exit 0, rendered ordinary success, and rejected rogue provenance / comment injection.
+
+========================================================
+★ ALL NEGATIVE CONTROLS PASSED (0 false certifications) ★
+========================================================
+=== [ZCC-PROVE-13] Gate 4D: Peephole Truth Machine (Formal Z3 SMT + 5,000-State Differential Verification) ===
+[ZCC-PROVE-01] PASS: 25/25 operand & XMM-liveness classes formally proven UNSAT via Z3 + 5000 differential machine states verified + ZCC-PROVE-02 super-peepholes UNSAT (0 counterexamples; 10/10 negative-control bugs caught; zcc2.s dead-XMM sites verified=0).
+=== [WASM-MV-22 / BITOPS-FFS-PARITY-01 / ARCH-CMP-SH-01 / WASM-V128-ACCUM / ZCC-PROVE-13] Gate 5: 76-Mutation Adversarial Kill Ledger (MV02..MV22) ===
+[MV-02] Running MV02-01: Signed comparison i64.lt_s -> i64.lt_u on INT64_MIN < 1 ...
+  -> MV02-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV02-02: 64-bit load i64.load -> i32.load upper-32-bit corruption / validation error ...
+  -> MV02-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=99
+[MV-02] Running MV02-03: Signed widening i64.extend_i32_s -> i64.extend_i32_u on negative i32 (-5) ...
+  -> MV02-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=2
+[MV-02] Running MV02-04: Incorrect 64-bit switch case constant (cval + 1) ...
+  -> MV02-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=4
+[MV-02] Running MV02-05: Incorrect WASM branch depth inside loop/switch ...
+  -> MV02-05: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=6
+[MV-02] Running MV02-06: Native x86-64 %r11 overwritten while live across 64-bit immediate comparison ...
+  -> MV02-06: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=4
+[MV-02] Running MV02-07: Incompatible typedef redeclaration silently accepted instead of rejected ...
+  -> MV02-07: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV02-08: Harness infrastructure guard: test executable not run / zero-test execution rejected ...
+  -> MV02-08: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV02-09: Artifact freshness guard: stale compiled WASM binary reused across distinct sources ...
+  -> MV02-09: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV03-01: Valid-module WASM 64-bit load upper-32-bit zeroing (i64.load align 3 -> i64.load32_u align 2) ...
+  -> MV03-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=3
+[MV-02] Running MV03-02: Valid-module WASM 64-bit store upper-32-bit truncation (i64.store align 3 -> i64.store32 align 2) ...
+  -> MV03-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=3
+[MV-02] Running MV03-03: Native x86-64 %rsp-relative operand uncompensated across pushq %r11 in 64-bit cmpq peephole ...
+  -> MV03-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=8
+[MV-02] Running MV03-04: Inline-asm (ND_ASM) output operand constant-folded to stale initializer by ICP in part3.c ...
+  -> MV03-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=4
+[MV-02] Running MV04-01: Effective-address base register %r11 clobbered in 8(%r11) when strstr check reverts to strcmp ...
+  -> MV04-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=139
+[MV-02] Running MV04-02: SIB effective-address index register %r10 clobbered in 8(%r11, %r10, 8) without 3rd disjoint scratch %r9 ...
+  -> MV04-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=139
+[MV-02] Running MV04-03: Internal ELF assembler omits REX.X bit on extended SIB index register (%r10/%r11) in encode_cmpq_mem ...
+  -> MV04-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV05-01: Push/pop scratch spill with +8 disp adjustment shifts direct %rsp by -8 and overwrites -8(%rsp) red-zone slot ...
+  -> MV05-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=12
+[MV-02] Running MV05-02: Red-zone scratch spill at fixed -128(%rsp) without collision guard clobbers -128(%rsp) operand ...
+  -> MV05-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=12
+[MV-02] Running MV06-01: Red-zone scratch spill with -128/-120(%rsp) collision guard overwrites unrelated live red-zone slots ...
+  -> MV06-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=12
+[MV-02] Running MV06-02: Miscomputed frame scratch slot (-8(%rbp)) overwrites live local variable slot ...
+  -> MV06-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=9
+[MV-02] Running MV07-01: Single-slot frame scratch -352(%rbp) without dual-slot guard clobbers 32(%rsp) / -352(%rbp) operand ...
+  -> MV07-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=14
+[MV-02] Running MV07-02: ZCC-PROVE-01 Peephole Truth Machine rejects unsound single-slot frame scratch lowering in part5.c ...
+  -> MV07-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV08-01: MV-07 dual-slot textual displacement selector clobbers 24(%rsp, %rcx, 8) indexed EA and live 32(%rsp)/24(%rsp) memory ...
+  -> MV08-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=14
+[MV-02] Running MV08-02: ZCC-PROVE-01 Peephole Truth Machine rejects MV-07 dual-slot textual displacement selector on 24(%rsp, %rcx, 8) and full memory equality ...
+  -> MV08-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV08-03: Internal ELF assembler swaps REX.R and REX.B in encode_movq_xmm (0x66 0x0f 0x7e %xmm15 -> %r11) ...
+  -> MV08-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=4
+[MV-02] Running MV09-01: Unconditional %xmm15 scratch spill without intra-function liveness scan overwrites/zero-extends live 128-bit %xmm15 ...
+  -> MV09-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=16
+[MV-02] Running MV09-02: ZCC-PROVE-01 128-bit XMM symbolic model & ownership verifier rejects unconditional %xmm15 scratch spill ...
+  -> MV09-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=3
+[MV-02] Running MV09-03: Two-register XMM scratch selector without %xmm13 fallback overwrites live 128-bit %xmm14 when both %xmm15 and %xmm14 are live ...
+  -> MV09-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=16
+[MV-02] Running MV10-01: Forward-only XMM liveness scan (k = i + 1) misses backward-loop %xmm15 read above cmpq and clobbers 128-bit %xmm15 ...
+  -> MV10-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=17
+[MV-02] Running MV10-02: Three-register XMM scratch selector without %xmm12 fallback clobbers live 128-bit %xmm13 when %xmm15, %xmm14, and %xmm13 are live ...
+  -> MV10-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=18
+[MV-02] Running MV10-03: Unguarded movq $0, %r -> xorq %r, %r without EFLAGS consumer lookahead clobbers live ZF before sete ...
+  -> MV10-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=18
+[MV-02] Running MV10-04: ZCC-PROVE-02 super-peephole verifier rejects part5.c when movq $0 -> xorq EFLAGS lookahead guard is disabled ...
+  -> MV10-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=4
+[MV-02] Running MV11-01: Unguarded movq %r11, %rax dead-write elision before addq -64(%rbp), %rax or xorq %rcx, %rax clobbers live %rax ...
+  -> MV11-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=19
+[MV-02] Running MV11-02: Internal ELF assembler strtoll on movabsq $0x8877665544332211 clamps unsigned 64-bit hex immediate >= 2^63 to LLONG_MAX ...
+  -> MV11-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=22
+[MV-02] Running MV11-03: Internal ELF assembler omits memory-operand dispatch on addq/subq/andq/orq/xorq and encodes addq -64(%rbp), %rax as addq %r15, %rax ...
+  -> MV11-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=19
+[MV-02] Running MV11-04: ZCC-PROVE-03 verifier rejects part5.c when movq %r11, %rax dead-write elision guard reverts to unguarded (rbp)/xor check ...
+  -> MV11-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=4
+[MV-02] Running MV12-01: zcc_x86_peephole_boost Pass 7 unguarded (rbp)/(rip) match elides movq %rdx, %rax before addq -64(%rbp), %rax under ZCC_OPT=1 ...
+  -> MV12-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=19
+[MV-02] Running MV12-02: zcc_x86_peephole_boost Pass 7 elides movq %r11, %rax before pxor %xmm0, %xmm0 even though pxor %xmm0 does not write %rax ...
+  -> MV12-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=20
+[MV-02] Running MV12-03: zcc_x86_peephole_boost Pass 0a sscanf %lld on movabsq $0x1122334455667788, %rax parses prefix 0 as imm==0 and rewrites 64-bit hex constant to xorl %eax, %eax ...
+  -> MV12-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=16
+[MV-02] Running MV12-04: TCO local-stack escape scan stops at .L branch labels and tears down stack frame while local pointer escapes to tail callee (killed by runtime & ZCC-PROVE-04) ...
+  -> MV12-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=20
+[MV-02] Running MV13-01: zcc_x86_peephole_boost Pass 8 tracks rsp_depth linearly across .L labels and jumps, injecting unaligned subq $8, %rsp before call ...
+  -> MV13-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=21
+[MV-02] Running MV13-02: zcc_x86_peephole_boost Pass 5c elides movq %xmm0, %rax before addsd %xmm0, %xmm0 without checking if %rax is overwritten before being read ...
+  -> MV13-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=21
+[MV-02] Running MV13-03: ZCC-PROVE-05 verifier rejects src/x86_codegen_sse.c when Pass 8 label/jump rsp_depth invalidation guard is removed ...
+  -> MV13-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=5
+[MV-02] Running MV13-04: ZCC-PROVE-05 verifier rejects src/x86_codegen_sse.c when Pass 5c %rax overwrite lookahead guard is removed ...
+  -> MV13-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=5
+[MV-02] Running MV14-01: Peephole boost Pass 6 elides movl %eax, %eax after movq $imm, %r11 when destination register check (, %rax) is omitted ...
+  -> MV14-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=22
+[MV-02] Running MV14-02: Peephole boost Pass 3 misparses hex immediate movq $0x10, %r11 as 0 when sscanf $%lld is used instead of parse_imm_line ...
+  -> MV14-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=22
+[MV-02] Running MV14-03: Internal ELF assembler src/codegen.c saturates movq $0xfffffffffffffff0, %rax to -1 (LLONG_MAX) when strtoll is used instead of strtoull ...
+  -> MV14-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=22
+[MV-02] Running MV14-04: ZCC-PROVE-06 verifier rejects src/x86_codegen_sse.c when Pass 6 movl $, %eax destination suffix guard is removed ...
+  -> MV14-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=5
+[MV-02] Running MV15-01: Peephole boost Pass 5c elides live movq %xmm0, %rax before addsd %xmm0, %xmm0 + movq $5, %r11 when movq $ is not guarded by , %rax destination check ...
+  -> MV15-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=23
+[MV-02] Running MV15-02: Peephole boost Pass 6 reverse-coupled back-propagation rewrites movq -32(%rbp), %rax to %r11 before movq $99, -40(%rbp) when movq $ lacks , %rax suffix check ...
+  -> MV15-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=23
+[MV-02] Running MV15-03: Internal ELF assembler src/codegen.c saturates addq $0xfffffffffffffff0, %rax to -1 (LLONG_MAX) when strtoll is used instead of strtoull ...
+  -> MV15-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=23
+[MV-02] Running MV15-04: ZCC-PROVE-07 verifier rejects src/x86_codegen_sse.c when Pass 5c XMM call-arg bypass movl $ destination suffix guard is removed ...
+  -> MV15-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=5
+[MV-02] Running MV16-01: Peephole boost Pass 0a rewrites movabsq $0, %rax to xorl %eax, %eax before sete %cl when EFLAGS lookahead guard is omitted ...
+  -> MV16-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=24
+[MV-02] Running MV16-02: Peephole boost Pass 0b deletes unrelated .LS_flit_N .rodata symbol when lbl_buf == ref_lbl identity check is omitted ...
+  -> MV16-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV16-03: part5.c Rule 3b Push/Imm/Mov/Pop quad deletes movq $99, %rdx and overwrites %r11 when , %rax suffix check is omitted ...
+  -> MV16-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=24
+[MV-02] Running MV16-04: Internal ELF assembler src/codegen.c fails on leaq 16(%rax,%rcx,8), %rdx and saturates addb $0xfffffffffffffff0, %al (killed by runtime & ZCC-PROVE-08) ...
+  -> MV16-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV18-01: ARM64 prologue allocates frame inside stp [sp, #-aligned_stack]! before mov x29, sp so negative [x29, #-16] locals lie below sp and get clobbered by pushes ...
+  -> MV18-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV18-02: ARM64 aarch64_emit_store emits 64-bit str x1, [x0] for 32-bit int stores, corrupting adjacent int array elements ...
+  -> MV18-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV18-03: RISC-V 64 prologue sets s0 = sp + 16 so saved ra/s0 at 8(sp)/0(sp) alias -8(s0)/-16(s0) parameter spill slots ...
+  -> MV18-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV18-04: WASM ND_FOR loop auto-vectorizer disabled so canonical 4-lane i32x4/f32x4 array loops fail to emit v128.load/store SIMD128 instructions ...
+  -> MV18-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV19-01: Standalone src/arm64_codegen.c emits stp/ldp [sp, #-aligned_stack]! without >504 range guard so large frames fail aarch64-linux-gnu-as ...
+  -> MV19-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV19-02: Standalone src/riscv_codegen.c sets s0 = sp + 16 so saved ra/s0 at 8(sp)/0(sp) alias -8(s0)/-16(s0) stack slots and crash on return ...
+  -> MV19-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV19-03: part4.c eval_const_call_math omits double-precision cos() and pow() so global initializers emit .zero 8 instead of folded IEEE-754 double bits ...
+  -> MV19-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV19-04: part6_wasm.c wasm_try_autovec_for_loop omits ND_COMPOUND_ASSIGN and bitwise XOR/AND/OR so in-place/bitwise loops fail to emit v128 opcodes ...
+  -> MV19-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV20-01: part5.c zcc_emit_bit_builtin_call omits xorl $31, %eax after bsrl %edi, %eax on x86-64 __builtin_clz, returning bit index (23) instead of leading-zero count (8) ...
+  -> MV20-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV20-02: part5.c zcc_emit_bit_builtin_call omits rbit w0, w0 before clz w0, w0 on ARM64 __builtin_ctz, breaking Quad-ISA differential execution on qemu-aarch64-static ...
+  -> MV20-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV20-03: part6_wasm.c wasm_try_autovec_for_loop horizontal reduction stops at 3 lanes (lane < 3) instead of 4 lanes, dropping lane 3 from SIMD128 dot-product ...
+  -> MV20-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV20-04: src/wasm_emit.c omits .zcc.prove W3C custom section (killed by runtime & ZCC-PROVE-11) ...
+  -> MV20-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV21-01: part5.c zcc_emit_bit_builtin_call omits x86-64 zero-input guard on __builtin_clz(0), leaving %eax polluted on x == 0 ...
+  -> MV21-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV21-02: part5.c zcc_emit_bit_builtin_call omits RISC-V 64 __builtin_bswap64 lowering, causing fallback to ARM64 rev x0, x0 and assembler failure ...
+  -> MV21-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV21-03: part6_wasm.c omits WASM32 __builtin_bswap64 64-bit byte-reversal lowering ...
+  -> MV21-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV21-04: part6_wasm.c wasm_try_autovec_for_loop omits reduction symbol aliasing guard (killed by ZCC-PROVE-12) ...
+  -> MV21-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=5
+[MV-02] Running MV22-01: part5.c zcc_emit_bit_builtin_call omits addl $1, %%eax on x86-64 __builtin_ffs, returning ctz(x) instead of ctz(x)+1 ...
+  -> MV22-01: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV22-02: part5.c zcc_emit_bit_builtin_call omits and w0, w0, #1 on ARM64 __builtin_parity, returning full popcount instead of parity ...
+  -> MV22-02: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV22-03: part4.c ND_COMPOUND_ASSIGN omits backend_ops->emit_store routing on ARM64/RISC-V 64, falling back to ARM32 str r1, [r0] ...
+  -> MV22-03: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Running MV22-04: part6_wasm.c omits WASM32 __builtin_parity lowering, breaking Quad-ISA parity execution and ZCC-PROVE-13 ...
+  -> MV22-04: status=KILLED baseline_exit=0 mut_build_exit=0 mut_test_exit=1
+[MV-02] Ledger summary: 76/76 mutations killed.
+=== [WASM-MV-22] Saving Patch & SHA-256 Artifact Hashes ===
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (815 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+ac6e77a5a8c99a507048f233ef846d617c9cf48428968b99ef12049aa9c0ec2f  /mnt/h/__DOWNLOADS/zcc_github_upload/docs/evidence/2026-11-01/wasm-mv02/wasm-mv02.patch
+21e1196bdf749405bb375caa4c7617ee0e92e36941d60119f672ffb044a323cd  /mnt/h/__DOWNLOADS/zcc_github_upload/docs/evidence/2026-11-01/wasm-mv02/x86_mv02_imm64.s
+84a67ddc6a6f05b0f936099044e77c905465a360ba578e396f3bc636bf5d0f35  /mnt/h/__DOWNLOADS/zcc_github_upload/docs/evidence/2026-11-01/wasm-mv02/zcc_prove_01.json
+b061557324f64139f9f5a9123c5f07bf29a1f17b63a7c7ea2159947ad1ad09f2  part0_pp.c
+f42728fef1711ba687e305df5b8fb6ee7f8b0118356f52c8fb928905a8f7ef34  part2.c
+9033c32d0dba7bf239f838edafa13aa4f7222b093212897763f069dfce5e36b6  part3.c
+7da68fdaf8a14a099408b75d2d006db4db7056d4a73ad3dda414317777864589  part4.c
+4a9f4d1ebf3ae096ce88d4f2b63eccdfdc19132513dd70938abeb212941c2720  part5.c
+1224995325f1080edd93b3e1d63b3761f3669e4ead2b1f13a664d9664404517b  part6_arm.c
+f60b815d33655e1e8d735f972e7f8e086bd523238b13ac62fcd8fe2e27fa55d0  part6_riscv.c
+916f892c503a062ab0a52375f590bc649c5cf97e5f091e52fd698724e9c3105a  part6_wasm.c
+081c8488e7afbe039e2041422e21ca49a1741dd771d1139dfbaefa04300d0adb  src/arm64_codegen.c
+e10a1fc943eb83150f11fdecf35dd0d0b9e306de54bc5ca852cc9191022a7726  src/riscv_codegen.c
+42b05bf4e861f776ba6a189f9d2885c48f2fb58b1d15827e5859c5b9763c4be2  src/codegen.c
+fb911a9e965e72969cfe91a8605a65ecd618ab0cb72ba49a7d46164522bc20b7  src/x86_codegen_sse.c
+f0dd080104636820a599ce7075637a1acc8841d15c36c1ad1178365de99e7e81  src/wasm_emit.c
+8bc1b108d3c70f54c1bc63a76f88abc5c65dab3088650745c155cec2179d844a  src/wasm_emit.h
+a1f2fc1cfa3efd6c934fb23e5802be037d62f269f276fcbd25913faaa13f3e88  zcc
+26f30ad9fcb06ad82018ac791bf5cb3a13bc7e4d49197c734a3d74f97333fe8d  zcc2.s
+26f30ad9fcb06ad82018ac791bf5cb3a13bc7e4d49197c734a3d74f97333fe8d  zcc3.s
+a96dfa292ff54ab22badd74216c39f453cb8e46749a08dd25eb006e5ad7449ad  zcc2
+a96dfa292ff54ab22badd74216c39f453cb8e46749a08dd25eb006e5ad7449ad  zcc3
+7a24e999d4d870abe68b14d3e2df8da34fe6364b561e6f643d288c3a2c7d840a  tests/wasm_mv02_signedness.c
+46c727bf2983895e7c463b21c5eeade31b45d0ac0e04efba0299ed817b0755ed  tests/x86_mv02_imm64.c
+8a59412b0e54d546eabe51e406f46944fdc9325647b9de096e6c793fbef16b00  tests/typedef_compatible.c
+043e9cb3c97a221eb8cf5431f44c0e51ed6ce9b88c4dd3b22683e4966c184a6f  tests/typedef_incompatible.c
+6152e8501300158e48e3f3931b3e65a8a278af5203859b8d26493b5c4cbbca97  tests/test_wasm_i64.py
+4f7a226b8a55c10d8a4ad16aac1297d3bea2e6112d7b89f5dc85c07afbb45ee2  tests/test_wasm_mv02.py
+c643a8d9f9f3e6a34a2a7f1aebb066e50f5f1d150d35f9170f5deef01438c48b  tools/mv02_mutation.py
+aa0f4c2ce40a2dd4b9635251d9bb806bf631a1e34051c89d2d8f41fda13d79ce  tools/zcc_prove_01.py
+264b8c683bd6d08483e6609192e9a907641b803d3e6e70130fbe2b5b8268c1bf  scripts/run_mv02_gate.sh
+9e135ba557c8b807d9908246e786d6fa6771e38315fae117ecf026b2fdbed060  /mnt/h/__DOWNLOADS/zcc_github_upload/docs/evidence/2026-11-01/wasm-mv02/mv02_mutation_ledger.json
+ALL WASM-MV-02..22 / ARCH-AUDIT-01..02 / BITOPS-FFS-PARITY-01 / ARCH-CMP-SH-01 / WASM-V128-ACCUM / ZCC-PROVE-01..13 GATES PASSED (EXIT 0)

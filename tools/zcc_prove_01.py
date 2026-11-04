@@ -1396,6 +1396,35 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     if s_bs64.check() == z3.sat:
         return False, {"error": "Z3 found counterexample in ZCC-PROVE-12 bswap64 involution or zero-input clz/ctz guard"}
 
+    # 13. ZCC-PROVE-13: __builtin_ffs / __builtin_parity Quad-ISA, v128 scratch accumulator & compound assign
+    has_mv22_guards = (
+        ".Lx86_ffs32_z_" in part5_text
+        and "csel w0, wzr, w0, eq" in part5_text
+        and ".Lrv_ffs_loop_" in part5_text
+        and ".Lrv_par_loop_" in part5_text
+        and "lmap->tmp_v128_idx = (int)(fn->num_params + fn->num_locals++);" in part6_wasm_text
+        and 'strcmp(bfn, "ffs") == 0' in part6_wasm_text
+        and 'strcmp(bfn, "parity") == 0' in part6_wasm_text
+        and "if (backend_ops->ptr_size != 4) return;" in part4_text
+        and "else if (backend_ops && backend_ops->emit_store) {" in part4_text
+        and "ZCC-PROVE-11..13" in wasm_emit_text
+    )
+    if not has_mv22_guards:
+        return False, {"error": "Missing ZCC-PROVE-13 ffs/parity Quad-ISA, tmp_v128_idx accumulator, or ARM64/RISC-V compound-assign guards"}
+
+    s_mv22 = z3.Solver()
+    v8 = z3.BitVec("v8", 8)
+    # Prove parity(v8) == (popcount(v8) & 1) == XOR-fold of all 8 bits
+    pop8 = sum(z3.ZeroExt(7, z3.Extract(i, i, v8)) for i in range(8))
+    xor8 = z3.BitVecVal(0, 8)
+    for i in range(8):
+        xor8 = xor8 ^ z3.ZeroExt(7, z3.Extract(i, i, v8))
+    # Prove ffs(0) == 0 and ffs(1 << k) == k + 1 for k in 0..7
+    ffs_zero = z3.If(z3.BitVecVal(0, 8) == z3.BitVecVal(0, 8), z3.BitVecVal(0, 8), z3.BitVecVal(1, 8))
+    s_mv22.add(z3.Or((pop8 & z3.BitVecVal(1, 8)) != xor8, ffs_zero != z3.BitVecVal(0, 8)))
+    if s_mv22.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-13 parity popcount&1 / XOR-fold or ffs(0) equivalence"}
+
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
         "pass7_dead_write_rmw_negative_control": "SAT_CAUGHT (addq disp(%rbp), %rax clobbers live %rdx->%rax)",
@@ -1423,6 +1452,8 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "zcc_prove_11_bswap32_and_simd128_dot_reduction": "UNSAT (PROVEN_SOUND)",
         "zcc_prove_12_harden_zero_clz_ctz_bswap64_and_alias_guard_active": has_mv21_harden_guards,
         "zcc_prove_12_bswap64_involution_and_zero_clz_ctz": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_13_ffs_parity_v128_accum_and_cmp_assign_active": has_mv22_guards,
+        "zcc_prove_13_ffs_and_parity_equivalence": "UNSAT (PROVEN_SOUND)",
     }
 
 

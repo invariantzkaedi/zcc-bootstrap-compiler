@@ -292,6 +292,7 @@ typedef struct {
     int tmp_i64_idx;     /* Scratch local for i64 value evaluation */
     int tmp_f32_idx;     /* Scratch local for f32 evaluation */
     int tmp_f64_idx;     /* Scratch local for f64 evaluation */
+    int tmp_v128_idx;    /* Scratch local for v128 vector reduction */
 } WasmLocalMap;
 
 /* Function Definition */

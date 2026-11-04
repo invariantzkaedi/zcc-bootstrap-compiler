@@ -542,17 +542,17 @@ void init_compiler(Compiler *cc) {
 
       /* Bit-manipulation intrinsics */
       {
-        const char *b32[] = {"__builtin_clz", "__builtin_ctz", "__builtin_popcount"};
-        const char *b64[] = {"__builtin_clzl", "__builtin_clzll", "__builtin_ctzl", "__builtin_ctzll", "__builtin_popcountl", "__builtin_popcountll"};
+        const char *b32[] = {"__builtin_clz", "__builtin_ctz", "__builtin_popcount", "__builtin_ffs", "__builtin_parity"};
+        const char *b64[] = {"__builtin_clzl", "__builtin_clzll", "__builtin_ctzl", "__builtin_ctzll", "__builtin_popcountl", "__builtin_popcountll", "__builtin_ffsl", "__builtin_ffsll", "__builtin_parityl", "__builtin_parityll"};
         int bi;
-        for (bi = 0; bi < 3; bi++) {
+        for (bi = 0; bi < 5; bi++) {
           ft = type_func(cc, cc->ty_int);
           ft->num_params = 1;
           ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
           ft->params[0] = cc->ty_uint;
           sym = scope_add(cc, b32[bi], ft); sym->is_global = 1;
         }
-        for (bi = 0; bi < 6; bi++) {
+        for (bi = 0; bi < 10; bi++) {
           ft = type_func(cc, cc->ty_int);
           ft->num_params = 1;
           ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
@@ -3356,6 +3356,36 @@ int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long
     *out_bits = (long long)r;
     return 1;
   }
+  if (strcmp(fname, "__builtin_ffs") == 0) {
+    unsigned int v = (unsigned int)arg0_bits;
+    int n = 1;
+    if (v == 0) { *out_bits = 0; return 1; }
+    while ((v & 1U) == 0) { n++; v >>= 1; }
+    *out_bits = n;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_ffsl") == 0 || strcmp(fname, "__builtin_ffsll") == 0) {
+    unsigned long long v = (unsigned long long)arg0_bits;
+    int n = 1;
+    if (v == 0) { *out_bits = 0; return 1; }
+    while ((v & 1ULL) == 0) { n++; v >>= 1; }
+    *out_bits = n;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_parity") == 0) {
+    unsigned int v = (unsigned int)arg0_bits;
+    int n = 0;
+    while (v) { n ^= (int)(v & 1U); v >>= 1; }
+    *out_bits = n;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_parityl") == 0 || strcmp(fname, "__builtin_parityll") == 0) {
+    unsigned long long v = (unsigned long long)arg0_bits;
+    int n = 0;
+    while (v) { n ^= (int)(v & 1ULL); v >>= 1; }
+    *out_bits = n;
+    return 1;
+  }
   return 0;
 }
 
@@ -3481,6 +3511,62 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
                        ".Lrv_bs64_loop_%d:\n    slli a0, a0, 8\n    andi t1, t0, 255\n    or a0, a0, t1\n"
                        "    srli t0, t0, 8\n    addi t2, t2, -1\n    bnez t2, .Lrv_bs64_loop_%d\n", lbl, lbl);
     }
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_ffs") == 0) {
+    if (!backend_ops) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    testl %%%s, %%%s\n    je .Lx86_ffs32_z_%d\n    bsfl %%%s, %%eax\n    addl $1, %%eax\n    jmp .Lx86_ffs32_d_%d\n"
+                       ".Lx86_ffs32_z_%d:\n    xorl %%eax, %%eax\n.Lx86_ffs32_d_%d:\n", r32, r32, lbl, r32, lbl, lbl, lbl);
+    } else if (is_a64) {
+      fprintf(cc->out, "    cmp w0, #0\n    rbit w0, w0\n    clz w0, w0\n    add w0, w0, #1\n    csel w0, wzr, w0, eq\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    li a0, 0\n    beqz t0, .Lrv_ffs_done_%d\n    li a0, 1\n"
+                       ".Lrv_ffs_loop_%d:\n    andi t1, t0, 1\n    bnez t1, .Lrv_ffs_done_%d\n    srli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_ffs_loop_%d\n"
+                       ".Lrv_ffs_done_%d:\n", lbl, lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_ffsl") == 0 || strcmp(fn, "__builtin_ffsll") == 0) {
+    if (!backend_ops) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    testq %%%s, %%%s\n    je .Lx86_ffs64_z_%d\n    bsfq %%%s, %%rax\n    addq $1, %%rax\n    jmp .Lx86_ffs64_d_%d\n"
+                       ".Lx86_ffs64_z_%d:\n    xorl %%eax, %%eax\n.Lx86_ffs64_d_%d:\n", r64, r64, lbl, r64, lbl, lbl, lbl);
+    } else if (is_a64) {
+      fprintf(cc->out, "    cmp x0, #0\n    rbit x0, x0\n    clz x0, x0\n    add x0, x0, #1\n    csel x0, xzr, x0, eq\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    mv t0, a0\n    li a0, 0\n    beqz t0, .Lrv_ffs_done_%d\n    li a0, 1\n"
+                       ".Lrv_ffs_loop_%d:\n    andi t1, t0, 1\n    bnez t1, .Lrv_ffs_done_%d\n    srli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_ffs_loop_%d\n"
+                       ".Lrv_ffs_done_%d:\n", lbl, lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_parity") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    popcntl %%%s, %%eax\n    andl $1, %%eax\n", r32);
+    } else if (is_a64) {
+      fprintf(cc->out, "    fmov s0, w0\n    cnt v0.8b, v0.8b\n    uaddlv h0, v0.8b\n    fmov w0, s0\n    and w0, w0, #1\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    li a0, 0\n"
+                       ".Lrv_par_loop_%d:\n    beqz t0, .Lrv_par_done_%d\n    andi t1, t0, 1\n    xor a0, a0, t1\n    srli t0, t0, 1\n    j .Lrv_par_loop_%d\n"
+                       ".Lrv_par_done_%d:\n", lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_parityl") == 0 || strcmp(fn, "__builtin_parityll") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    popcntq %%%s, %%rax\n    andl $1, %%eax\n", r64);
+    } else if (is_a64) {
+      fprintf(cc->out, "    fmov d0, x0\n    cnt v0.8b, v0.8b\n    uaddlv h0, v0.8b\n    fmov w0, s0\n    and w0, w0, #1\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    mv t0, a0\n    li a0, 0\n"
+                       ".Lrv_par_loop_%d:\n    beqz t0, .Lrv_par_done_%d\n    andi t1, t0, 1\n    xor a0, a0, t1\n    srli t0, t0, 1\n    j .Lrv_par_loop_%d\n"
+                       ".Lrv_par_done_%d:\n", lbl, lbl, lbl, lbl);
+    } else return 0;
     return 1;
   }
   return 0;

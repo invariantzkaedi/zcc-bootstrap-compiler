@@ -236,6 +236,7 @@ static void emit_node_extend(Compiler *cc, Node *node) {
   if (!node || !node->type || is_pointer(node->type) || is_float_type(node->type)) return;
   int is_unsigned = node_type_unsigned(node);
   if (backend_ops) {
+    if (backend_ops->ptr_size != 4) return;
     if (node->type->size == 1) {
       if (is_unsigned) fprintf(cc->out, "    uxtb r0, r0\n");
       else fprintf(cc->out, "    sxtb r0, r0\n");
@@ -1610,7 +1611,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     push_reg(cc, "rax");
     codegen_expr_checked(cc, node->rhs);
     ir_save_result(rhs_ir);
-    if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
+    if (backend_ops) { if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc); else fprintf(cc->out, "    mov r1, r0\n"); }
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
     if (!backend_ops && ct && is_float_type(ct) && lt) {
@@ -1791,7 +1792,8 @@ void codegen_expr(Compiler *cc, Node *node) {
       break;
     case ND_SHR:
       if (backend_ops) {
-          if (node->lhs->type && is_unsigned_type(node->lhs->type)) {
+          if (backend_ops->emit_shr) backend_ops->emit_shr(cc, node->lhs->type && is_unsigned_type(node->lhs->type));
+          else if (node->lhs->type && is_unsigned_type(node->lhs->type)) {
               fprintf(cc->out, "    lsrs r0, r0, r1\n");
           } else {
               fprintf(cc->out, "    asrs r0, r0, r1\n");
@@ -1819,11 +1821,13 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (!is_float_type(lt)) emit_cvttfd2si(cc, lt, ct->kind == TY_FLOAT);
       else if (lt->kind == TY_FLOAT && ct->kind != TY_FLOAT) fprintf(cc->out, "    movq %%rax, %%xmm0\n    cvtsd2ss %%xmm0, %%xmm0\n    movd %%xmm0, %%eax\n");
     }
-    if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
+    if (backend_ops) { if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc); else fprintf(cc->out, "    mov r1, r0\n"); }
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
     if (node->lhs->is_bitfield) {
       emit_bitfield_store_p4(cc, node->lhs);
+    } else if (backend_ops && backend_ops->emit_store) {
+      backend_ops->emit_store(cc, node->lhs->type);
     } else {
     if (node->lhs->kind == ND_MEMBER && node->lhs->member_size > 0) {
       switch (node->lhs->member_size) {
@@ -4823,8 +4827,10 @@ void codegen_expr(Compiler *cc, Node *node) {
         fprintf(cc->out, "    movq %%xmm0, %%rax\n");
     } else if (node->type && !node_type_unsigned(node)) {
         if (backend_ops) {
-            if (node->type->size == 1) fprintf(cc->out, "    sxtb r0, r0\n");
-            else if (node->type->size == 2) fprintf(cc->out, "    sxth r0, r0\n");
+            if (backend_ops->ptr_size == 4) {
+                if (node->type->size == 1) fprintf(cc->out, "    sxtb r0, r0\n");
+                else if (node->type->size == 2) fprintf(cc->out, "    sxth r0, r0\n");
+            }
         } else {
             if (node->type->size == 4) fprintf(cc->out, "    cltq\n");
             else if (node->type->size == 1) fprintf(cc->out, "    movsbq %%al, %%rax\n");
@@ -4832,8 +4838,10 @@ void codegen_expr(Compiler *cc, Node *node) {
         }
     } else if (node->type && node_type_unsigned(node)) {
         if (backend_ops) {
-            if (node->type->size == 1) fprintf(cc->out, "    uxtb r0, r0\n");
-            else if (node->type->size == 2) fprintf(cc->out, "    uxth r0, r0\n");
+            if (backend_ops->ptr_size == 4) {
+                if (node->type->size == 1) fprintf(cc->out, "    uxtb r0, r0\n");
+                else if (node->type->size == 2) fprintf(cc->out, "    uxth r0, r0\n");
+            }
         } else {
             if (node->type->size == 4) fprintf(cc->out, "    movl %%eax, %%eax\n");
             else if (node->type->size == 1) fprintf(cc->out, "    movzbq %%al, %%rax\n");

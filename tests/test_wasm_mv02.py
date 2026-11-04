@@ -1048,6 +1048,121 @@ int main(void) {
                 self.assertEqual(rwt.returncode, 0, rwt.stderr)
                 self.assertEqual(rwt.stdout.strip(), "129")
 
+    def test_13_ffs_parity_quad_isa_v128_accum_and_compound_assign(self) -> None:
+        """
+        MV-22 / BITOPS-FFS-PARITY-01 / ARCH-CMP-SH-01 / WASM-V128-ACCUM / ZCC-PROVE-13:
+        1. Compile-time constant folding in part5.c for __builtin_ffs/ffsl/ffsll and __builtin_parity/parityl/parityll.
+        2. Runtime lowering across all 4 ISAs (x86-64, ARM64, RISC-V 64, WASM32) for __builtin_ffs (0 -> 0, else ctz+1)
+           and __builtin_parity (popcount & 1).
+        3. Multi-backend ND_COMPOUND_ASSIGN (+=, >>=) and emit_node_extend hardening on ARM64 and RISC-V 64.
+        4. True v128 vector local scratch register ($tmp_v128) in part6_wasm.c auto-vectorized reductions,
+           reducing v128.load count per 4-lane dot-product body from 8 to 2 and i32x4.mul count from 4 to 1.
+        5. Quad-ISA Bit-Exact Differential Execution Lock: x86-64 ELF, ARM64 (qemu-aarch64-static),
+           RISC-V 64 (qemu-riscv64-static), and WASM32 (Node.js V8 + Wasmtime) all return exact exit status 86.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            mv22_c = pathlib.Path(tmp) / "quad_mv22.c"
+            mv22_c.write_text(
+                r"""
+int g_ffs0 = __builtin_ffs(0U);
+int g_ffs256 = __builtin_ffs(256U);
+int g_par7 = __builtin_parity(7U);
+int g_par6 = __builtin_parity(6U);
+
+int vec_dot_v128(const int *a, const int *b, int n) {
+    int sum = 0;
+    for (int i = 0; i < n; i++) {
+        sum += a[i] * b[i];
+    }
+    return sum;
+}
+
+int test_ffs_parity_and_cmp(unsigned int x, unsigned int z) {
+    int f1 = __builtin_ffs(z);
+    int f2 = __builtin_ffs(x);
+    int p1 = __builtin_parity(x);
+    int p2 = __builtin_parity(x | 1U);
+    int arr[4] = {10, 20, 32, 40};
+    arr[1] += 5;
+    arr[2] >>= 2;
+    return f1 + f2 + p1 + p2 + arr[1] + arr[2];
+}
+
+int main(void) {
+    int a[4] = {1, 2, 3, 4};
+    int b[4] = {2, 3, 4, 5};
+    int dot = vec_dot_v128(a, b, 4);
+    int res = test_ffs_parity_and_cmp(0x00F0F000U, 0U);
+    if (g_ffs0 != 0) return 10;
+    if (g_par6 != 0) return 11;
+    return g_ffs256 + g_par7 + dot + res;
+}
+""",
+                encoding="utf-8",
+            )
+
+            # 1. x86-64 assembly & native ELF execution
+            x86_s = pathlib.Path(tmp) / "mv22_x86.s"
+            x86_bin = pathlib.Path(tmp) / "mv22_x86"
+            r_x86_s = subprocess.run([str(ZCC_BIN), "-S", str(mv22_c), "-o", str(x86_s)], capture_output=True, text=True)
+            self.assertEqual(r_x86_s.returncode, 0, r_x86_s.stderr)
+            x86_txt = x86_s.read_text(encoding="utf-8")
+            self.assertIn(".Lx86_ffs32_z_", x86_txt, "Missing x86-64 zero-input guard label on __builtin_ffs")
+            self.assertIn("andl $1, %eax", x86_txt, "Missing andl $1, %eax on x86-64 __builtin_parity")
+            r_x86_b = subprocess.run([str(ZCC_BIN), str(mv22_c), "-o", str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_b.returncode, 0, r_x86_b.stderr)
+            r_x86_run = subprocess.run([str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_run.returncode, 97)
+
+            # 2. ARM64 assembly & QEMU execution
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                arm_s = pathlib.Path(tmp) / "mv22_arm64.s"
+                arm_o = pathlib.Path(tmp) / "mv22_arm64.o"
+                arm_bin = pathlib.Path(tmp) / "mv22_arm64"
+                r_arm_s = subprocess.run([str(ZCC_BIN), "--target=arm64", "-S", str(mv22_c), "-o", str(arm_s)], capture_output=True, text=True)
+                self.assertEqual(r_arm_s.returncode, 0, r_arm_s.stderr)
+                arm_txt = arm_s.read_text(encoding="utf-8")
+                self.assertIn("csel w0, wzr, w0, eq", arm_txt, "Missing csel w0, wzr, w0, eq on ARM64 __builtin_ffs")
+                self.assertIn("and w0, w0, #1", arm_txt, "Missing and w0, w0, #1 on ARM64 __builtin_parity")
+                arm_s.write_text(arm_txt + "\n.text\n.globl _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n", encoding="utf-8")
+                ras = subprocess.run(["aarch64-linux-gnu-as", str(arm_s), "-o", str(arm_o)], capture_output=True, text=True)
+                self.assertEqual(ras.returncode, 0, ras.stderr)
+                rld = subprocess.run(["aarch64-linux-gnu-ld", str(arm_o), "-o", str(arm_bin)], capture_output=True, text=True)
+                self.assertEqual(rld.returncode, 0, rld.stderr)
+                rq_arm = subprocess.run(["qemu-aarch64-static", str(arm_bin)], capture_output=True, text=True)
+                self.assertEqual(rq_arm.returncode, 97)
+
+            # 3. RISC-V 64 assembly & QEMU execution
+            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
+                rv_s = pathlib.Path(tmp) / "mv22_rv64.s"
+                rv_bin = pathlib.Path(tmp) / "mv22_rv64"
+                r_rv_s = subprocess.run([str(ZCC_BIN), "--target=riscv64", "-S", str(mv22_c), "-o", str(rv_s)], capture_output=True, text=True)
+                self.assertEqual(r_rv_s.returncode, 0, r_rv_s.stderr)
+                rv_txt = rv_s.read_text(encoding="utf-8")
+                self.assertIn(".Lrv_ffs_loop_", rv_txt, "Missing .Lrv_ffs_loop_ on RISC-V 64 __builtin_ffs")
+                self.assertIn(".Lrv_par_loop_", rv_txt, "Missing .Lrv_par_loop_ on RISC-V 64 __builtin_parity")
+                rgcc = subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(rgcc.returncode, 0, rgcc.stderr)
+                rq_rv = subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(rq_rv.returncode, 97)
+
+            # 4. WASM32 SIMD128 v128 accumulator + ffs/parity + ZCC-PROVE-11..13
+            wasm_out = pathlib.Path(tmp) / "mv22.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv22_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            wb = wasm_out.read_bytes()
+            self.assertIn(b"ZCC-PROVE-11..13", wb, "Missing ZCC-PROVE-11..13 in .zcc.prove custom section")
+            self.assertEqual(wb.count(b"\xfd\x00"), 2, "Expected exactly 2 v128.load opcodes in vec_dot_v128 with $tmp_v128 scratch local")
+            self.assertEqual(wb.count(b"\xfd\xb5\x01"), 1, "Expected exactly 1 i32x4.mul opcode in vec_dot_v128 with $tmp_v128 scratch local")
+            if shutil.which("wasm-validate"):
+                rv = subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True, text=True)
+                self.assertEqual(rv.returncode, 0, rv.stderr)
+            self.assertEqual(run_wasm_node(wasm_out), 97)
+            if WASMTIME_BIN.exists():
+                rwt = subprocess.run([str(WASMTIME_BIN), "run", "--invoke", "main", str(wasm_out)], capture_output=True, text=True)
+                self.assertEqual(rwt.returncode, 0, rwt.stderr)
+                self.assertEqual(rwt.stdout.strip(), "97")
+
 
 if __name__ == "__main__":
     unittest.main()

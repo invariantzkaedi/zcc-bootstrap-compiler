@@ -1,161 +1,346 @@
+diff --git a/part4.c b/part4.c
+index eb0aa9da4..ce9f00c6c 100644
+--- a/part4.c
++++ b/part4.c
+@@ -236,6 +236,7 @@ static void emit_node_extend(Compiler *cc, Node *node) {
+   if (!node || !node->type || is_pointer(node->type) || is_float_type(node->type)) return;
+   int is_unsigned = node_type_unsigned(node);
+   if (backend_ops) {
++    if (backend_ops->ptr_size != 4) return;
+     if (node->type->size == 1) {
+       if (is_unsigned) fprintf(cc->out, "    uxtb r0, r0\n");
+       else fprintf(cc->out, "    sxtb r0, r0\n");
+@@ -1610,7 +1611,7 @@ void codegen_expr(Compiler *cc, Node *node) {
+     push_reg(cc, "rax");
+     codegen_expr_checked(cc, node->rhs);
+     ir_save_result(rhs_ir);
+-    if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
++    if (backend_ops) { if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc); else fprintf(cc->out, "    mov r1, r0\n"); }
+       else fprintf(cc->out, "    movq %%rax, %%r11\n");
+     pop_reg(cc, "rax");
+     if (!backend_ops && ct && is_float_type(ct) && lt) {
+@@ -1791,7 +1792,8 @@ void codegen_expr(Compiler *cc, Node *node) {
+       break;
+     case ND_SHR:
+       if (backend_ops) {
+-          if (node->lhs->type && is_unsigned_type(node->lhs->type)) {
++          if (backend_ops->emit_shr) backend_ops->emit_shr(cc, node->lhs->type && is_unsigned_type(node->lhs->type));
++          else if (node->lhs->type && is_unsigned_type(node->lhs->type)) {
+               fprintf(cc->out, "    lsrs r0, r0, r1\n");
+           } else {
+               fprintf(cc->out, "    asrs r0, r0, r1\n");
+@@ -1819,11 +1821,13 @@ void codegen_expr(Compiler *cc, Node *node) {
+       if (!is_float_type(lt)) emit_cvttfd2si(cc, lt, ct->kind == TY_FLOAT);
+       else if (lt->kind == TY_FLOAT && ct->kind != TY_FLOAT) fprintf(cc->out, "    movq %%rax, %%xmm0\n    cvtsd2ss %%xmm0, %%xmm0\n    movd %%xmm0, %%eax\n");
+     }
+-    if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
++    if (backend_ops) { if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc); else fprintf(cc->out, "    mov r1, r0\n"); }
+       else fprintf(cc->out, "    movq %%rax, %%r11\n");
+     pop_reg(cc, "rax");
+     if (node->lhs->is_bitfield) {
+       emit_bitfield_store_p4(cc, node->lhs);
++    } else if (backend_ops && backend_ops->emit_store) {
++      backend_ops->emit_store(cc, node->lhs->type);
+     } else {
+     if (node->lhs->kind == ND_MEMBER && node->lhs->member_size > 0) {
+       switch (node->lhs->member_size) {
+@@ -4823,8 +4827,10 @@ void codegen_expr(Compiler *cc, Node *node) {
+         fprintf(cc->out, "    movq %%xmm0, %%rax\n");
+     } else if (node->type && !node_type_unsigned(node)) {
+         if (backend_ops) {
+-            if (node->type->size == 1) fprintf(cc->out, "    sxtb r0, r0\n");
+-            else if (node->type->size == 2) fprintf(cc->out, "    sxth r0, r0\n");
++            if (backend_ops->ptr_size == 4) {
++                if (node->type->size == 1) fprintf(cc->out, "    sxtb r0, r0\n");
++                else if (node->type->size == 2) fprintf(cc->out, "    sxth r0, r0\n");
++            }
+         } else {
+             if (node->type->size == 4) fprintf(cc->out, "    cltq\n");
+             else if (node->type->size == 1) fprintf(cc->out, "    movsbq %%al, %%rax\n");
+@@ -4832,8 +4838,10 @@ void codegen_expr(Compiler *cc, Node *node) {
+         }
+     } else if (node->type && node_type_unsigned(node)) {
+         if (backend_ops) {
+-            if (node->type->size == 1) fprintf(cc->out, "    uxtb r0, r0\n");
+-            else if (node->type->size == 2) fprintf(cc->out, "    uxth r0, r0\n");
++            if (backend_ops->ptr_size == 4) {
++                if (node->type->size == 1) fprintf(cc->out, "    uxtb r0, r0\n");
++                else if (node->type->size == 2) fprintf(cc->out, "    uxth r0, r0\n");
++            }
+         } else {
+             if (node->type->size == 4) fprintf(cc->out, "    movl %%eax, %%eax\n");
+             else if (node->type->size == 1) fprintf(cc->out, "    movzbq %%al, %%rax\n");
 diff --git a/part5.c b/part5.c
-index dfec7fa49..43e9d9a68 100644
+index 43e9d9a68..61e3daa94 100644
 --- a/part5.c
 +++ b/part5.c
-@@ -3337,6 +3337,25 @@ int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long
-     *out_bits = n;
+@@ -542,17 +542,17 @@ void init_compiler(Compiler *cc) {
+ 
+       /* Bit-manipulation intrinsics */
+       {
+-        const char *b32[] = {"__builtin_clz", "__builtin_ctz", "__builtin_popcount"};
+-        const char *b64[] = {"__builtin_clzl", "__builtin_clzll", "__builtin_ctzl", "__builtin_ctzll", "__builtin_popcountl", "__builtin_popcountll"};
++        const char *b32[] = {"__builtin_clz", "__builtin_ctz", "__builtin_popcount", "__builtin_ffs", "__builtin_parity"};
++        const char *b64[] = {"__builtin_clzl", "__builtin_clzll", "__builtin_ctzl", "__builtin_ctzll", "__builtin_popcountl", "__builtin_popcountll", "__builtin_ffsl", "__builtin_ffsll", "__builtin_parityl", "__builtin_parityll"};
+         int bi;
+-        for (bi = 0; bi < 3; bi++) {
++        for (bi = 0; bi < 5; bi++) {
+           ft = type_func(cc, cc->ty_int);
+           ft->num_params = 1;
+           ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+           ft->params[0] = cc->ty_uint;
+           sym = scope_add(cc, b32[bi], ft); sym->is_global = 1;
+         }
+-        for (bi = 0; bi < 6; bi++) {
++        for (bi = 0; bi < 10; bi++) {
+           ft = type_func(cc, cc->ty_int);
+           ft->num_params = 1;
+           ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+@@ -3356,6 +3356,36 @@ int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long
+     *out_bits = (long long)r;
      return 1;
    }
-+  if (strcmp(fname, "__builtin_bswap16") == 0) {
-+    unsigned int v = (unsigned int)arg0_bits & 0xFFFFU;
-+    *out_bits = (long long)(((v & 0xFFU) << 8) | ((v >> 8) & 0xFFU));
-+    return 1;
-+  }
-+  if (strcmp(fname, "__builtin_bswap32") == 0) {
++  if (strcmp(fname, "__builtin_ffs") == 0) {
 +    unsigned int v = (unsigned int)arg0_bits;
-+    unsigned int r = ((v & 0xFFU) << 24) | (((v >> 8) & 0xFFU) << 16) | (((v >> 16) & 0xFFU) << 8) | ((v >> 24) & 0xFFU);
-+    *out_bits = (long long)r;
++    int n = 1;
++    if (v == 0) { *out_bits = 0; return 1; }
++    while ((v & 1U) == 0) { n++; v >>= 1; }
++    *out_bits = n;
 +    return 1;
 +  }
-+  if (strcmp(fname, "__builtin_bswap64") == 0) {
++  if (strcmp(fname, "__builtin_ffsl") == 0 || strcmp(fname, "__builtin_ffsll") == 0) {
 +    unsigned long long v = (unsigned long long)arg0_bits;
-+    unsigned long long r = 0;
-+    int b;
-+    for (b = 0; b < 8; b++) { r = (r << 8) | (v & 0xFFULL); v >>= 8; }
-+    *out_bits = (long long)r;
++    int n = 1;
++    if (v == 0) { *out_bits = 0; return 1; }
++    while ((v & 1ULL) == 0) { n++; v >>= 1; }
++    *out_bits = n;
++    return 1;
++  }
++  if (strcmp(fname, "__builtin_parity") == 0) {
++    unsigned int v = (unsigned int)arg0_bits;
++    int n = 0;
++    while (v) { n ^= (int)(v & 1U); v >>= 1; }
++    *out_bits = n;
++    return 1;
++  }
++  if (strcmp(fname, "__builtin_parityl") == 0 || strcmp(fname, "__builtin_parityll") == 0) {
++    unsigned long long v = (unsigned long long)arg0_bits;
++    int n = 0;
++    while (v) { n ^= (int)(v & 1ULL); v >>= 1; }
++    *out_bits = n;
 +    return 1;
 +  }
    return 0;
  }
  
-@@ -3350,7 +3369,9 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
- 
-   if (strcmp(fn, "__builtin_clz") == 0) {
-     if (!backend_ops) {
--      fprintf(cc->out, "    bsrl %%%s, %%eax\n    xorl $31, %%eax\n", r32);
-+      int lbl = cc->label_count++;
-+      fprintf(cc->out, "    testl %%%s, %%%s\n    je .Lx86_clz32_z_%d\n    bsrl %%%s, %%eax\n    xorl $31, %%eax\n    jmp .Lx86_clz32_d_%d\n"
-+                       ".Lx86_clz32_z_%d:\n    movl $32, %%eax\n.Lx86_clz32_d_%d:\n", r32, r32, lbl, r32, lbl, lbl, lbl);
-     } else if (is_a64) {
-       fprintf(cc->out, "    clz w0, w0\n");
-     } else if (is_rv64) {
-@@ -3363,7 +3384,9 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
-   }
-   if (strcmp(fn, "__builtin_clzl") == 0 || strcmp(fn, "__builtin_clzll") == 0) {
-     if (!backend_ops) {
--      fprintf(cc->out, "    bsrq %%%s, %%rax\n    xorq $63, %%rax\n", r64);
-+      int lbl = cc->label_count++;
-+      fprintf(cc->out, "    testq %%%s, %%%s\n    je .Lx86_clz64_z_%d\n    bsrq %%%s, %%rax\n    xorq $63, %%rax\n    jmp .Lx86_clz64_d_%d\n"
-+                       ".Lx86_clz64_z_%d:\n    movl $64, %%eax\n.Lx86_clz64_d_%d:\n", r64, r64, lbl, r64, lbl, lbl, lbl);
-     } else if (is_a64) {
-       fprintf(cc->out, "    clz x0, x0\n");
-     } else if (is_rv64) {
-@@ -3376,7 +3399,9 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
-   }
-   if (strcmp(fn, "__builtin_ctz") == 0) {
-     if (!backend_ops) {
--      fprintf(cc->out, "    bsfl %%%s, %%eax\n", r32);
-+      int lbl = cc->label_count++;
-+      fprintf(cc->out, "    testl %%%s, %%%s\n    je .Lx86_ctz32_z_%d\n    bsfl %%%s, %%eax\n    jmp .Lx86_ctz32_d_%d\n"
-+                       ".Lx86_ctz32_z_%d:\n    movl $32, %%eax\n.Lx86_ctz32_d_%d:\n", r32, r32, lbl, r32, lbl, lbl, lbl);
-     } else if (is_a64) {
-       fprintf(cc->out, "    rbit w0, w0\n    clz w0, w0\n");
-     } else if (is_rv64) {
-@@ -3389,7 +3414,9 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
-   }
-   if (strcmp(fn, "__builtin_ctzl") == 0 || strcmp(fn, "__builtin_ctzll") == 0) {
-     if (!backend_ops) {
--      fprintf(cc->out, "    bsfq %%%s, %%rax\n", r64);
-+      int lbl = cc->label_count++;
-+      fprintf(cc->out, "    testq %%%s, %%%s\n    je .Lx86_ctz64_z_%d\n    bsfq %%%s, %%rax\n    jmp .Lx86_ctz64_d_%d\n"
-+                       ".Lx86_ctz64_z_%d:\n    movl $64, %%eax\n.Lx86_ctz64_d_%d:\n", r64, r64, lbl, r64, lbl, lbl, lbl);
-     } else if (is_a64) {
-       fprintf(cc->out, "    rbit x0, x0\n    clz x0, x0\n");
-     } else if (is_rv64) {
-@@ -3445,6 +3472,17 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
+@@ -3483,6 +3513,62 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
      }
      return 1;
    }
-+  if (strcmp(fn, "__builtin_bswap64") == 0 && (is_a64 || is_rv64)) {
-+    if (is_a64) {
-+      fprintf(cc->out, "    rev x0, x0\n");
-+    } else {
++  if (strcmp(fn, "__builtin_ffs") == 0) {
++    if (!backend_ops) {
 +      int lbl = cc->label_count++;
-+      fprintf(cc->out, "    mv t0, a0\n    li a0, 0\n    li t2, 8\n"
-+                       ".Lrv_bs64_loop_%d:\n    slli a0, a0, 8\n    andi t1, t0, 255\n    or a0, a0, t1\n"
-+                       "    srli t0, t0, 8\n    addi t2, t2, -1\n    bnez t2, .Lrv_bs64_loop_%d\n", lbl, lbl);
-+    }
++      fprintf(cc->out, "    testl %%%s, %%%s\n    je .Lx86_ffs32_z_%d\n    bsfl %%%s, %%eax\n    addl $1, %%eax\n    jmp .Lx86_ffs32_d_%d\n"
++                       ".Lx86_ffs32_z_%d:\n    xorl %%eax, %%eax\n.Lx86_ffs32_d_%d:\n", r32, r32, lbl, r32, lbl, lbl, lbl);
++    } else if (is_a64) {
++      fprintf(cc->out, "    cmp w0, #0\n    rbit w0, w0\n    clz w0, w0\n    add w0, w0, #1\n    csel w0, wzr, w0, eq\n");
++    } else if (is_rv64) {
++      int lbl = cc->label_count++;
++      fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    li a0, 0\n    beqz t0, .Lrv_ffs_done_%d\n    li a0, 1\n"
++                       ".Lrv_ffs_loop_%d:\n    andi t1, t0, 1\n    bnez t1, .Lrv_ffs_done_%d\n    srli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_ffs_loop_%d\n"
++                       ".Lrv_ffs_done_%d:\n", lbl, lbl, lbl, lbl, lbl);
++    } else return 0;
++    return 1;
++  }
++  if (strcmp(fn, "__builtin_ffsl") == 0 || strcmp(fn, "__builtin_ffsll") == 0) {
++    if (!backend_ops) {
++      int lbl = cc->label_count++;
++      fprintf(cc->out, "    testq %%%s, %%%s\n    je .Lx86_ffs64_z_%d\n    bsfq %%%s, %%rax\n    addq $1, %%rax\n    jmp .Lx86_ffs64_d_%d\n"
++                       ".Lx86_ffs64_z_%d:\n    xorl %%eax, %%eax\n.Lx86_ffs64_d_%d:\n", r64, r64, lbl, r64, lbl, lbl, lbl);
++    } else if (is_a64) {
++      fprintf(cc->out, "    cmp x0, #0\n    rbit x0, x0\n    clz x0, x0\n    add x0, x0, #1\n    csel x0, xzr, x0, eq\n");
++    } else if (is_rv64) {
++      int lbl = cc->label_count++;
++      fprintf(cc->out, "    mv t0, a0\n    li a0, 0\n    beqz t0, .Lrv_ffs_done_%d\n    li a0, 1\n"
++                       ".Lrv_ffs_loop_%d:\n    andi t1, t0, 1\n    bnez t1, .Lrv_ffs_done_%d\n    srli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_ffs_loop_%d\n"
++                       ".Lrv_ffs_done_%d:\n", lbl, lbl, lbl, lbl, lbl);
++    } else return 0;
++    return 1;
++  }
++  if (strcmp(fn, "__builtin_parity") == 0) {
++    if (!backend_ops) {
++      fprintf(cc->out, "    popcntl %%%s, %%eax\n    andl $1, %%eax\n", r32);
++    } else if (is_a64) {
++      fprintf(cc->out, "    fmov s0, w0\n    cnt v0.8b, v0.8b\n    uaddlv h0, v0.8b\n    fmov w0, s0\n    and w0, w0, #1\n");
++    } else if (is_rv64) {
++      int lbl = cc->label_count++;
++      fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    li a0, 0\n"
++                       ".Lrv_par_loop_%d:\n    beqz t0, .Lrv_par_done_%d\n    andi t1, t0, 1\n    xor a0, a0, t1\n    srli t0, t0, 1\n    j .Lrv_par_loop_%d\n"
++                       ".Lrv_par_done_%d:\n", lbl, lbl, lbl, lbl);
++    } else return 0;
++    return 1;
++  }
++  if (strcmp(fn, "__builtin_parityl") == 0 || strcmp(fn, "__builtin_parityll") == 0) {
++    if (!backend_ops) {
++      fprintf(cc->out, "    popcntq %%%s, %%rax\n    andl $1, %%eax\n", r64);
++    } else if (is_a64) {
++      fprintf(cc->out, "    fmov d0, x0\n    cnt v0.8b, v0.8b\n    uaddlv h0, v0.8b\n    fmov w0, s0\n    and w0, w0, #1\n");
++    } else if (is_rv64) {
++      int lbl = cc->label_count++;
++      fprintf(cc->out, "    mv t0, a0\n    li a0, 0\n"
++                       ".Lrv_par_loop_%d:\n    beqz t0, .Lrv_par_done_%d\n    andi t1, t0, 1\n    xor a0, a0, t1\n    srli t0, t0, 1\n    j .Lrv_par_loop_%d\n"
++                       ".Lrv_par_done_%d:\n", lbl, lbl, lbl, lbl);
++    } else return 0;
 +    return 1;
 +  }
    return 0;
  }
  
 diff --git a/part6_wasm.c b/part6_wasm.c
-index cd9f2130a..ac0900055 100644
+index ac0900055..f00ceb219 100644
 --- a/part6_wasm.c
 +++ b/part6_wasm.c
-@@ -1455,6 +1455,34 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
-                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);
+@@ -1382,6 +1382,61 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
+                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
                      break;
                  }
-+                if (strcmp(bfn, "bswap64") == 0 && lmap->tmp_i64_idx >= 0) {
-+                    int b;
++                if (strcmp(bfn, "parity") == 0) {
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_POPCNT);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
++                    wasm_buf_append_sleb128(&fn->body, 1);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
++                    break;
++                }
++                if (strcmp(bfn, "parityl") == 0 || strcmp(bfn, "parityll") == 0) {
 +                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
 +                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I64, cc->ty_ulonglong);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_POPCNT);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
++                    wasm_buf_append_sleb128(&fn->body, 1);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
++                    break;
++                }
++                if (strcmp(bfn, "ffs") == 0 && lmap->tmp_val_idx >= 0) {
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CTZ);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
++                    wasm_buf_append_sleb128(&fn->body, 1);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
++                    wasm_buf_append_sleb128(&fn->body, 0);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_SELECT);
++                    break;
++                }
++                if ((strcmp(bfn, "ffsl") == 0 || strcmp(bfn, "ffsll") == 0) && lmap->tmp_i64_idx >= 0) {
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I64, cc->ty_ulonglong);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CTZ);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
++                    wasm_buf_append_sleb128(&fn->body, 1);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
++                    wasm_buf_append_sleb128(&fn->body, 0);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
 +                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
 +                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
 +                    wasm_buf_append_sleb128_i64(&fn->body, 0);
-+                    for (b = 0; b < 8; b++) {
-+                        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
-+                        wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
-+                        if (b > 0) {
-+                            wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
-+                            wasm_buf_append_sleb128_i64(&fn->body, (int64_t)(b * 8));
-+                            wasm_buf_append_u8(&fn->body, WASM_OP_I64_SHR_U);
-+                        }
-+                        wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
-+                        wasm_buf_append_sleb128_i64(&fn->body, 255);
-+                        wasm_buf_append_u8(&fn->body, WASM_OP_I64_AND);
-+                        if ((7 - b) > 0) {
-+                            wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
-+                            wasm_buf_append_sleb128_i64(&fn->body, (int64_t)((7 - b) * 8));
-+                            wasm_buf_append_u8(&fn->body, WASM_OP_I64_SHL);
-+                        }
-+                        wasm_buf_append_u8(&fn->body, WASM_OP_I64_OR);
-+                    }
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_NE);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_SELECT);
 +                    break;
 +                }
-             }
-             int callee_idx = node->func_name[0] ? wasm_find_func_idx(mod, node->func_name) : -1;
-             int a;
-@@ -1749,14 +1777,22 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
-             (!loop_body->lhs->type || (loop_body->lhs->type->size == 4 && !is_float_type(loop_body->lhs->type)))) {
-             a_base = wasm_match_indexed_ptr(loop_body->rhs, ivar_name, &esz_a, &f32_a);
-             if (a_base && !f32_a) {
--                acc_var = loop_body->lhs;
--                is_reduction = 1;
-+                const char *an = a_base->sym ? a_base->sym->name : a_base->name;
-+                if (!an || (strcmp(an, acc_name) != 0 && strcmp(an, ivar_name) != 0)) {
-+                    acc_var = loop_body->lhs;
-+                    is_reduction = 1;
-+                }
-             } else if (loop_body->rhs && loop_body->rhs->kind == ND_MUL) {
-                 a_base = wasm_match_indexed_ptr(loop_body->rhs->lhs, ivar_name, &esz_a, &f32_a);
-                 b_base = wasm_match_indexed_ptr(loop_body->rhs->rhs, ivar_name, &esz_b, &f32_b);
-                 if (a_base && b_base && !f32_a && !f32_b) {
--                    acc_var = loop_body->lhs;
--                    is_reduction = 2;
-+                    const char *an = a_base->sym ? a_base->sym->name : a_base->name;
-+                    const char *bn = b_base->sym ? b_base->sym->name : b_base->name;
-+                    if ((!an || (strcmp(an, acc_name) != 0 && strcmp(an, ivar_name) != 0)) &&
-+                        (!bn || (strcmp(bn, acc_name) != 0 && strcmp(bn, ivar_name) != 0))) {
-+                        acc_var = loop_body->lhs;
-+                        is_reduction = 2;
-+                    }
-                 }
-             }
+                 if (strcmp(bfn, "bswap16") == 0 && lmap->tmp_val_idx >= 0) {
+                     wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                     wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_ushort);
+@@ -1856,24 +1911,33 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
+         const char *acc_name = acc_var->sym ? acc_var->sym->name : acc_var->name;
+         WasmLocalEntry *aentry = wasm_local_find_entry(lmap, acc_name);
+         int lane;
++        if (lmap->tmp_v128_idx < 0) {
++            lmap->tmp_v128_idx = (int)(fn->num_params + fn->num_locals++);
++            fn->local_types[fn->num_locals - 1] = WASM_TYPE_V128;
++        }
++        /* Load 4-lane vector (and multiply for dot-product) ONCE into $tmp_v128 */
++        wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, a_base, ivar);
++        wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
++        wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
++        wasm_emit_memarg_safe(&fn->body, 2, 0);
++        if (is_reduction == 2 && b_base) {
++            wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, b_base, ivar);
++            wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
++            wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
++            wasm_emit_memarg_safe(&fn->body, 2, 0);
++            wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
++            wasm_buf_append_uleb128(&fn->body, WASM_SIMD_I32X4_MUL);
++        }
++        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
++        wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_v128_idx);
+         if (!aentry || aentry->is_memory) {
+             wasm_lower_addr(cc, mod, fn, lmap, gmap, acc_var);
          }
+         wasm_lower_expr(cc, mod, fn, lmap, gmap, acc_var);
+         wasm_emit_type_conversion(&fn->body, wasm_node_valtype(acc_var), acc_var->type, WASM_TYPE_I32, cc->ty_int);
+         for (lane = 0; lane < 4; lane++) {
+-            wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, a_base, ivar);
+-            wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+-            wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
+-            wasm_emit_memarg_safe(&fn->body, 2, 0);
+-            if (is_reduction == 2 && b_base) {
+-                wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, b_base, ivar);
+-                wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+-                wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
+-                wasm_emit_memarg_safe(&fn->body, 2, 0);
+-                wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+-                wasm_buf_append_uleb128(&fn->body, WASM_SIMD_I32X4_MUL);
+-            }
++            wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
++            wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_v128_idx);
+             wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+             wasm_buf_append_uleb128(&fn->body, WASM_SIMD_I32X4_EXTRACT_LANE);
+             wasm_buf_append_u8(&fn->body, (uint8_t)lane);
+@@ -3038,6 +3102,7 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
+             lmap.tmp_i64_idx = -1;
+             lmap.tmp_f32_idx = -1;
+             lmap.tmp_f64_idx = -1;
++            lmap.tmp_v128_idx = -1;
+ 
+             Type *ret_type = curr->func_type ? curr->func_type->ret : NULL;
+ 
+diff --git a/src/wasm_emit.c b/src/wasm_emit.c
+index 1ae5c58cb..473cfe66e 100644
+--- a/src/wasm_emit.c
++++ b/src/wasm_emit.c
+@@ -499,7 +499,7 @@ int wasm_module_emit_binary(const WasmModule *mod, WASMBuffer *out) {
+     {
+         WASMBuffer prove_sec;
+         const char *sec_name = ".zcc.prove";
+-        const char *payload = "{\"compiler\":\"zcc-omega\",\"prove\":\"ZCC-PROVE-11\",\"simd128\":true,\"quad_isa\":true}";
++        const char *payload = "{\"compiler\":\"zcc-omega\",\"prove\":\"ZCC-PROVE-11..13\",\"simd128\":true,\"quad_isa\":true}";
+         size_t nlen = strlen(sec_name);
+         size_t plen = strlen(payload);
+         wasm_buf_init(&prove_sec);
+diff --git a/src/wasm_emit.h b/src/wasm_emit.h
+index c7f0601f5..bdcf6fca8 100644
+--- a/src/wasm_emit.h
++++ b/src/wasm_emit.h
+@@ -292,6 +292,7 @@ typedef struct {
+     int tmp_i64_idx;     /* Scratch local for i64 value evaluation */
+     int tmp_f32_idx;     /* Scratch local for f32 evaluation */
+     int tmp_f64_idx;     /* Scratch local for f64 evaluation */
++    int tmp_v128_idx;    /* Scratch local for v128 vector reduction */
+ } WasmLocalMap;
+ 
+ /* Function Definition */
 diff --git a/zcc_test_suite.sh b/zcc_test_suite.sh
 index defd85a99..9e026a675 100644
 --- a/zcc_test_suite.sh
