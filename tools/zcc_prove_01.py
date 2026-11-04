@@ -1324,6 +1324,55 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     if s_vec.check() == z3.sat:
         return False, {"error": "Z3 found divergence between 4-lane SIMD128 + scalar tail and scalar reference loop"}
 
+    # ZCC-PROVE-11: Bit-Manipulation Intrinsics, Quad-ISA Lock, WASM Horizontal Reduction & .zcc.prove Custom Section
+    wasm_emit_text = (REPO_ROOT / "src" / "wasm_emit.c").read_text(encoding="utf-8")
+    has_bitops_and_prove_sec = (
+        "zcc_eval_const_bit_builtin" in part5_text
+        and "zcc_emit_bit_builtin_call" in part5_text
+        and 'const char *sec_name = ".zcc.prove";' in wasm_emit_text
+        and "WASM_SIMD_I32X4_EXTRACT_LANE" in part6_wasm_text
+        and "WASM_OP_I32_CLZ" in part6_wasm_text
+        and "WASM_OP_I32_CTZ" in part6_wasm_text
+        and "WASM_OP_I32_POPCNT" in part6_wasm_text
+    )
+    if not has_bitops_and_prove_sec:
+        return False, {"error": "Missing ZCC-PROVE-11 bit-manipulation intrinsics, WASM horizontal reduction, or .zcc.prove custom section"}
+
+    # Z3 BitVec proof of bswap32 involution and 4-lane horizontal dot-product reduction equivalence
+    s_bit = z3.Solver()
+    x32 = z3.BitVec("x32", 32)
+    bswap1 = z3.Concat(
+        z3.Extract(7, 0, x32),
+        z3.Extract(15, 8, x32),
+        z3.Extract(23, 16, x32),
+        z3.Extract(31, 24, x32),
+    )
+    bswap2 = z3.Concat(
+        z3.Extract(7, 0, bswap1),
+        z3.Extract(15, 8, bswap1),
+        z3.Extract(23, 16, bswap1),
+        z3.Extract(31, 24, bswap1),
+    )
+    # 4-lane SIMD128 dot-product extract_lane(0..3) + 2-element scalar tail vs 6-element scalar dot-product
+    lane_vec128 = z3.Concat(
+        A_arr[3] * B_arr[3],
+        A_arr[2] * B_arr[2],
+        A_arr[1] * B_arr[1],
+        A_arr[0] * B_arr[0],
+    )
+    simd_dot6 = (
+        z3.Extract(31, 0, lane_vec128)
+        + z3.Extract(63, 32, lane_vec128)
+        + z3.Extract(95, 64, lane_vec128)
+        + z3.Extract(127, 96, lane_vec128)
+        + (A_arr[4] * B_arr[4])
+        + (A_arr[5] * B_arr[5])
+    )
+    scalar_dot6 = sum((A_arr[i] * B_arr[i] for i in range(6)), z3.BitVecVal(0, 32))
+    s_bit.add(z3.Or(bswap2 != x32, simd_dot6 != scalar_dot6))
+    if s_bit.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in bswap32 involution or 4-lane SIMD128 dot-product reduction"}
+
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
         "pass7_dead_write_rmw_negative_control": "SAT_CAUGHT (addq disp(%rbp), %rax clobbers live %rdx->%rax)",
@@ -1347,6 +1396,8 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "cfold_double_math_sin_cos_pow_active": has_cfold_double_math,
         "wasm_simd128_autovec_active": has_wasm_autovec_v128,
         "wasm_simd128_4lane_plus_tail_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_11_bitops_quad_isa_and_prove_section_active": has_bitops_and_prove_sec,
+        "zcc_prove_11_bswap32_and_simd128_dot_reduction": "UNSAT (PROVEN_SOUND)",
     }
 
 

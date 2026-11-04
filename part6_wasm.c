@@ -1365,6 +1365,97 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     break;
                 }
             }
+            if (strncmp(node->func_name, "__builtin_", 10) == 0 && node->num_args == 1 && node->args && node->args[0]) {
+                const char *bfn = node->func_name + 10;
+                if (strcmp(bfn, "clz") == 0 || strcmp(bfn, "ctz") == 0 || strcmp(bfn, "popcount") == 0) {
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
+                    wasm_buf_append_u8(&fn->body, (strcmp(bfn, "clz") == 0) ? WASM_OP_I32_CLZ : ((strcmp(bfn, "ctz") == 0) ? WASM_OP_I32_CTZ : WASM_OP_I32_POPCNT));
+                    break;
+                }
+                if (strcmp(bfn, "clzl") == 0 || strcmp(bfn, "clzll") == 0 ||
+                    strcmp(bfn, "ctzl") == 0 || strcmp(bfn, "ctzll") == 0 ||
+                    strcmp(bfn, "popcountl") == 0 || strcmp(bfn, "popcountll") == 0) {
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I64, cc->ty_ulonglong);
+                    wasm_buf_append_u8(&fn->body, (strncmp(bfn, "clz", 3) == 0) ? WASM_OP_I64_CLZ : ((strncmp(bfn, "ctz", 3) == 0) ? WASM_OP_I64_CTZ : WASM_OP_I64_POPCNT));
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
+                    break;
+                }
+                if (strcmp(bfn, "bswap16") == 0 && lmap->tmp_val_idx >= 0) {
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_ushort);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 255);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 8);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHL);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 8);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 255);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);
+                    break;
+                }
+                if (strcmp(bfn, "bswap32") == 0 && lmap->tmp_val_idx >= 0) {
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                    /* ((v & 0xff) << 24) | (((v >> 8) & 0xff) << 16) | (((v >> 16) & 0xff) << 8) | ((v >> 24) & 0xff) */
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 255);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 24);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHL);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 8);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 255);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 16);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHL);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 16);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 255);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 8);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHL);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 24);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 255);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);
+                    break;
+                }
+            }
             int callee_idx = node->func_name[0] ? wasm_find_func_idx(mod, node->func_name) : -1;
             int a;
             for (a = 0; a < node->num_args; a++) {
@@ -1643,30 +1734,55 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
     const char *inc_name = inc_var->sym ? inc_var->sym->name : inc_var->name;
     if (!inc_name || strcmp(inc_name, ivar_name) != 0) return;
 
-    /* Match body: dst[i] = a[i] OP b[i]  OR  dst[i] OP= b[i] */
+    /* Match body: dst[i] = a[i] OP b[i]  OR  dst[i] OP= b[i]  OR  acc += a[i] / acc += a[i] * b[i] */
     int op_kind = 0;
+    int is_reduction = 0;
     int esz_d = 0, f32_d = 0, esz_a = 0, f32_a = 0, esz_b = 0, f32_b = 0;
     Node *dst_base = wasm_match_indexed_ptr(loop_body->lhs, ivar_name, &esz_d, &f32_d);
+    Node *acc_var = NULL;
     Node *a_base = NULL;
     Node *b_base = NULL;
-    if (loop_body->kind == ND_COMPOUND_ASSIGN) {
-        op_kind = loop_body->compound_op;
-        a_base = dst_base;
-        esz_a = esz_d;
-        f32_a = f32_d;
-        b_base = wasm_match_indexed_ptr(loop_body->rhs, ivar_name, &esz_b, &f32_b);
-    } else {
-        Node *rhs = loop_body->rhs;
-        if (!rhs) return;
-        op_kind = rhs->kind;
-        a_base = wasm_match_indexed_ptr(rhs->lhs, ivar_name, &esz_a, &f32_a);
-        b_base = wasm_match_indexed_ptr(rhs->rhs, ivar_name, &esz_b, &f32_b);
+    if (!dst_base && loop_body->kind == ND_COMPOUND_ASSIGN && loop_body->compound_op == ND_ADD &&
+        loop_body->lhs && loop_body->lhs->kind == ND_VAR) {
+        const char *acc_name = loop_body->lhs->sym ? loop_body->lhs->sym->name : loop_body->lhs->name;
+        if (acc_name && acc_name[0] && strcmp(acc_name, ivar_name) != 0 &&
+            (!loop_body->lhs->type || (loop_body->lhs->type->size == 4 && !is_float_type(loop_body->lhs->type)))) {
+            a_base = wasm_match_indexed_ptr(loop_body->rhs, ivar_name, &esz_a, &f32_a);
+            if (a_base && !f32_a) {
+                acc_var = loop_body->lhs;
+                is_reduction = 1;
+            } else if (loop_body->rhs && loop_body->rhs->kind == ND_MUL) {
+                a_base = wasm_match_indexed_ptr(loop_body->rhs->lhs, ivar_name, &esz_a, &f32_a);
+                b_base = wasm_match_indexed_ptr(loop_body->rhs->rhs, ivar_name, &esz_b, &f32_b);
+                if (a_base && b_base && !f32_a && !f32_b) {
+                    acc_var = loop_body->lhs;
+                    is_reduction = 2;
+                }
+            }
+        }
     }
-    if (!dst_base || !a_base || !b_base) return;
-    if (f32_d != f32_a || f32_d != f32_b) return;
+    if (!is_reduction) {
+        if (loop_body->kind == ND_COMPOUND_ASSIGN) {
+            op_kind = loop_body->compound_op;
+            a_base = dst_base;
+            esz_a = esz_d;
+            f32_a = f32_d;
+            b_base = wasm_match_indexed_ptr(loop_body->rhs, ivar_name, &esz_b, &f32_b);
+        } else {
+            Node *rhs = loop_body->rhs;
+            if (!rhs) return;
+            op_kind = rhs->kind;
+            a_base = wasm_match_indexed_ptr(rhs->lhs, ivar_name, &esz_a, &f32_a);
+            b_base = wasm_match_indexed_ptr(rhs->rhs, ivar_name, &esz_b, &f32_b);
+        }
+        if (!dst_base || !a_base || !b_base) return;
+        if (f32_d != f32_a || f32_d != f32_b) return;
+    }
 
     uint32_t simd_op = 0;
-    if (f32_d) {
+    if (is_reduction) {
+        simd_op = (is_reduction == 2) ? WASM_SIMD_I32X4_MUL : WASM_SIMD_I32X4_ADD;
+    } else if (f32_d) {
         if (op_kind == ND_ADD) simd_op = WASM_SIMD_F32X4_ADD;
         else if (op_kind == ND_SUB) simd_op = WASM_SIMD_F32X4_SUB;
         else if (op_kind == ND_MUL) simd_op = WASM_SIMD_F32X4_MUL;
@@ -1700,21 +1816,57 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
     wasm_buf_append_u8(&fn->body, WASM_OP_BR_IF);
     wasm_buf_append_uleb128(&fn->body, 1);
 
-    /* Stack: dst_addr, v128.load(a_addr), v128.load(b_addr), simd_op, v128.store */
-    wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, dst_base, ivar);
-    wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, a_base, ivar);
-    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
-    wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
-    wasm_emit_memarg_safe(&fn->body, 2, 0);
-    wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, b_base, ivar);
-    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
-    wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
-    wasm_emit_memarg_safe(&fn->body, 2, 0);
-    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
-    wasm_buf_append_uleb128(&fn->body, simd_op);
-    wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
-    wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_STORE);
-    wasm_emit_memarg_safe(&fn->body, 2, 0);
+    if (is_reduction && acc_var) {
+        const char *acc_name = acc_var->sym ? acc_var->sym->name : acc_var->name;
+        WasmLocalEntry *aentry = wasm_local_find_entry(lmap, acc_name);
+        int lane;
+        if (!aentry || aentry->is_memory) {
+            wasm_lower_addr(cc, mod, fn, lmap, gmap, acc_var);
+        }
+        wasm_lower_expr(cc, mod, fn, lmap, gmap, acc_var);
+        wasm_emit_type_conversion(&fn->body, wasm_node_valtype(acc_var), acc_var->type, WASM_TYPE_I32, cc->ty_int);
+        for (lane = 0; lane < 4; lane++) {
+            wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, a_base, ivar);
+            wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+            wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
+            wasm_emit_memarg_safe(&fn->body, 2, 0);
+            if (is_reduction == 2 && b_base) {
+                wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, b_base, ivar);
+                wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+                wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
+                wasm_emit_memarg_safe(&fn->body, 2, 0);
+                wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+                wasm_buf_append_uleb128(&fn->body, WASM_SIMD_I32X4_MUL);
+            }
+            wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+            wasm_buf_append_uleb128(&fn->body, WASM_SIMD_I32X4_EXTRACT_LANE);
+            wasm_buf_append_u8(&fn->body, (uint8_t)lane);
+            wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD);
+        }
+        if (aentry && !aentry->is_memory) {
+            wasm_emit_type_conversion(&fn->body, WASM_TYPE_I32, cc->ty_int, aentry->val_type, acc_var->type);
+            wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+            wasm_buf_append_uleb128(&fn->body, aentry->local_idx);
+        } else {
+            wasm_emit_typed_store(&fn->body, acc_var->type ? acc_var->type : cc->ty_int, 0);
+        }
+    } else {
+        /* Stack: dst_addr, v128.load(a_addr), v128.load(b_addr), simd_op, v128.store */
+        wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, dst_base, ivar);
+        wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, a_base, ivar);
+        wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+        wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
+        wasm_emit_memarg_safe(&fn->body, 2, 0);
+        wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, b_base, ivar);
+        wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+        wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
+        wasm_emit_memarg_safe(&fn->body, 2, 0);
+        wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+        wasm_buf_append_uleb128(&fn->body, simd_op);
+        wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+        wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_STORE);
+        wasm_emit_memarg_safe(&fn->body, 2, 0);
+    }
 
     /* i = i + 4 */
     {

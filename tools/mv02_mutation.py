@@ -751,6 +751,42 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_10_standalone_arm64_riscv_codegen_cfold_math_and_wasm_autovec_v2",
     },
+    {
+        "id": "MV20-01",
+        "desc": "part5.c zcc_emit_bit_builtin_call omits xorl $31, %eax after bsrl %edi, %eax on x86-64 __builtin_clz, returning bit index (23) instead of leading-zero count (8)",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    bsrl %%%s, %%eax\\n    xorl $31, %%eax\\n", r32);',
+        "new": '      fprintf(cc->out, "    bsrl %%%s, %%eax\\n", r32); /* MV20-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_11_bit_intrinsics_quad_isa_wasm_reduction_and_prove_section",
+    },
+    {
+        "id": "MV20-02",
+        "desc": "part5.c zcc_emit_bit_builtin_call omits rbit w0, w0 before clz w0, w0 on ARM64 __builtin_ctz, breaking Quad-ISA differential execution on qemu-aarch64-static",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    rbit w0, w0\\n    clz w0, w0\\n");',
+        "new": '      fprintf(cc->out, "    clz w0, w0\\n"); /* MV20-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_11_bit_intrinsics_quad_isa_wasm_reduction_and_prove_section",
+    },
+    {
+        "id": "MV20-03",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop horizontal reduction stops at 3 lanes (lane < 3) instead of 4 lanes, dropping lane 3 from SIMD128 dot-product",
+        "file": "part6_wasm.c",
+        "old": '        for (lane = 0; lane < 4; lane++) {',
+        "new": '        for (lane = 0; lane < 3; lane++) { /* MV20-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_11_bit_intrinsics_quad_isa_wasm_reduction_and_prove_section",
+    },
+    {
+        "id": "MV20-04",
+        "desc": "src/wasm_emit.c omits .zcc.prove W3C custom section (killed by runtime & ZCC-PROVE-11)",
+        "file": "src/wasm_emit.c",
+        "old": '        const char *sec_name = ".zcc.prove";',
+        "new": '        const char *sec_name = ".zcc.unverified"; /* MV20-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_11_bit_intrinsics_quad_isa_wasm_reduction_and_prove_section && python3 tools/zcc_prove_01.py",
+    },
 ]
 
 

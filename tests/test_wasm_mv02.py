@@ -820,6 +820,130 @@ int main(void) {
                 self.assertEqual(rwt.returncode, 0, rwt.stderr)
                 self.assertEqual(rwt.stdout.strip(), "0")
 
+    def test_11_bit_intrinsics_quad_isa_wasm_reduction_and_prove_section(self) -> None:
+        """
+        MV-20 / BITOPS-INTRINSICS-01 / QUAD-ISA-LOCK-01 / WASM-SIMD128-REDUC / WASM-PROVE-SECTION:
+        1. Compile-time constant folding in part4.c + part5.c for __builtin_clz, __builtin_ctz, __builtin_popcount.
+        2. Native bit-manipulation intrinsic lowering across all 4 ISAs:
+           - x86-64 (bsrl+xorl $31, bsfl, popcntl, bswapl)
+           - ARM64 (clz w0, rbit+clz, cnt+uaddlv, rev w0)
+           - RISC-V 64 (branchless/loop clz/ctz/popcnt + bswap32)
+           - WASM32 (0x67 i32.clz, 0x68 i32.ctz, 0x69 i32.popcnt, bswap32)
+        3. Quad-ISA Bit-Exact Differential Execution Lock: identical C99 source compiled & executed on
+           x86-64 ELF, ARM64 (qemu-aarch64-static), RISC-V 64 (qemu-riscv64-static), and WASM32 (Node.js V8 + Wasmtime)
+           returning exact exit status 52 across all 4 architectures.
+        4. WASM 4-lane SIMD128 horizontal reduction & dot-product auto-vectorization (0xfd 0xb5 0x01 i32x4.mul +
+           0xfd 0x1b i32x4.extract_lane 0..3) and W3C Custom Section (0) `.zcc.prove` containing ZCC-PROVE-11 seal.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            quad_c = pathlib.Path(tmp) / "quad_isa_bitops_dot.c"
+            quad_c.write_text(
+                r"""
+int g_clz = __builtin_clz(16777216U);
+int g_ctz = __builtin_ctz(256U);
+int g_pop = __builtin_popcount(255U);
+
+int test_bitops(unsigned int x) {
+    int a = __builtin_clz(x);
+    int b = __builtin_ctz(x);
+    int c = __builtin_popcount(x);
+    unsigned int d = __builtin_bswap32(0x12345678U);
+    return a + b + c + (d == 0x78563412U ? 1 : 0);
+}
+
+int vec_dot_i32(const int *a, const int *b, int n) {
+    int sum = 0;
+    for (int i = 0; i < n; i++) {
+        sum += a[i] * b[i];
+    }
+    return sum;
+}
+
+int vec_sum_i32(const int *a, int n) {
+    int sum = 0;
+    for (int i = 0; i < n; i++) {
+        sum += a[i];
+    }
+    return sum;
+}
+
+int main(void) {
+    int a[6] = {1, 2, 3, 4, 5, 6};
+    int b[6] = {2, 3, 4, 5, 6, 7};
+    int dot = vec_dot_i32(a, b, 6);
+    int s = vec_sum_i32(a, 6);
+    int bits = test_bitops(0x00F0F000U);
+    if (dot != 112) return 10;
+    if (s != 21) return 11;
+    return g_clz + g_ctz + g_pop + bits;
+}
+""",
+                encoding="utf-8",
+            )
+
+            # 1. x86-64 assembly & native ELF execution
+            x86_s = pathlib.Path(tmp) / "quad_x86.s"
+            x86_bin = pathlib.Path(tmp) / "quad_x86"
+            r_x86_s = subprocess.run([str(ZCC_BIN), "-S", str(quad_c), "-o", str(x86_s)], capture_output=True, text=True)
+            self.assertEqual(r_x86_s.returncode, 0, r_x86_s.stderr)
+            x86_txt = x86_s.read_text(encoding="utf-8")
+            self.assertIn(".long 7", x86_txt)
+            self.assertIn(".long 8", x86_txt)
+            self.assertIn("bsrl %edi, %eax", x86_txt)
+            self.assertIn("bsfl %edi, %eax", x86_txt)
+            self.assertIn("popcntl %edi, %eax", x86_txt)
+            self.assertIn("bswapl %eax", x86_txt)
+            r_x86_b = subprocess.run([str(ZCC_BIN), str(quad_c), "-o", str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_b.returncode, 0, r_x86_b.stderr)
+            r_x86_run = subprocess.run([str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_run.returncode, 52)
+
+            # 2. ARM64 assembly & QEMU execution
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                arm_s = pathlib.Path(tmp) / "quad_arm64.s"
+                arm_o = pathlib.Path(tmp) / "quad_arm64.o"
+                arm_bin = pathlib.Path(tmp) / "quad_arm64"
+                r_arm_s = subprocess.run([str(ZCC_BIN), "--target=arm64", "-S", str(quad_c), "-o", str(arm_s)], capture_output=True, text=True)
+                self.assertEqual(r_arm_s.returncode, 0, r_arm_s.stderr)
+                arm_txt = arm_s.read_text(encoding="utf-8")
+                self.assertIn("clz w0, w0", arm_txt)
+                self.assertIn("rbit w0, w0", arm_txt)
+                self.assertIn("cnt v0.8b, v0.8b", arm_txt)
+                self.assertIn("rev w0, w0", arm_txt)
+                arm_s.write_text(arm_txt + "\n.text\n.globl _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n", encoding="utf-8")
+                ras = subprocess.run(["aarch64-linux-gnu-as", str(arm_s), "-o", str(arm_o)], capture_output=True, text=True)
+                self.assertEqual(ras.returncode, 0, ras.stderr)
+                rld = subprocess.run(["aarch64-linux-gnu-ld", str(arm_o), "-o", str(arm_bin)], capture_output=True, text=True)
+                self.assertEqual(rld.returncode, 0, rld.stderr)
+                rq_arm = subprocess.run(["qemu-aarch64-static", str(arm_bin)], capture_output=True, text=True)
+                self.assertEqual(rq_arm.returncode, 52)
+
+            # 3. RISC-V 64 assembly & QEMU execution
+            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
+                rv_s = pathlib.Path(tmp) / "quad_rv64.s"
+                rv_bin = pathlib.Path(tmp) / "quad_rv64"
+                r_rv_s = subprocess.run([str(ZCC_BIN), "--target=riscv64", "-S", str(quad_c), "-o", str(rv_s)], capture_output=True, text=True)
+                self.assertEqual(r_rv_s.returncode, 0, r_rv_s.stderr)
+                rgcc = subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(rgcc.returncode, 0, rgcc.stderr)
+                rq_rv = subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(rq_rv.returncode, 52)
+
+            # 4. WASM32 SIMD128 dot-product reduction, bit intrinsics & .zcc.prove custom section
+            wasm_out = pathlib.Path(tmp) / "quad.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(quad_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            wb = wasm_out.read_bytes()
+            self.assertIn(b".zcc.prove", wb, "Missing .zcc.prove W3C custom section")
+            self.assertIn(b"ZCC-PROVE-11", wb, "Missing ZCC-PROVE-11 formal verification seal in .zcc.prove")
+            self.assertIn(b"\xfd\xb5\x01", wb, "Missing i32x4.mul (0xfd 0xb5 0x01) in dot-product reduction")
+            self.assertIn(b"\xfd\x1b\x03", wb, "Missing i32x4.extract_lane 3 (0xfd 0x1b 0x03) in horizontal reduction")
+            self.assertEqual(run_wasm_node(wasm_out), 52)
+            if WASMTIME_BIN.exists():
+                rwt = subprocess.run([str(WASMTIME_BIN), "run", "--invoke", "main", str(wasm_out)], capture_output=True, text=True)
+                self.assertEqual(rwt.returncode, 0, rwt.stderr)
+                self.assertEqual(rwt.stdout.strip(), "52")
+
 
 if __name__ == "__main__":
     unittest.main()

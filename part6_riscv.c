@@ -283,6 +283,11 @@ void backend_normalize_asm(char **line_ptrs, int nlines) {
                 sprintf(l, "    mov x1, #%d\n", v);
             } else if (sscanf(l, "    ldr r0, =%d", &v) == 1) {
                 sprintf(l, "    mov x0, #%d\n", v);
+            } else if (strncmp(l, "    ldr r0, =", 13) == 0) {
+                memmove(l + 8, l + 8, strlen(l + 8) + 1);
+                l[8] = 'x';
+            } else if (strcmp(l, "    ldr r0, [r0]\n") == 0) {
+                strcpy(l, "    ldr x0, [x0]\n");
             } else if (sscanf(l, "    movs r0, #%d", &v) == 1) {
                 sprintf(l, "    mov x0, #%d\n", v);
             } else if (sscanf(l, "    movs r3, #%d", &v) == 1) {
@@ -331,6 +336,13 @@ void backend_normalize_asm(char **line_ptrs, int nlines) {
                 sprintf(l, "    li a1, %d\n", v);
             } else if (sscanf(l, "    ldr r0, =%d", &v) == 1) {
                 sprintf(l, "    li a0, %d\n", v);
+            } else if (strncmp(l, "    ldr r0, =", 13) == 0) {
+                char sym_buf[128];
+                if (sscanf(l + 13, "%127s", sym_buf) == 1) {
+                    sprintf(l, "    la a0, %s\n", sym_buf);
+                }
+            } else if (strcmp(l, "    ldr r0, [r0]\n") == 0) {
+                strcpy(l, "    lw a0, 0(a0)\n");
             } else if (sscanf(l, "    movs r0, #%d", &v) == 1 || sscanf(l, "    mov x0, #%d", &v) == 1) {
                 sprintf(l, "    li a0, %d\n", v);
             } else if (sscanf(l, "    movs r3, #%d", &v) == 1 || sscanf(l, "    mov x3, #%d", &v) == 1) {

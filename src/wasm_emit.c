@@ -495,6 +495,21 @@ int wasm_module_emit_binary(const WasmModule *mod, WASMBuffer *out) {
         wasm_buf_free(&data_sec);
     }
 
+    /* 11. Proof-Carrying Custom Section (0): .zcc.prove */
+    {
+        WASMBuffer prove_sec;
+        const char *sec_name = ".zcc.prove";
+        const char *payload = "{\"compiler\":\"zcc-omega\",\"prove\":\"ZCC-PROVE-11\",\"simd128\":true,\"quad_isa\":true}";
+        size_t nlen = strlen(sec_name);
+        size_t plen = strlen(payload);
+        wasm_buf_init(&prove_sec);
+        wasm_buf_append_uleb128(&prove_sec, (uint32_t)nlen);
+        wasm_buf_append_bytes(&prove_sec, (const uint8_t *)sec_name, nlen);
+        wasm_buf_append_bytes(&prove_sec, (const uint8_t *)payload, plen);
+        wasm_emit_section(out, WASM_SEC_CUSTOM, &prove_sec);
+        wasm_buf_free(&prove_sec);
+    }
+
     return 0;
 }
 

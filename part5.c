@@ -540,6 +540,42 @@ void init_compiler(Compiler *cc) {
       ft->params[0] = cc->ty_float;
       sym = scope_add(cc, "sqrtf", ft); sym->is_global = 1;
 
+      /* Bit-manipulation intrinsics */
+      {
+        const char *b32[] = {"__builtin_clz", "__builtin_ctz", "__builtin_popcount"};
+        const char *b64[] = {"__builtin_clzl", "__builtin_clzll", "__builtin_ctzl", "__builtin_ctzll", "__builtin_popcountl", "__builtin_popcountll"};
+        int bi;
+        for (bi = 0; bi < 3; bi++) {
+          ft = type_func(cc, cc->ty_int);
+          ft->num_params = 1;
+          ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+          ft->params[0] = cc->ty_uint;
+          sym = scope_add(cc, b32[bi], ft); sym->is_global = 1;
+        }
+        for (bi = 0; bi < 6; bi++) {
+          ft = type_func(cc, cc->ty_int);
+          ft->num_params = 1;
+          ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+          ft->params[0] = cc->ty_ulonglong;
+          sym = scope_add(cc, b64[bi], ft); sym->is_global = 1;
+        }
+        ft = type_func(cc, cc->ty_ushort);
+        ft->num_params = 1;
+        ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+        ft->params[0] = cc->ty_ushort;
+        sym = scope_add(cc, "__builtin_bswap16", ft); sym->is_global = 1;
+        ft = type_func(cc, cc->ty_uint);
+        ft->num_params = 1;
+        ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+        ft->params[0] = cc->ty_uint;
+        sym = scope_add(cc, "__builtin_bswap32", ft); sym->is_global = 1;
+        ft = type_func(cc, cc->ty_ulonglong);
+        ft->num_params = 1;
+        ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+        ft->params[0] = cc->ty_ulonglong;
+        sym = scope_add(cc, "__builtin_bswap64", ft); sym->is_global = 1;
+      }
+
       /* snprintf — returns int, variadic */
       ft = type_func(cc, cc->ty_int);
       ft->is_variadic = 1;
@@ -3250,6 +3286,165 @@ link_phase:
   free(source);
   free(cc);
   ir_telem_shutdown();
+  return 0;
+}
+
+int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long *out_bits) {
+  if (!fname || !out_bits) return 0;
+  if (strcmp(fname, "__builtin_clz") == 0) {
+    unsigned int v = (unsigned int)arg0_bits;
+    int n = 0;
+    if (v == 0) { *out_bits = 32; return 1; }
+    while ((v & 0x80000000U) == 0) { n++; v <<= 1; }
+    *out_bits = n;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_clzl") == 0 || strcmp(fname, "__builtin_clzll") == 0) {
+    unsigned long long v = (unsigned long long)arg0_bits;
+    int n = 0;
+    if (v == 0) { *out_bits = 64; return 1; }
+    while ((v & 0x8000000000000000ULL) == 0) { n++; v <<= 1; }
+    *out_bits = n;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_ctz") == 0) {
+    unsigned int v = (unsigned int)arg0_bits;
+    int n = 0;
+    if (v == 0) { *out_bits = 32; return 1; }
+    while ((v & 1U) == 0) { n++; v >>= 1; }
+    *out_bits = n;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_ctzl") == 0 || strcmp(fname, "__builtin_ctzll") == 0) {
+    unsigned long long v = (unsigned long long)arg0_bits;
+    int n = 0;
+    if (v == 0) { *out_bits = 64; return 1; }
+    while ((v & 1ULL) == 0) { n++; v >>= 1; }
+    *out_bits = n;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_popcount") == 0) {
+    unsigned int v = (unsigned int)arg0_bits;
+    int n = 0;
+    while (v) { n += (int)(v & 1U); v >>= 1; }
+    *out_bits = n;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_popcountl") == 0 || strcmp(fname, "__builtin_popcountll") == 0) {
+    unsigned long long v = (unsigned long long)arg0_bits;
+    int n = 0;
+    while (v) { n += (int)(v & 1ULL); v >>= 1; }
+    *out_bits = n;
+    return 1;
+  }
+  return 0;
+}
+
+int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
+  if (!cc || !node || !node->func_name[0]) return 0;
+  const char *fn = node->func_name;
+  int is_rv64 = (backend_ops && backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j');
+  int is_a64 = (backend_ops && !is_rv64 && backend_ops->ptr_size == 8);
+  const char *r32 = g_win64_abi_mode ? "ecx" : "edi";
+  const char *r64 = g_win64_abi_mode ? "rcx" : "rdi";
+
+  if (strcmp(fn, "__builtin_clz") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    bsrl %%%s, %%eax\n    xorl $31, %%eax\n", r32);
+    } else if (is_a64) {
+      fprintf(cc->out, "    clz w0, w0\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    slli t0, a0, 32\n    li a0, 32\n    beqz t0, .Lrv_clz_done_%d\n    li a0, 0\n"
+                       ".Lrv_clz_loop_%d:\n    bltz t0, .Lrv_clz_done_%d\n    slli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_clz_loop_%d\n"
+                       ".Lrv_clz_done_%d:\n", lbl, lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_clzl") == 0 || strcmp(fn, "__builtin_clzll") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    bsrq %%%s, %%rax\n    xorq $63, %%rax\n", r64);
+    } else if (is_a64) {
+      fprintf(cc->out, "    clz x0, x0\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    mv t0, a0\n    li a0, 64\n    beqz t0, .Lrv_clz_done_%d\n    li a0, 0\n"
+                       ".Lrv_clz_loop_%d:\n    bltz t0, .Lrv_clz_done_%d\n    slli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_clz_loop_%d\n"
+                       ".Lrv_clz_done_%d:\n", lbl, lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_ctz") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    bsfl %%%s, %%eax\n", r32);
+    } else if (is_a64) {
+      fprintf(cc->out, "    rbit w0, w0\n    clz w0, w0\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    li a0, 32\n    beqz t0, .Lrv_ctz_done_%d\n    li a0, 0\n"
+                       ".Lrv_ctz_loop_%d:\n    andi t1, t0, 1\n    bnez t1, .Lrv_ctz_done_%d\n    srli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_ctz_loop_%d\n"
+                       ".Lrv_ctz_done_%d:\n", lbl, lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_ctzl") == 0 || strcmp(fn, "__builtin_ctzll") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    bsfq %%%s, %%rax\n", r64);
+    } else if (is_a64) {
+      fprintf(cc->out, "    rbit x0, x0\n    clz x0, x0\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    mv t0, a0\n    li a0, 64\n    beqz t0, .Lrv_ctz_done_%d\n    li a0, 0\n"
+                       ".Lrv_ctz_loop_%d:\n    andi t1, t0, 1\n    bnez t1, .Lrv_ctz_done_%d\n    srli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_ctz_loop_%d\n"
+                       ".Lrv_ctz_done_%d:\n", lbl, lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_popcount") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    popcntl %%%s, %%eax\n", r32);
+    } else if (is_a64) {
+      fprintf(cc->out, "    fmov s0, w0\n    cnt v0.8b, v0.8b\n    uaddlv h0, v0.8b\n    fmov w0, s0\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    li a0, 0\n"
+                       ".Lrv_pop_loop_%d:\n    beqz t0, .Lrv_pop_done_%d\n    andi t1, t0, 1\n    add a0, a0, t1\n    srli t0, t0, 1\n    j .Lrv_pop_loop_%d\n"
+                       ".Lrv_pop_done_%d:\n", lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_popcountl") == 0 || strcmp(fn, "__builtin_popcountll") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    popcntq %%%s, %%rax\n", r64);
+    } else if (is_a64) {
+      fprintf(cc->out, "    fmov d0, x0\n    cnt v0.8b, v0.8b\n    uaddlv h0, v0.8b\n    fmov w0, s0\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    mv t0, a0\n    li a0, 0\n"
+                       ".Lrv_pop_loop_%d:\n    beqz t0, .Lrv_pop_done_%d\n    andi t1, t0, 1\n    add a0, a0, t1\n    srli t0, t0, 1\n    j .Lrv_pop_loop_%d\n"
+                       ".Lrv_pop_done_%d:\n", lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_bswap16") == 0 && (is_a64 || is_rv64)) {
+    if (is_a64) {
+      fprintf(cc->out, "    rev16 w0, w0\n    and w0, w0, #65535\n");
+    } else {
+      fprintf(cc->out, "    andi t0, a0, 255\n    slli t0, t0, 8\n    srli t1, a0, 8\n    andi t1, t1, 255\n    or a0, t0, t1\n");
+    }
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_bswap32") == 0 && (is_a64 || is_rv64)) {
+    if (is_a64) {
+      fprintf(cc->out, "    rev w0, w0\n");
+    } else {
+      fprintf(cc->out, "    andi t0, a0, 255\n    slli t0, t0, 24\n"
+                       "    srli t1, a0, 8\n    andi t1, t1, 255\n    slli t1, t1, 16\n    or t0, t0, t1\n"
+                       "    srli t1, a0, 16\n    andi t1, t1, 255\n    slli t1, t1, 8\n    or t0, t0, t1\n"
+                       "    srli t1, a0, 24\n    andi t1, t1, 255\n    or a0, t0, t1\n");
+    }
+    return 1;
+  }
   return 0;
 }
 

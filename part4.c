@@ -27,6 +27,8 @@ static long long eval_const_expr_p4(Node *elem, int *ok);
 long long force_truncate(long long v, Type *type);
 int is_unsigned_cmp(Node *n);
 extern void zcc_divzero_report(int line, int is_mod);
+int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long *out_bits);
+int zcc_emit_bit_builtin_call(Compiler *cc, Node *node);
 StructField *find_struct_member(Type *type, const char *name, int *out_offset);
 static Node *current_func_node = NULL;
 
@@ -4719,6 +4721,8 @@ void codegen_expr(Compiler *cc, Node *node) {
           fprintf(cc->out, "    movq 16(%%rsi), %%rax\n");
           fprintf(cc->out, "    movq %%rax, 16(%%rdi)\n");
       }
+    } else if (zcc_emit_bit_builtin_call(cc, node)) {
+      /* Emitted by zcc_emit_bit_builtin_call */
     } else if (strcmp(node->func_name, "__builtin_bswap16") == 0) {
       if (backend_ops) {
           fprintf(cc->out, "    rev16 r0, r0\n");
@@ -6735,6 +6739,13 @@ static int eval_const_call_math(Node *elem, long long *out_bits) {
                                     ((v << 8) & 0xff00000000ULL) | ((v << 24) & 0xff0000000000ULL) | ((v << 40) & 0xff000000000000ULL) | ((v << 56) & 0xff00000000000000ULL));
         }
         return 1;
+    }
+
+    if (elem->num_args == 1 && elem->args && elem->args[0] &&
+        strncmp(elem->func_name, "__builtin_", 10) == 0) {
+        ok0 = 1;
+        arg0_bits = eval_const_expr_p4(elem->args[0], &ok0);
+        if (ok0 && zcc_eval_const_bit_builtin(elem->func_name, arg0_bits, out_bits)) return 1;
     }
 
     return 0;

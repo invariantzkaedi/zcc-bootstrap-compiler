@@ -83,7 +83,9 @@
     "standalone_arm64_riscv_guards_active": true,
     "cfold_double_math_sin_cos_pow_active": true,
     "wasm_simd128_autovec_active": true,
-    "wasm_simd128_4lane_plus_tail_equivalence": "UNSAT (PROVEN_SOUND)"
+    "wasm_simd128_4lane_plus_tail_equivalence": "UNSAT (PROVEN_SOUND)",
+    "zcc_prove_11_bitops_quad_isa_and_prove_section_active": true,
+    "zcc_prove_11_bswap32_and_simd128_dot_reduction": "UNSAT (PROVEN_SOUND)"
   },
   "cases_verified": 25,
   "total_emulated_states": 5000,

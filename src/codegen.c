@@ -4640,6 +4640,32 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
             seg_append(&text_seg, &rex, 1);
           seg_append(&text_seg, &opcode, 1);
           seg_append(&text_seg, &modrm, 1);
+        } else if (strcmp(mnemonic, "bsfl") == 0 ||
+                   strcmp(mnemonic, "bsfq") == 0 ||
+                   strcmp(mnemonic, "bsrl") == 0 ||
+                   strcmp(mnemonic, "bsrq") == 0 ||
+                   strcmp(mnemonic, "popcntl") == 0 ||
+                   strcmp(mnemonic, "popcntq") == 0) {
+          /* AT&T: op %src(rm=reg1), %dst(reg=reg2) -> [0xF3] [REX] 0x0F op2 ModRM(11,reg2,reg1) */
+          int is_64 = (mnemonic[strlen(mnemonic) - 1] == 'q');
+          int is_popcnt = (strncmp(mnemonic, "popcnt", 6) == 0);
+          unsigned char opcode2 = is_popcnt ? 0xB8 : ((strncmp(mnemonic, "bsf", 3) == 0) ? 0xBC : 0xBD);
+          unsigned char rex = is_64 ? 0x48 : 0x40;
+          if (reg2 & 8)
+            rex |= 0x04;
+          if (reg1 & 8)
+            rex |= 0x01;
+          if (is_popcnt) {
+            unsigned char pref = 0xF3;
+            seg_append(&text_seg, &pref, 1);
+          }
+          if (rex != 0x40)
+            seg_append(&text_seg, &rex, 1);
+          unsigned char esc = 0x0F;
+          unsigned char modrm = 0xc0 | ((reg2 & 7) << 3) | (reg1 & 7);
+          seg_append(&text_seg, &esc, 1);
+          seg_append(&text_seg, &opcode2, 1);
+          seg_append(&text_seg, &modrm, 1);
         } else {
           fprintf(stderr,
                   "assembler error: unrecognized 2-operand instruction '%s'\n",
