@@ -1434,7 +1434,7 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         and 'strcmp(bfn, "clrsb") == 0' in part6_wasm_text
         and "WASM_SIMD_I32X4_SPLAT" in part6_wasm_text
         and "cset x0, ne" in part4_text
-        and "ZCC-PROVE-11..14" in wasm_emit_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
     )
     if not has_mv23_guards:
         return False, {"error": "Missing ZCC-PROVE-14 clrsb Quad-ISA, SIMD128 splat, or ND_LAND/ND_LOR multi-backend guards"}
@@ -1452,6 +1452,48 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     s_mv23.add(clz_u8 != spec_clrsb8)
     if s_mv23.check() == z3.sat:
         return False, {"error": "Z3 found counterexample in ZCC-PROVE-14 branchless clrsb identity"}
+
+    # 15. ZCC-PROVE-15: 2-arg __builtin_rotateleft32/64 & rotateright32/64 Quad-ISA, ND_COMPOUND_ASSIGN (/=, %=) backend_ops routing & WASM SIMD128 shift/div
+    has_mv24_guards = (
+        "zcc_eval_const_bit_builtin2" in part5_text
+        and "roll %%cl, %%eax" in part5_text
+        and "rorl %%cl, %%eax" in part5_text
+        and "neg w1, w1\\n    ror w0, w0, w1" in part5_text
+        and "andi t0, a1, 31\\n    sllw t1, a0, t0\\n    negw t2, a1\\n    andi t2, t2, 31\\n    srlw t3, a0, t2\\n    or a0, t1, t3" in part5_text
+        and 'strcmp(bfn, "rotateleft32") == 0' in part6_wasm_text
+        and "WASM_SIMD_I32X4_SHL" in part6_wasm_text
+        and "WASM_SIMD_F32X4_DIV" in part6_wasm_text
+        and "backend_ops->emit_div(cc, node_type_unsigned(node));" in part4_text
+        and "backend_ops->emit_mod(cc, node_type_unsigned(node));" in part4_text
+        and part4_text.count("backend_ops->emit_div(cc, node_type_unsigned(node));") >= 3
+        and part4_text.count("backend_ops->emit_mod(cc, node_type_unsigned(node));") >= 3
+        and "ZCC-PROVE-11..15" in wasm_emit_text
+    )
+    if not has_mv24_guards:
+        return False, {"error": "Missing ZCC-PROVE-15 rotate Quad-ISA, ND_COMPOUND_ASSIGN div/mod backend_ops, or WASM SIMD128 shift/div guards"}
+
+    s_mv24 = z3.Solver()
+    for bits in (32, 64):
+        xv = z3.BitVec(f"rot_x{bits}", bits)
+        sv = z3.BitVec(f"rot_s{bits}", bits)
+        mask = z3.BitVecVal(bits - 1, bits)
+        sh = sv & mask
+        neg_sh = (-sv) & mask
+        # RISC-V / C constant-folding identity: (x << (s & (W-1))) | (x >>_u ((-s) & (W-1)))
+        rv_rotl = (xv << sh) | z3.LShR(xv, neg_sh)
+        rv_rotr = z3.LShR(xv, sh) | (xv << neg_sh)
+        # ARM64 identity: rotl(x, s) == rotr(x, -s)
+        arm_rotl_via_neg_rotr = z3.RotateRight(xv, neg_sh)
+        s_mv24.add(
+            z3.Or(
+                rv_rotl != z3.RotateLeft(xv, sh),
+                rv_rotr != z3.RotateRight(xv, sh),
+                arm_rotl_via_neg_rotr != z3.RotateLeft(xv, sh),
+                z3.RotateRight(z3.RotateLeft(xv, sh), sh) != xv,
+            )
+        )
+    if s_mv24.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-15 32/64-bit rotate Quad-ISA equivalence"}
 
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
@@ -1484,6 +1526,8 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "zcc_prove_13_ffs_and_parity_equivalence": "UNSAT (PROVEN_SOUND)",
         "zcc_prove_14_clrsb_simd128_splat_and_logic_ops_active": has_mv23_guards,
         "zcc_prove_14_branchless_clrsb_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_15_rotate_quad_isa_divmod_and_simd128_shift_div_active": has_mv24_guards,
+        "zcc_prove_15_rotate_32_64_quad_isa_equivalence": "UNSAT (PROVEN_SOUND)",
     }
 
 

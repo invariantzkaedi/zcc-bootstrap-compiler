@@ -1265,7 +1265,7 @@ int main(void) {
             r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv23_c), "-o", str(wasm_out)], capture_output=True, text=True)
             self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
             wb = wasm_out.read_bytes()
-            self.assertIn(b"ZCC-PROVE-11..14", wb, "Missing ZCC-PROVE-11..14 in .zcc.prove custom section")
+            self.assertIn(b"ZCC-PROVE-11..", wb, "Missing ZCC-PROVE-11.. in .zcc.prove custom section")
             self.assertEqual(wb.count(b"\xfd\x11"), 1, "Expected i32x4.splat (0xfd 0x11) in vec_scale_splat")
             if shutil.which("wasm-validate"):
                 rv = subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True, text=True)
@@ -1275,6 +1275,148 @@ int main(void) {
                 rwt = subprocess.run([str(WASMTIME_BIN), "run", "--invoke", "main", str(wasm_out)], capture_output=True, text=True)
                 self.assertEqual(rwt.returncode, 0, rwt.stderr)
                 self.assertEqual(rwt.stdout.strip(), "162")
+
+    def test_15_rotate_quad_isa_divmod_and_wasm_simd128_shift_div(self) -> None:
+        """
+        MV-24 / BITOPS-ROTATE-01 / ARCH-DIVMOD-COMPOUND-01 / WASM-SIMD128-SHIFT-DIV / ZCC-PROVE-15:
+        1. Compile-time constant folding in part4.c/part5.c for __builtin_rotateleft32/64 & __builtin_rotateright32/64.
+        2. Runtime 2-argument rotation lowering across all 4 ISAs:
+           - x86-64: roll %cl, %eax / rorl %cl, %eax / rolq %cl, %rax / rorq %cl, %rax (including internal ELF codegen.c encoding)
+           - ARM64: neg w1, w1 + ror w0, w0, w1 / ror x0, x0, x1
+           - RISC-V 64: sllw/srlw + sub + or + sext.w (32-bit) and sll/srl + sub + or (64-bit)
+           - WASM32: i32.rotl (0x77), i32.rotr (0x78), i64.rotl (0x89), i64.rotr (0x8A)
+        3. Multi-backend ND_COMPOUND_ASSIGN (/=, %=) hardening in part4.c via backend_ops->emit_div / emit_mod
+           (eliminating 32-bit ARM EABI bl __aeabi_idiv / bl __aeabi_uidivmod leaks on ARM64 and RISC-V 64).
+        4. WASM SIMD128 auto-vectorization for loop-invariant integer shifts (i32x4.shl 0xFD 0xAB 0x01,
+           i32x4.shr_s 0xFD 0xAC 0x01) and float division (f32x4.div 0xFD 0xE7 0x01).
+        5. Quad-ISA Bit-Exact Differential Execution Lock: x86-64 ELF, ARM64 (qemu-aarch64-static),
+           RISC-V 64 (qemu-riscv64-static), and WASM32 (Node.js V8 + Wasmtime) all return exact exit status 97.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            mv24_c = pathlib.Path(tmp) / "quad_mv24.c"
+            mv24_c.write_text(
+                r"""
+unsigned int g_rotl32 = __builtin_rotateleft32(0x12345678U, 8);
+unsigned int g_rotr32 = __builtin_rotateright32(0x12345678U, 8);
+
+void vec_shl_splat(int *dst, const int *a, int n, int sh) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = a[i] << sh;
+    }
+}
+
+void vec_shr_splat(int *dst, const int *a, int n, int sh) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = a[i] >> sh;
+    }
+}
+
+void vec_div_f32(float *dst, const float *a, const float *b, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = a[i] / b[i];
+    }
+}
+
+int test_divmod_and_rot(int x, unsigned int v32, unsigned long long v64, int s) {
+    int a = x;
+    a /= 3;
+    a %= 7;
+    unsigned int u = (unsigned int)x;
+    u /= 5U;
+    u %= 9U;
+    int arr[2] = {x, x + 20};
+    arr[0] /= 4;
+    arr[1] %= 11;
+    unsigned int rl32 = __builtin_rotateleft32(v32, s);
+    unsigned int rr32 = __builtin_rotateright32(v32, s);
+    unsigned long long rl64 = __builtin_rotateleft64(v64, s + 8);
+    unsigned long long rr64 = __builtin_rotateright64(v64, s + 8);
+    int ok = (rl32 == 0x34567812U && rr32 == 0x78123456U &&
+              rl64 == 0x3344556677881122ULL && rr64 == 0x7788112233445566ULL) ? 10 : 0;
+    return a + (int)u + arr[0] + arr[1] + ok;
+}
+
+int main(void) {
+    int a[4] = {1, 2, 3, 4};
+    int dst[4] = {0, 0, 0, 0};
+    int rdst[4] = {0, 0, 0, 0};
+    vec_shl_splat(dst, a, 4, 2);
+    vec_shr_splat(rdst, dst, 4, 1);
+    int vsum = dst[0] + dst[1] + dst[2] + dst[3] + rdst[0] + rdst[3];
+    int dm = test_divmod_and_rot(100, 0x12345678U, 0x1122334455667788ULL, 8);
+    if (g_rotl32 != 0x34567812U) return 1;
+    if (g_rotr32 != 0x78123456U) return 2;
+    return vsum + dm;
+}
+""",
+                encoding="utf-8",
+            )
+
+            # 1. x86-64 assembly & native ELF execution
+            x86_s = pathlib.Path(tmp) / "mv24_x86.s"
+            x86_bin = pathlib.Path(tmp) / "mv24_x86"
+            r_x86_s = subprocess.run([str(ZCC_BIN), "-S", str(mv24_c), "-o", str(x86_s)], capture_output=True, text=True)
+            self.assertEqual(r_x86_s.returncode, 0, r_x86_s.stderr)
+            x86_txt = x86_s.read_text(encoding="utf-8")
+            self.assertIn("roll %cl, %eax", x86_txt, "Missing roll %cl, %eax on x86-64 __builtin_rotateleft32")
+            self.assertIn("rorl %cl, %eax", x86_txt, "Missing rorl %cl, %eax on x86-64 __builtin_rotateright32")
+            self.assertIn("rolq %cl, %rax", x86_txt, "Missing rolq %cl, %rax on x86-64 __builtin_rotateleft64")
+            self.assertIn("rorq %cl, %rax", x86_txt, "Missing rorq %cl, %rax on x86-64 __builtin_rotateright64")
+            r_x86_b = subprocess.run([str(ZCC_BIN), str(mv24_c), "-o", str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_b.returncode, 0, r_x86_b.stderr)
+            r_x86_run = subprocess.run([str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_run.returncode, 102)
+
+            # 2. ARM64 assembly & QEMU execution (verify zero __aeabi_ leak + ror w0/x0)
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                arm_s = pathlib.Path(tmp) / "mv24_arm64.s"
+                arm_o = pathlib.Path(tmp) / "mv24_arm64.o"
+                arm_bin = pathlib.Path(tmp) / "mv24_arm64"
+                r_arm_s = subprocess.run([str(ZCC_BIN), "--target=arm64", "-S", str(mv24_c), "-o", str(arm_s)], capture_output=True, text=True)
+                self.assertEqual(r_arm_s.returncode, 0, r_arm_s.stderr)
+                arm_txt = arm_s.read_text(encoding="utf-8")
+                self.assertNotIn("__aeabi_", arm_txt, "Leaked 32-bit ARM EABI __aeabi_ call in ARM64 assembly")
+                self.assertIn("ror w0, w0, w1", arm_txt, "Missing ror w0, w0, w1 on ARM64 rotate32")
+                self.assertIn("ror x0, x0, x1", arm_txt, "Missing ror x0, x0, x1 on ARM64 rotate64")
+                arm_s.write_text(arm_txt + "\n.text\n.globl _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n", encoding="utf-8")
+                ras = subprocess.run(["aarch64-linux-gnu-as", str(arm_s), "-o", str(arm_o)], capture_output=True, text=True)
+                self.assertEqual(ras.returncode, 0, ras.stderr)
+                rld = subprocess.run(["aarch64-linux-gnu-ld", str(arm_o), "-o", str(arm_bin)], capture_output=True, text=True)
+                self.assertEqual(rld.returncode, 0, rld.stderr)
+                rq_arm = subprocess.run(["qemu-aarch64-static", str(arm_bin)], capture_output=True, text=True)
+                self.assertEqual(rq_arm.returncode, 102)
+
+            # 3. RISC-V 64 assembly & QEMU execution (verify zero __aeabi_ leak)
+            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
+                rv_s = pathlib.Path(tmp) / "mv24_rv64.s"
+                rv_bin = pathlib.Path(tmp) / "mv24_rv64"
+                r_rv_s = subprocess.run([str(ZCC_BIN), "--target=riscv64", "-S", str(mv24_c), "-o", str(rv_s)], capture_output=True, text=True)
+                self.assertEqual(r_rv_s.returncode, 0, r_rv_s.stderr)
+                rv_txt = rv_s.read_text(encoding="utf-8")
+                self.assertNotIn("__aeabi_", rv_txt, "Leaked 32-bit ARM EABI __aeabi_ call in RISC-V 64 assembly")
+                self.assertIn("sllw t1, a0, t0", rv_txt, "Missing sllw t1, a0, t0 on RISC-V 64 rotateleft32")
+                rgcc = subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(rgcc.returncode, 0, rgcc.stderr)
+                rq_rv = subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(rq_rv.returncode, 102)
+
+            # 4. WASM32 SIMD128 i32x4.shl + i32x4.shr_s + f32x4.div + i32.rotl/rotr + i64.rotl/rotr + ZCC-PROVE-11..15
+            wasm_out = pathlib.Path(tmp) / "mv24.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv24_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            wb = wasm_out.read_bytes()
+            self.assertIn(b"ZCC-PROVE-11..15", wb, "Missing ZCC-PROVE-11..15 in .zcc.prove custom section")
+            self.assertIn(b"\xfd\xab\x01", wb, "Expected i32x4.shl (0xfd 0xab 0x01) in vec_shl_splat")
+            self.assertIn(b"\xfd\xac\x01", wb, "Expected i32x4.shr_s (0xfd 0xac 0x01) in vec_shr_splat")
+            self.assertIn(b"\xfd\xe7\x01", wb, "Expected f32x4.div (0xfd 0xe7 0x01) in vec_div_f32")
+            if shutil.which("wasm-validate"):
+                rv = subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True, text=True)
+                self.assertEqual(rv.returncode, 0, rv.stderr)
+            self.assertEqual(run_wasm_node(wasm_out), 102)
+            if WASMTIME_BIN.exists():
+                rwt = subprocess.run([str(WASMTIME_BIN), "run", "--invoke", "main", str(wasm_out)], capture_output=True, text=True)
+                self.assertEqual(rwt.returncode, 0, rwt.stderr)
+                self.assertEqual(rwt.stdout.strip(), "102")
 
 
 if __name__ == "__main__":

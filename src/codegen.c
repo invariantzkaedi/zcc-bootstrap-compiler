@@ -4325,9 +4325,13 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
         } else if (strcmp(mnemonic, "sarq") == 0 ||
                    strcmp(mnemonic, "shlq") == 0 ||
                    strcmp(mnemonic, "shrq") == 0 ||
+                   strcmp(mnemonic, "rolq") == 0 ||
+                   strcmp(mnemonic, "rorq") == 0 ||
                    strcmp(mnemonic, "sarl") == 0 ||
                    strcmp(mnemonic, "shll") == 0 ||
                    strcmp(mnemonic, "shrl") == 0 ||
+                   strcmp(mnemonic, "roll") == 0 ||
+                   strcmp(mnemonic, "rorl") == 0 ||
                    strcmp(mnemonic, "sarw") == 0 ||
                    strcmp(mnemonic, "shlw") == 0 ||
                    strcmp(mnemonic, "shrw") == 0 ||
@@ -4364,16 +4368,14 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
               opcode = 0xc1;
             }
 
-            int shift_type = 0;
-            if (strncmp(mnemonic, "sar", 3) == 0)
-              shift_type = 2;
-            else if (strncmp(mnemonic, "shr", 3) == 0)
-              shift_type = 1;
-
-            if (shift_type == 2) {
+            if (strncmp(mnemonic, "sar", 3) == 0) {
               modrm = 0xf8 | (reg2 & 7);
-            } else if (shift_type == 1) {
+            } else if (strncmp(mnemonic, "shr", 3) == 0) {
               modrm = 0xe8 | (reg2 & 7);
+            } else if (strncmp(mnemonic, "rol", 3) == 0) {
+              modrm = 0xc0 | (reg2 & 7);
+            } else if (strncmp(mnemonic, "ror", 3) == 0) {
+              modrm = 0xc8 | (reg2 & 7);
             } else {
               modrm = 0xe0 | (reg2 & 7);
             }
@@ -4414,16 +4416,14 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
               opcode = 0xd3;
             }
 
-            int shift_type = 0;
-            if (strncmp(mnemonic, "sar", 3) == 0)
-              shift_type = 2;
-            else if (strncmp(mnemonic, "shr", 3) == 0)
-              shift_type = 1;
-
-            if (shift_type == 2) {
+            if (strncmp(mnemonic, "sar", 3) == 0) {
               modrm = 0xf8 | (reg2 & 7);
-            } else if (shift_type == 1) {
+            } else if (strncmp(mnemonic, "shr", 3) == 0) {
               modrm = 0xe8 | (reg2 & 7);
+            } else if (strncmp(mnemonic, "rol", 3) == 0) {
+              modrm = 0xc0 | (reg2 & 7);
+            } else if (strncmp(mnemonic, "ror", 3) == 0) {
+              modrm = 0xc8 | (reg2 & 7);
             } else {
               modrm = 0xe0 | (reg2 & 7);
             }

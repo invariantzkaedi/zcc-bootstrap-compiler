@@ -1,0 +1,4 @@
+bash scripts/run_mv02_gate.sh
+python3 -m unittest discover -s tests -p "test_wasm_mv02.py" -v
+python3 tools/zcc_prove_01.py --out-json docs/evidence/2026-11-01/wasm-mv02/zcc_prove_01.json
+python3 tools/mv02_mutation.py --repo . --run-ledger --out-json docs/evidence/2026-11-01/wasm-mv02/mv02_mutation_ledger.json

@@ -28,6 +28,7 @@ long long force_truncate(long long v, Type *type);
 int is_unsigned_cmp(Node *n);
 extern void zcc_divzero_report(int line, int is_mod);
 int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long *out_bits);
+int zcc_eval_const_bit_builtin2(const char *fname, long long arg0_bits, long long arg1_bits, long long *out_bits);
 int zcc_emit_bit_builtin_call(Compiler *cc, Node *node);
 StructField *find_struct_member(Type *type, const char *name, int *out_offset);
 static Node *current_func_node = NULL;
@@ -1451,10 +1452,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         break;
       case ND_DIV:
         if (backend_ops) {
-          if (node_type_unsigned(node))
-            fprintf(cc->out, "    bl __aeabi_uidiv\n");
-          else
-            fprintf(cc->out, "    bl __aeabi_idiv\n");
+          backend_ops->emit_div(cc, node_type_unsigned(node));
         } else if (node_type_unsigned(node)) {
           if (node->type && type_size(node->type) <= 4) {
             fprintf(cc->out, "    xorl %%edx, %%edx\n    divl %%r11d\n");
@@ -1471,13 +1469,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         break;
       case ND_MOD:
         if (backend_ops) {
-          if (node_type_unsigned(node)) {
-            fprintf(cc->out, "    bl __aeabi_uidivmod\n");
-            fprintf(cc->out, "    movs r0, r1\n");
-          } else {
-            fprintf(cc->out, "    bl __aeabi_idivmod\n");
-            fprintf(cc->out, "    movs r0, r1\n");
-          }
+          backend_ops->emit_mod(cc, node_type_unsigned(node));
         } else if (node_type_unsigned(node)) {
           if (node->type && type_size(node->type) <= 4) {
             fprintf(cc->out, "    xorl %%edx, %%edx\n    divl %%r11d\n    movq %%rdx, %%rax\n");
@@ -1721,10 +1713,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         break;
       }
       if (backend_ops) {
-        if (node_type_unsigned(node))
-          fprintf(cc->out, "    bl __aeabi_uidiv\n");
-        else
-          fprintf(cc->out, "    bl __aeabi_idiv\n");
+        backend_ops->emit_div(cc, node_type_unsigned(node));
         break;
       }
       if (node_type_unsigned(node)) {
@@ -1743,13 +1732,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       break;
     case ND_MOD:
       if (backend_ops) {
-        if (node_type_unsigned(node)) {
-          fprintf(cc->out, "    bl __aeabi_uidivmod\n");
-          fprintf(cc->out, "    movs r0, r1\n");
-        } else {
-          fprintf(cc->out, "    bl __aeabi_idivmod\n");
-          fprintf(cc->out, "    movs r0, r1\n");
-        }
+        backend_ops->emit_mod(cc, node_type_unsigned(node));
         break;
       }
       if (node_type_unsigned(node)) {
@@ -6757,6 +6740,13 @@ static int eval_const_call_math(Node *elem, long long *out_bits) {
         ok0 = 1;
         arg0_bits = eval_const_expr_p4(elem->args[0], &ok0);
         if (ok0 && zcc_eval_const_bit_builtin(elem->func_name, arg0_bits, out_bits)) return 1;
+    }
+    if (elem->num_args == 2 && elem->args && elem->args[0] && elem->args[1] &&
+        strncmp(elem->func_name, "__builtin_", 10) == 0) {
+        ok0 = 1; ok1 = 1;
+        arg0_bits = eval_const_expr_p4(elem->args[0], &ok0);
+        arg1_bits = eval_const_expr_p4(elem->args[1], &ok1);
+        if (ok0 && ok1 && zcc_eval_const_bit_builtin2(elem->func_name, arg0_bits, arg1_bits, out_bits)) return 1;
     }
 
     return 0;

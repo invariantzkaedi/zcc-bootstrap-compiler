@@ -91,7 +91,9 @@
     "zcc_prove_13_ffs_parity_v128_accum_and_cmp_assign_active": true,
     "zcc_prove_13_ffs_and_parity_equivalence": "UNSAT (PROVEN_SOUND)",
     "zcc_prove_14_clrsb_simd128_splat_and_logic_ops_active": true,
-    "zcc_prove_14_branchless_clrsb_equivalence": "UNSAT (PROVEN_SOUND)"
+    "zcc_prove_14_branchless_clrsb_equivalence": "UNSAT (PROVEN_SOUND)",
+    "zcc_prove_15_rotate_quad_isa_divmod_and_simd128_shift_div_active": true,
+    "zcc_prove_15_rotate_32_64_quad_isa_equivalence": "UNSAT (PROVEN_SOUND)"
   },
   "cases_verified": 25,
   "total_emulated_states": 5000,

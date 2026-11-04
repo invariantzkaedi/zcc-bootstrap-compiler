@@ -895,6 +895,42 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_14_clrsb_quad_isa_simd128_splat_and_logic_ops && python3 tools/zcc_prove_01.py",
     },
+    {
+        "id": "MV24-01",
+        "desc": "part5.c zcc_emit_bit_builtin_call emits rorl %cl, %eax instead of roll %cl, %eax on x86-64 __builtin_rotateleft32",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    movl %%%s, %%eax\\n    movl %%%s, %%ecx\\n    roll %%cl, %%eax\\n", r32, s32);',
+        "new": '      fprintf(cc->out, "    movl %%%s, %%eax\\n    movl %%%s, %%ecx\\n    rorl %%cl, %%eax\\n", r32, s32); /* MV24-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_15_rotate_quad_isa_divmod_and_wasm_simd128_shift_div",
+    },
+    {
+        "id": "MV24-02",
+        "desc": "part5.c zcc_emit_bit_builtin_call omits neg w1, w1 on ARM64 __builtin_rotateleft32, rotating right instead of left",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    neg w1, w1\\n    ror w0, w0, w1\\n");',
+        "new": '      fprintf(cc->out, "    ror w0, w0, w1\\n"); /* MV24-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_15_rotate_quad_isa_divmod_and_wasm_simd128_shift_div",
+    },
+    {
+        "id": "MV24-03",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop disables ND_SHL SIMD128 vectorization (WASM_SIMD_I32X4_SHL)",
+        "file": "part6_wasm.c",
+        "old": '        else if (op_kind == ND_SHL && b_scalar && !b_base) {',
+        "new": '        else if (0 && op_kind == ND_SHL && b_scalar && !b_base) { /* MV24-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_15_rotate_quad_isa_divmod_and_wasm_simd128_shift_div",
+    },
+    {
+        "id": "MV24-04",
+        "desc": "part4.c ND_COMPOUND_ASSIGN ND_DIV calls emit_mod instead of emit_div on non-x86 backends, breaking /= on ARM64 & RISC-V 64 and ZCC-PROVE-15",
+        "file": "part4.c",
+        "old": '        if (backend_ops) {\n          backend_ops->emit_div(cc, node_type_unsigned(node));',
+        "new": '        if (backend_ops) {\n          backend_ops->emit_mod(cc, node_type_unsigned(node)); /* MV24-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_15_rotate_quad_isa_divmod_and_wasm_simd128_shift_div && python3 tools/zcc_prove_01.py",
+    },
 ]
 
 

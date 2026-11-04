@@ -14,7 +14,7 @@ extern int rand(void);
 #include "src/zcc_smt_prover.h"
 
 #ifndef ZCC_AST_BRIDGE_H
-/* 
+/*
  * This block is exclusively for IDE syntax analysis when viewing part5.c alone.
  * Since part1.c #includes zcc_ast_bridge.h, this #ifndef prevents infinite loops
  * and double-definitions when part1...5 are concatenated into zcc.c.
@@ -37,11 +37,11 @@ extern void zcc_telem_phase(int phase, const char *phase_name, const char *statu
 /* ZCC Resource Oracle telemetry global declarations */
 extern void zcc_oracle_init(const char *source_file);
 extern void zcc_oracle_shutdown(void);
-extern void zcc_oracle_log_pass(const char *pass_name, const char *function_name, 
-                                double duration_ms, size_t heap_bytes, 
+extern void zcc_oracle_log_pass(const char *pass_name, const char *function_name,
+                                double duration_ms, size_t heap_bytes,
                                 int spills, int virtual_regs, int physical_regs);
-extern void zcc_oracle_log_sentinel(size_t idt_size, size_t gdt_size, 
-                                    size_t base_offset, size_t idt_entry_size, 
+extern void zcc_oracle_log_sentinel(size_t idt_size, size_t gdt_size,
+                                    size_t base_offset, size_t idt_entry_size,
                                     size_t gdt_entry_size, size_t multiboot_offset);
 
 /* ForgeZero audit receipt integration — defensive scaffold only.
@@ -574,6 +574,24 @@ void init_compiler(Compiler *cc) {
         ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
         ft->params[0] = cc->ty_ulonglong;
         sym = scope_add(cc, "__builtin_bswap64", ft); sym->is_global = 1;
+        {
+          const char *rot32[] = {"__builtin_rotateleft32", "__builtin_rotateright32"};
+          const char *rot64[] = {"__builtin_rotateleft64", "__builtin_rotateright64"};
+          for (bi = 0; bi < 2; bi++) {
+            ft = type_func(cc, cc->ty_uint);
+            ft->num_params = 2;
+            ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
+            ft->params[0] = cc->ty_uint;
+            ft->params[1] = cc->ty_uint;
+            sym = scope_add(cc, rot32[bi], ft); sym->is_global = 1;
+            ft = type_func(cc, cc->ty_ulonglong);
+            ft->num_params = 2;
+            ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
+            ft->params[0] = cc->ty_ulonglong;
+            ft->params[1] = cc->ty_ulonglong;
+            sym = scope_add(cc, rot64[bi], ft); sym->is_global = 1;
+          }
+        }
       }
 
       /* snprintf — returns int, variadic */
@@ -1405,7 +1423,7 @@ static void security_nullderef_scan(Compiler *cc, char *filename) {
            }
            current_owner[k] = 0;
            if (strcmp(current_owner, "_") == 0) current_owner[0] = 0;
-           
+
            if (meta_match[k] == '@') {
                meta_match += k + 1;
                /* file */
@@ -1415,7 +1433,7 @@ static void security_nullderef_scan(Compiler *cc, char *filename) {
                    k++;
                }
                current_file[k] = 0;
-               
+
                if (meta_match[k] == ':') {
                    current_line = atoi(meta_match + k + 1);
                }
@@ -1552,7 +1570,7 @@ static void security_bounds_scan(Compiler *cc, char *filename) {
           while (ptr[k] && ptr[k] != ' ' && k < 63) { array_name[k] = ptr[k]; k++; }
           array_name[k] = 0;
       }
-      
+
       ptr = strstr(lp[i], "index=");
       if (ptr) {
           ptr += 6;
@@ -1568,7 +1586,7 @@ static void security_bounds_scan(Compiler *cc, char *filename) {
           while (ptr[k] && ptr[k] != ' ' && k < 31) { size_str[k] = ptr[k]; k++; }
           size_str[k] = 0;
       }
-      
+
       ptr = strstr(lp[i], "@");
       if (ptr) {
           ptr += 1;
@@ -2222,16 +2240,16 @@ int zcc_main(int argc, char **argv) {
       extern int ir_deserialize_json(ir_module_t *mod, const char *in_filename, Compiler *cc);
       ZCC_IR_INIT();
       g_ir_module = ir_module_create();
-      
+
       cc = (Compiler *)calloc(1, sizeof(Compiler));
       cc->filename = "replayed_ir";
-      
+
       int parse_ret = ir_deserialize_json(g_ir_module, g_replay_ir_path, cc);
       if (parse_ret != 0) {
           fprintf(stderr, "zcc: failed to deserialize IR graph '%s'\n", g_replay_ir_path);
           return 1;
       }
-      
+
       if (!output_file) output_file = "a.out";
       { size_t _ol = strlen(output_file); if (_ol >= 2 && output_file[_ol-2] == '.' && output_file[_ol-1] == 's') { strncpy(asm_file, output_file, sizeof(asm_file)-1); } else { sprintf(asm_file, "%s.s", output_file); } }
       cc->out = fopen(asm_file, "w");
@@ -2239,13 +2257,13 @@ int zcc_main(int argc, char **argv) {
           fprintf(stderr, "zcc: cannot open output file '%s'\n", asm_file);
           return 1;
       }
-      
+
       /* CG-IR-OPT-001: fold IR_CONST->IR_RET before lowering */
       /* { extern int ir_fold_const_ret_module(ir_module_t *mod);
         ir_fold_const_ret_module(g_ir_module); } */
       /* Run the standard optimization passes if requested! */
       /* ir_pm_run_default(g_ir_module, 1); */
-      
+
       /* Lower to x86-64 assembly! */
       extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div);
       ir_module_lower_x86(g_ir_module, cc->out, cc->safe_div);
@@ -2259,7 +2277,7 @@ int zcc_main(int argc, char **argv) {
       if (opt_peephole_replay) {
           peephole_optimize(asm_file);
       }
-      
+
       /* Now go to linking phase cleanly! */
       stop_at_asm = 0;
       if (compile_only) stop_at_asm = 1;
@@ -2560,7 +2578,7 @@ int zcc_main(int argc, char **argv) {
     if (getenv("ZCC_OFFLINE_HUNT")) {
         if (!enable_telemetry_stdout) printf("[WARDEN] Offline mode active. Bypassing PyTorch IPC. Dumping raw telemetry...\n");
         extern void evm_decompile(const unsigned char*, size_t, const char*, int);
-        
+
         if (symbolic_mode) {
             extern void evm_run_symbolic_from_bytecode(const unsigned char* bytecode, size_t len, int smt_mode);
             evm_run_symbolic_from_bytecode((const unsigned char*)source, source_len, g_smt_mode);
@@ -2568,7 +2586,7 @@ int zcc_main(int argc, char **argv) {
             /* Dump decompiled pseudo-code directly to stderr for inspection */
             evm_decompile((const unsigned char*)source, source_len, "/dev/stderr", abi_mode);
         }
-        
+
         free(source);
         return 0;
     }
@@ -2581,7 +2599,7 @@ int zcc_main(int argc, char **argv) {
 
     if (!enable_telemetry_stdout) printf("[WARDEN] Initializing zero-day MEV hunt mode...\n");
     ipc_bridge_init();
-    
+
     FILE *tx = ipc_bridge_open_tx();
     if (tx) {
         if (!enable_telemetry_stdout) printf("[WARDEN] Streaming decompiled AST to PyTorch orchestrator...\n");
@@ -2589,15 +2607,15 @@ int zcc_main(int argc, char **argv) {
         /* We write it directly using evm_decompile to the pipe path */
         fclose(tx); /* Let evm_decompile open it */
         evm_decompile((const unsigned char*)source, source_len, "/tmp/warden_tx.pipe", abi_mode);
-        
+
         if (!enable_telemetry_stdout) printf("[WARDEN] Awaiting synthesized IR payload...\n");
         char *payload = ipc_bridge_receive();
         if (payload) {
             if (!enable_telemetry_stdout) printf("[WARDEN] Exploit payload received. Length: %zu bytes.\n", strlen(payload));
-            
+
             extern void ipc_bridge_compile_and_strike(char *payload);
             ipc_bridge_compile_and_strike(payload);
-            
+
             free(payload);
             free(source);
             return 0;
@@ -2623,14 +2641,14 @@ int zcc_main(int argc, char **argv) {
   if (prove_mode) {
     extern void evm_symbolic_run(const unsigned char* bytecode, size_t len, const char* prop);
     evm_symbolic_run((const unsigned char*)source, source_len, prove_prop ? prove_prop : "no-revert");
-    
+
     // Export proof to SMT2
     extern ir_module_t* g_ir_module;
     if (g_ir_module && g_ir_module->func_count > 0) {
         extern void export_smt2(ir_func_t* graph, const char* path);
         export_smt2(g_ir_module->funcs[0], smt_out_file[0] ? smt_out_file : "proof.smt2");
     }
-    
+
     free(source);
     return 0;
   }
@@ -2669,7 +2687,7 @@ int zcc_main(int argc, char **argv) {
           if (!enable_telemetry_stdout) printf("zcc: out of memory\n");
           free(source); return 1;
       }
-      
+
       stop_at_asm = 0;
       strncpy(asm_file, output_file ? output_file : "a.s", 250);
       int alf = 0; while (asm_file[alf]) alf++;
@@ -2678,13 +2696,13 @@ int zcc_main(int argc, char **argv) {
       } else {
           asm_file[alf] = '.'; asm_file[alf + 1] = 's'; asm_file[alf + 2] = 0;
       }
-      
+
       cc->out = fopen(asm_file, "w");
       if (!cc->out) {
           printf("zcc: cannot write '%s'\n", asm_file);
           free(source); free(cc); return 1;
       }
-      
+
       char sym[256];
       int si = 0;
       const char *p = input_file;
@@ -2699,13 +2717,13 @@ int zcc_main(int argc, char **argv) {
           p++;
       }
       sym[si] = '\0';
-      
+
       fprintf(cc->out, ".data\n");
       fprintf(cc->out, ".global %s_data\n", sym);
       fprintf(cc->out, ".global %s_len\n", sym);
       fprintf(cc->out, ".align 8\n");
       fprintf(cc->out, "%s_data:\n", sym);
-      
+
       int col = 0;
       for (i = 0; i < source_len; i++) {
           if (col == 0) fprintf(cc->out, "  .byte ");
@@ -2720,7 +2738,7 @@ int zcc_main(int argc, char **argv) {
       }
       fprintf(cc->out, "  .byte 0x00\n");
       fprintf(cc->out, "\n%s_len:\n  .long %d\n", sym, source_len);
-      
+
       fclose(cc->out);
       if (!enable_telemetry_stdout) printf("[OK] Asset %s compiled to assembly.\n", input_file);
       goto link_phase;
@@ -3036,7 +3054,7 @@ int zcc_main(int argc, char **argv) {
   zcc_telem_phase(3, "constant_folding", "OK", p3_us, "nodes_folded", 0, "dce_eliminated", 0, "errors", 0);
   zcc_oracle_log_pass("constant_folding", "_global", (double)(p3_end - p3_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
   if (!enable_telemetry_stdout) printf("[Phase 4] SystemV ABI X86-64 Codegen... OK\n");
-  
+
   long p4_start = clock();
   if (g_ir_primary && g_ir_module) {
       /* Dummy pass to generate IR. We write the AST codegen to a temp file or just let it overwrite.
@@ -3405,6 +3423,39 @@ int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long
   return 0;
 }
 
+int zcc_eval_const_bit_builtin2(const char *fname, long long arg0_bits, long long arg1_bits, long long *out_bits) {
+  if (!fname || !out_bits) return 0;
+  if (strcmp(fname, "__builtin_rotateleft32") == 0) {
+    unsigned int v = (unsigned int)arg0_bits;
+    unsigned int s = (unsigned int)arg1_bits & 31U;
+    unsigned int r = s ? ((v << s) | (v >> (32U - s))) : v;
+    *out_bits = (long long)r;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_rotateright32") == 0) {
+    unsigned int v = (unsigned int)arg0_bits;
+    unsigned int s = (unsigned int)arg1_bits & 31U;
+    unsigned int r = s ? ((v >> s) | (v << (32U - s))) : v;
+    *out_bits = (long long)r;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_rotateleft64") == 0) {
+    unsigned long long v = (unsigned long long)arg0_bits;
+    unsigned int s = (unsigned int)arg1_bits & 63U;
+    unsigned long long r = s ? ((v << s) | (v >> (64U - s))) : v;
+    *out_bits = (long long)r;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_rotateright64") == 0) {
+    unsigned long long v = (unsigned long long)arg0_bits;
+    unsigned int s = (unsigned int)arg1_bits & 63U;
+    unsigned long long r = s ? ((v >> s) | (v << (64U - s))) : v;
+    *out_bits = (long long)r;
+    return 1;
+  }
+  return 0;
+}
+
 int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
   if (!cc || !node || !node->func_name[0]) return 0;
   const char *fn = node->func_name;
@@ -3412,6 +3463,8 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
   int is_a64 = (backend_ops && !is_rv64 && backend_ops->ptr_size == 8);
   const char *r32 = g_win64_abi_mode ? "ecx" : "edi";
   const char *r64 = g_win64_abi_mode ? "rcx" : "rdi";
+  const char *s32 = g_win64_abi_mode ? "edx" : "esi";
+  const char *s64 = g_win64_abi_mode ? "rdx" : "rsi";
 
   if (strcmp(fn, "__builtin_clz") == 0) {
     if (!backend_ops) {
@@ -3608,6 +3661,46 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
       fprintf(cc->out, "    srai t1, a0, 63\n    xor t0, a0, t1\n    slli t0, t0, 1\n    ori t0, t0, 1\n    li a0, 0\n"
                        ".Lrv_clrsb_loop_%d:\n    bltz t0, .Lrv_clrsb_done_%d\n    slli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_clrsb_loop_%d\n"
                        ".Lrv_clrsb_done_%d:\n", lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_rotateleft32") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    roll %%cl, %%eax\n", r32, s32);
+    } else if (is_a64) {
+      fprintf(cc->out, "    neg w1, w1\n    ror w0, w0, w1\n");
+    } else if (is_rv64) {
+      fprintf(cc->out, "    andi t0, a1, 31\n    sllw t1, a0, t0\n    negw t2, a1\n    andi t2, t2, 31\n    srlw t3, a0, t2\n    or a0, t1, t3\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_rotateright32") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    rorl %%cl, %%eax\n", r32, s32);
+    } else if (is_a64) {
+      fprintf(cc->out, "    ror w0, w0, w1\n");
+    } else if (is_rv64) {
+      fprintf(cc->out, "    andi t0, a1, 31\n    srlw t1, a0, t0\n    negw t2, a1\n    andi t2, t2, 31\n    sllw t3, a0, t2\n    or a0, t1, t3\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_rotateleft64") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    movq %%%s, %%rax\n    movq %%%s, %%rcx\n    rolq %%cl, %%rax\n", r64, s64);
+    } else if (is_a64) {
+      fprintf(cc->out, "    neg x1, x1\n    ror x0, x0, x1\n");
+    } else if (is_rv64) {
+      fprintf(cc->out, "    andi t0, a1, 63\n    sll t1, a0, t0\n    neg t2, a1\n    andi t2, t2, 63\n    srl t3, a0, t2\n    or a0, t1, t3\n");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_rotateright64") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    movq %%%s, %%rax\n    movq %%%s, %%rcx\n    rorq %%cl, %%rax\n", r64, s64);
+    } else if (is_a64) {
+      fprintf(cc->out, "    ror x0, x0, x1\n");
+    } else if (is_rv64) {
+      fprintf(cc->out, "    andi t0, a1, 63\n    srl t1, a0, t0\n    neg t2, a1\n    andi t2, t2, 63\n    sll t3, a0, t2\n    or a0, t1, t3\n");
     } else return 0;
     return 1;
   }

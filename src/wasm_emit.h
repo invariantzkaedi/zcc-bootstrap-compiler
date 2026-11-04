@@ -149,6 +149,8 @@ typedef enum {
     WASM_OP_I32_SHL      = 0x74,
     WASM_OP_I32_SHR_S    = 0x75,
     WASM_OP_I32_SHR_U    = 0x76,
+    WASM_OP_I32_ROTL     = 0x77,
+    WASM_OP_I32_ROTR     = 0x78,
     WASM_OP_I64_CLZ      = 0x79,
     WASM_OP_I64_CTZ      = 0x7A,
     WASM_OP_I64_POPCNT   = 0x7B,
@@ -165,6 +167,8 @@ typedef enum {
     WASM_OP_I64_SHL      = 0x86,
     WASM_OP_I64_SHR_S    = 0x87,
     WASM_OP_I64_SHR_U    = 0x88,
+    WASM_OP_I64_ROTL     = 0x89,
+    WASM_OP_I64_ROTR     = 0x8A,
     WASM_OP_F32_ABS      = 0x8B,
     WASM_OP_F32_NEG      = 0x8C,
     WASM_OP_F32_CEIL     = 0x8D,
@@ -233,13 +237,17 @@ typedef enum {
     WASM_SIMD_V128_AND          = 0x4E,
     WASM_SIMD_V128_OR           = 0x50,
     WASM_SIMD_V128_XOR          = 0x51,
+    WASM_SIMD_I32X4_SHL         = 0xAB,
+    WASM_SIMD_I32X4_SHR_S       = 0xAC,
+    WASM_SIMD_I32X4_SHR_U       = 0xAD,
     WASM_SIMD_I32X4_ADD         = 0xAE,
     WASM_SIMD_I32X4_SUB         = 0xB1,
     WASM_SIMD_I32X4_MUL         = 0xB5,
     WASM_SIMD_I32X4_DOT_I16X8_S = 0xBA,
     WASM_SIMD_F32X4_ADD         = 0xE4,
     WASM_SIMD_F32X4_SUB         = 0xE5,
-    WASM_SIMD_F32X4_MUL         = 0xE6
+    WASM_SIMD_F32X4_MUL         = 0xE6,
+    WASM_SIMD_F32X4_DIV         = 0xE7
 } WASMSimdOpcode;
 
 /* Dynamic Byte Buffer for Section Construction */

@@ -1580,6 +1580,26 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     break;
                 }
             }
+            if (strncmp(node->func_name, "__builtin_", 10) == 0 && node->num_args == 2 &&
+                node->args && node->args[0] && node->args[1]) {
+                const char *bfn = node->func_name + 10;
+                if (strcmp(bfn, "rotateleft32") == 0 || strcmp(bfn, "rotateright32") == 0) {
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_uint);
+                    wasm_buf_append_u8(&fn->body, (strcmp(bfn, "rotateleft32") == 0) ? WASM_OP_I32_ROTL : WASM_OP_I32_ROTR);
+                    break;
+                }
+                if (strcmp(bfn, "rotateleft64") == 0 || strcmp(bfn, "rotateright64") == 0) {
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I64, cc->ty_ulonglong);
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I64, cc->ty_ulonglong);
+                    wasm_buf_append_u8(&fn->body, (strcmp(bfn, "rotateleft64") == 0) ? WASM_OP_I64_ROTL : WASM_OP_I64_ROTR);
+                    break;
+                }
+            }
             int callee_idx = node->func_name[0] ? wasm_find_func_idx(mod, node->func_name) : -1;
             int a;
             for (a = 0; a < node->num_args; a++) {
@@ -1931,12 +1951,14 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
     }
 
     uint32_t simd_op = 0;
+    int is_shift_op = 0;
     if (is_reduction) {
         simd_op = (is_reduction == 2) ? WASM_SIMD_I32X4_MUL : WASM_SIMD_I32X4_ADD;
     } else if (f32_d) {
         if (op_kind == ND_ADD) simd_op = WASM_SIMD_F32X4_ADD;
         else if (op_kind == ND_SUB) simd_op = WASM_SIMD_F32X4_SUB;
         else if (op_kind == ND_MUL) simd_op = WASM_SIMD_F32X4_MUL;
+        else if (op_kind == ND_DIV) simd_op = WASM_SIMD_F32X4_DIV;
     } else {
         if (op_kind == ND_ADD) simd_op = WASM_SIMD_I32X4_ADD;
         else if (op_kind == ND_SUB) simd_op = WASM_SIMD_I32X4_SUB;
@@ -1944,6 +1966,16 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
         else if (op_kind == ND_BAND) simd_op = WASM_SIMD_V128_AND;
         else if (op_kind == ND_BOR) simd_op = WASM_SIMD_V128_OR;
         else if (op_kind == ND_BXOR) simd_op = WASM_SIMD_V128_XOR;
+        else if (op_kind == ND_SHL && b_scalar && !b_base) {
+            simd_op = WASM_SIMD_I32X4_SHL;
+            is_shift_op = 1;
+        } else if (op_kind == ND_SHR && b_scalar && !b_base) {
+            Type *aty = (loop_body->kind == ND_COMPOUND_ASSIGN)
+                            ? (loop_body->lhs ? loop_body->lhs->type : NULL)
+                            : (loop_body->rhs && loop_body->rhs->lhs ? loop_body->rhs->lhs->type : NULL);
+            simd_op = (aty && is_unsigned_type(aty)) ? WASM_SIMD_I32X4_SHR_U : WASM_SIMD_I32X4_SHR_S;
+            is_shift_op = 1;
+        }
     }
     if (!simd_op) return;
 
@@ -2027,8 +2059,10 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
             wasm_emit_type_conversion(&fn->body, wasm_node_valtype(b_scalar), b_scalar->type,
                                       f32_d ? WASM_TYPE_F32 : WASM_TYPE_I32,
                                       f32_d ? cc->ty_float : cc->ty_int);
-            wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
-            wasm_buf_append_uleb128(&fn->body, f32_d ? WASM_SIMD_F32X4_SPLAT : WASM_SIMD_I32X4_SPLAT);
+            if (!is_shift_op) {
+                wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+                wasm_buf_append_uleb128(&fn->body, f32_d ? WASM_SIMD_F32X4_SPLAT : WASM_SIMD_I32X4_SPLAT);
+            }
         }
         wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
         wasm_buf_append_uleb128(&fn->body, simd_op);

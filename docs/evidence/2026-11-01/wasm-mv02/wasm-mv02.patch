@@ -1,204 +1,440 @@
 diff --git a/BOOTSTRAP_BASELINES.tsv b/BOOTSTRAP_BASELINES.tsv
-index 687f7b5c8..ed789f78e 100644
+index ed789f78e..ec18e9dfb 100644
 --- a/BOOTSTRAP_BASELINES.tsv
 +++ b/BOOTSTRAP_BASELINES.tsv
-@@ -154,4 +154,5 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
- 2026-11-03T19:22:00Z	HEAD	cd89a184434451d4821e0baa253097c7	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(bitops,quad-isa,wasm,prove): WASM-MV-20 / BITOPS-INTRINSICS-01 / QUAD-ISA-LOCK-01 / WASM-SIMD128-REDUC / ZCC-PROVE-11 baseline lock
+@@ -155,4 +155,5 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
  2026-11-03T23:17:00Z	HEAD	720dbfdf5a7d6e3c7b51c4920ba8cbfa	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	harden(bitops,quad-isa,wasm,prove): WASM-MV-21 / BITOPS-HARDEN-01 / QUAD-ISA-LOCK-01 / ZCC-PROVE-12 baseline lock
  2026-11-03T23:58:00Z	HEAD	bbc3533c2990328c049c7472252fed05	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(bitops,quad-isa,wasm,part4,prove): WASM-MV-22 / BITOPS-FFS-PARITY-01 / ARCH-CMP-SH-01 / WASM-V128-ACCUM / ZCC-PROVE-13 baseline lock
-+2026-11-04T09:20:00Z	HEAD	bf66665c625e353d824f630bb3912f27	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(bitops,quad-isa,wasm,part4,prove): WASM-MV-23 / BITOPS-CLRSB-01 / ARCH-LOGIC-01 / WASM-SIMD128-SPLAT / ZCC-PROVE-14 baseline lock
+ 2026-11-04T09:20:00Z	HEAD	bf66665c625e353d824f630bb3912f27	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(bitops,quad-isa,wasm,part4,prove): WASM-MV-23 / BITOPS-CLRSB-01 / ARCH-LOGIC-01 / WASM-SIMD128-SPLAT / ZCC-PROVE-14 baseline lock
++2026-11-04T11:44:00Z	HEAD	1362610d55320c883b6dae67c732713d	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(bitops,quad-isa,wasm,part4,codegen,prove): WASM-MV-24 / BITOPS-ROTATE-01 / ARCH-DIVMOD-COMPOUND-01 / WASM-SIMD128-SHIFT-DIV / ZCC-PROVE-15 baseline lock
  
 diff --git a/part4.c b/part4.c
-index ce9f00c6c..41a2fac93 100644
+index 41a2fac93..91ff44ae5 100644
 --- a/part4.c
 +++ b/part4.c
-@@ -3198,7 +3198,8 @@ void codegen_expr(Compiler *cc, Node *node) {
-       fprintf(cc->out, "    je .L%d\n", lbl1);
-     } else {
-       if (backend_ops) {
--        fprintf(cc->out, "    cmp r0, #0\n");
-+        if (!(backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j'))
-+          fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
-       } else {
-         if (node->lhs && node->lhs->type && type_size(node->lhs->type) <= 4) {
-           fprintf(cc->out, "    cmpl $0, %%eax\n");
-@@ -3229,15 +3230,14 @@ void codegen_expr(Compiler *cc, Node *node) {
-       fprintf(cc->out, "    movzbl %%al, %%eax\n");
-     } else {
-       if (backend_ops) {
--        int l_true = new_label(cc);
--        int l_end = new_label(cc);
--        fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
--        fprintf(cc->out, "    bne .L%d\n", l_true);
--        fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x0, #0\n" : "    movs r0, #0\n");
--        fprintf(cc->out, "    b .L%d\n", l_end);
--        fprintf(cc->out, ".L%d:\n", l_true);
--        fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x0, #1\n" : "    movs r0, #1\n");
--        fprintf(cc->out, ".L%d:\n", l_end);
-+        if (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j') {
-+          fprintf(cc->out, "    snez a0, a0\n");
-+        } else if (backend_ops->ptr_size == 8) {
-+          fprintf(cc->out, "    cmp x0, #0\n    cset x0, ne\n");
-+        } else {
-+          int l_true = new_label(cc), l_end = new_label(cc);
-+          fprintf(cc->out, "    cmp r0, #0\n    bne .L%d\n    movs r0, #0\n    b .L%d\n.L%d:\n    movs r0, #1\n.L%d:\n", l_true, l_end, l_true, l_end);
-+        }
-       } else {
-         if (node->rhs && node->rhs->type && type_size(node->rhs->type) <= 4) {
-           fprintf(cc->out, "    cmpl $0, %%eax\n");
-@@ -3254,7 +3254,7 @@ void codegen_expr(Compiler *cc, Node *node) {
-     /* Short-circuit false label: LHS was falsy, result = 0 */
-     fprintf(cc->out, ".L%d:\n", lbl1);
-     ZCC_EMIT_LABEL(land_lbl, node->line);
--    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x0, #0\n" : "    movs r0, #0\n");
-+    if (backend_ops) backend_ops->emit_num(cc, 0);
-     else fprintf(cc->out, "    movq $0, %%rax\n");
-     fprintf(cc->out, ".L%d:\n", lbl2);
-     ZCC_EMIT_LABEL(land_lbl2, node->line);
-@@ -3291,8 +3291,9 @@ void codegen_expr(Compiler *cc, Node *node) {
-       fprintf(cc->out, "    jne .L%d\n", lbl1);
-     } else {
-       if (backend_ops) {
--        fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
--        fprintf(cc->out, "    bne .L%d\n", lbl1);
-+        if (!(backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j'))
-+          fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
-+        emit_label_fmt(cc, lbl1, FMT_JNE);
-       } else {
-         if (node->lhs && node->lhs->type && type_size(node->lhs->type) <= 4) {
-           fprintf(cc->out, "    cmpl $0, %%eax\n");
-@@ -3321,8 +3322,9 @@ void codegen_expr(Compiler *cc, Node *node) {
-       fprintf(cc->out, "    jne .L%d\n", lbl1);
-     } else {
-       if (backend_ops) {
--        fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
--        fprintf(cc->out, "    bne .L%d\n", lbl1);
-+        if (!(backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j'))
-+          fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
-+        emit_label_fmt(cc, lbl1, FMT_JNE);
-       } else {
-         if (node->rhs && node->rhs->type && type_size(node->rhs->type) <= 4) {
-           fprintf(cc->out, "    cmpl $0, %%eax\n");
-@@ -3332,13 +3334,13 @@ void codegen_expr(Compiler *cc, Node *node) {
-         fprintf(cc->out, "    jne .L%d\n", lbl1);
+@@ -28,6 +28,7 @@ long long force_truncate(long long v, Type *type);
+ int is_unsigned_cmp(Node *n);
+ extern void zcc_divzero_report(int line, int is_mod);
+ int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long *out_bits);
++int zcc_eval_const_bit_builtin2(const char *fname, long long arg0_bits, long long arg1_bits, long long *out_bits);
+ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node);
+ StructField *find_struct_member(Type *type, const char *name, int *out_offset);
+ static Node *current_func_node = NULL;
+@@ -1451,10 +1452,7 @@ void codegen_expr(Compiler *cc, Node *node) {
+         break;
+       case ND_DIV:
+         if (backend_ops) {
+-          if (node_type_unsigned(node))
+-            fprintf(cc->out, "    bl __aeabi_uidiv\n");
+-          else
+-            fprintf(cc->out, "    bl __aeabi_idiv\n");
++          backend_ops->emit_div(cc, node_type_unsigned(node));
+         } else if (node_type_unsigned(node)) {
+           if (node->type && type_size(node->type) <= 4) {
+             fprintf(cc->out, "    xorl %%edx, %%edx\n    divl %%r11d\n");
+@@ -1471,13 +1469,7 @@ void codegen_expr(Compiler *cc, Node *node) {
+         break;
+       case ND_MOD:
+         if (backend_ops) {
+-          if (node_type_unsigned(node)) {
+-            fprintf(cc->out, "    bl __aeabi_uidivmod\n");
+-            fprintf(cc->out, "    movs r0, r1\n");
+-          } else {
+-            fprintf(cc->out, "    bl __aeabi_idivmod\n");
+-            fprintf(cc->out, "    movs r0, r1\n");
+-          }
++          backend_ops->emit_mod(cc, node_type_unsigned(node));
+         } else if (node_type_unsigned(node)) {
+           if (node->type && type_size(node->type) <= 4) {
+             fprintf(cc->out, "    xorl %%edx, %%edx\n    divl %%r11d\n    movq %%rdx, %%rax\n");
+@@ -1721,10 +1713,7 @@ void codegen_expr(Compiler *cc, Node *node) {
+         break;
        }
-     }
--    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x0, #0\n" : "    movs r0, #0\n");
-+    if (backend_ops) backend_ops->emit_num(cc, 0);
-     else fprintf(cc->out, "    movq $0, %%rax\n");
-     emit_label_fmt(cc, lbl2, FMT_JMP);
-     ZCC_EMIT_BR(lor_lbl2, node->line);
-     fprintf(cc->out, ".L%d:\n", lbl1);
-     ZCC_EMIT_LABEL(lor_lbl1, node->line);
--    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x0, #1\n" : "    movs r0, #1\n");
-+    if (backend_ops) backend_ops->emit_num(cc, 1);
-     else fprintf(cc->out, "    movq $1, %%rax\n");
-     fprintf(cc->out, ".L%d:\n", lbl2);
-     ZCC_EMIT_LABEL(lor_lbl2, node->line);
-@@ -3761,7 +3763,7 @@ void codegen_expr(Compiler *cc, Node *node) {
-     lbl2 = new_label(cc);
-     codegen_expr_checked(cc, node->cond);
-     ir_save_result(ternary_cond_ir);
--    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
-+    if (backend_ops) { if (!(backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j')) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n"); }
-     else {
-       /* CG-FLOAT-012: float/double ternary condition needs SSE zero-compare */
-       int tern_is_float = node->cond && node->cond->type &&
-@@ -5483,7 +5485,8 @@ void codegen_stmt(Compiler *cc, Node *node) {
-       codegen_expr_checked(cc, node->cond);
-       ir_save_result(cond_ir);
        if (backend_ops) {
--        fprintf(cc->out, "    cmp r0, #0\n");
-+        if (!(backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j'))
-+          fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
-       } else {
-         if (node->cond && node->cond->type && type_size(node->cond->type) <= 4) {
-           fprintf(cc->out, "    cmpl $0, %%eax\n");
+-        if (node_type_unsigned(node))
+-          fprintf(cc->out, "    bl __aeabi_uidiv\n");
+-        else
+-          fprintf(cc->out, "    bl __aeabi_idiv\n");
++        backend_ops->emit_div(cc, node_type_unsigned(node));
+         break;
+       }
+       if (node_type_unsigned(node)) {
+@@ -1743,13 +1732,7 @@ void codegen_expr(Compiler *cc, Node *node) {
+       break;
+     case ND_MOD:
+       if (backend_ops) {
+-        if (node_type_unsigned(node)) {
+-          fprintf(cc->out, "    bl __aeabi_uidivmod\n");
+-          fprintf(cc->out, "    movs r0, r1\n");
+-        } else {
+-          fprintf(cc->out, "    bl __aeabi_idivmod\n");
+-          fprintf(cc->out, "    movs r0, r1\n");
+-        }
++        backend_ops->emit_mod(cc, node_type_unsigned(node));
+         break;
+       }
+       if (node_type_unsigned(node)) {
+@@ -6758,6 +6741,13 @@ static int eval_const_call_math(Node *elem, long long *out_bits) {
+         arg0_bits = eval_const_expr_p4(elem->args[0], &ok0);
+         if (ok0 && zcc_eval_const_bit_builtin(elem->func_name, arg0_bits, out_bits)) return 1;
+     }
++    if (elem->num_args == 2 && elem->args && elem->args[0] && elem->args[1] &&
++        strncmp(elem->func_name, "__builtin_", 10) == 0) {
++        ok0 = 1; ok1 = 1;
++        arg0_bits = eval_const_expr_p4(elem->args[0], &ok0);
++        arg1_bits = eval_const_expr_p4(elem->args[1], &ok1);
++        if (ok0 && ok1 && zcc_eval_const_bit_builtin2(elem->func_name, arg0_bits, arg1_bits, out_bits)) return 1;
++    }
+ 
+     return 0;
+ }
 diff --git a/part5.c b/part5.c
-index 61e3daa94..e2a120558 100644
+index e2a120558..08d509480 100644
 --- a/part5.c
 +++ b/part5.c
-@@ -542,17 +542,17 @@ void init_compiler(Compiler *cc) {
+@@ -14,7 +14,7 @@ extern int rand(void);
+ #include "src/zcc_smt_prover.h"
  
-       /* Bit-manipulation intrinsics */
-       {
--        const char *b32[] = {"__builtin_clz", "__builtin_ctz", "__builtin_popcount", "__builtin_ffs", "__builtin_parity"};
--        const char *b64[] = {"__builtin_clzl", "__builtin_clzll", "__builtin_ctzl", "__builtin_ctzll", "__builtin_popcountl", "__builtin_popcountll", "__builtin_ffsl", "__builtin_ffsll", "__builtin_parityl", "__builtin_parityll"};
-+        const char *b32[] = {"__builtin_clz", "__builtin_ctz", "__builtin_popcount", "__builtin_ffs", "__builtin_parity", "__builtin_clrsb"};
-+        const char *b64[] = {"__builtin_clzl", "__builtin_clzll", "__builtin_ctzl", "__builtin_ctzll", "__builtin_popcountl", "__builtin_popcountll", "__builtin_ffsl", "__builtin_ffsll", "__builtin_parityl", "__builtin_parityll", "__builtin_clrsbl", "__builtin_clrsbll"};
-         int bi;
--        for (bi = 0; bi < 5; bi++) {
-+        for (bi = 0; bi < 6; bi++) {
-           ft = type_func(cc, cc->ty_int);
-           ft->num_params = 1;
-           ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
-           ft->params[0] = cc->ty_uint;
-           sym = scope_add(cc, b32[bi], ft); sym->is_global = 1;
+ #ifndef ZCC_AST_BRIDGE_H
+-/* 
++/*
+  * This block is exclusively for IDE syntax analysis when viewing part5.c alone.
+  * Since part1.c #includes zcc_ast_bridge.h, this #ifndef prevents infinite loops
+  * and double-definitions when part1...5 are concatenated into zcc.c.
+@@ -37,11 +37,11 @@ extern void zcc_telem_phase(int phase, const char *phase_name, const char *statu
+ /* ZCC Resource Oracle telemetry global declarations */
+ extern void zcc_oracle_init(const char *source_file);
+ extern void zcc_oracle_shutdown(void);
+-extern void zcc_oracle_log_pass(const char *pass_name, const char *function_name, 
+-                                double duration_ms, size_t heap_bytes, 
++extern void zcc_oracle_log_pass(const char *pass_name, const char *function_name,
++                                double duration_ms, size_t heap_bytes,
+                                 int spills, int virtual_regs, int physical_regs);
+-extern void zcc_oracle_log_sentinel(size_t idt_size, size_t gdt_size, 
+-                                    size_t base_offset, size_t idt_entry_size, 
++extern void zcc_oracle_log_sentinel(size_t idt_size, size_t gdt_size,
++                                    size_t base_offset, size_t idt_entry_size,
+                                     size_t gdt_entry_size, size_t multiboot_offset);
+ 
+ /* ForgeZero audit receipt integration — defensive scaffold only.
+@@ -574,6 +574,24 @@ void init_compiler(Compiler *cc) {
+         ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
+         ft->params[0] = cc->ty_ulonglong;
+         sym = scope_add(cc, "__builtin_bswap64", ft); sym->is_global = 1;
++        {
++          const char *rot32[] = {"__builtin_rotateleft32", "__builtin_rotateright32"};
++          const char *rot64[] = {"__builtin_rotateleft64", "__builtin_rotateright64"};
++          for (bi = 0; bi < 2; bi++) {
++            ft = type_func(cc, cc->ty_uint);
++            ft->num_params = 2;
++            ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
++            ft->params[0] = cc->ty_uint;
++            ft->params[1] = cc->ty_uint;
++            sym = scope_add(cc, rot32[bi], ft); sym->is_global = 1;
++            ft = type_func(cc, cc->ty_ulonglong);
++            ft->num_params = 2;
++            ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
++            ft->params[0] = cc->ty_ulonglong;
++            ft->params[1] = cc->ty_ulonglong;
++            sym = scope_add(cc, rot64[bi], ft); sym->is_global = 1;
++          }
++        }
+       }
+ 
+       /* snprintf — returns int, variadic */
+@@ -1405,7 +1423,7 @@ static void security_nullderef_scan(Compiler *cc, char *filename) {
+            }
+            current_owner[k] = 0;
+            if (strcmp(current_owner, "_") == 0) current_owner[0] = 0;
+-           
++
+            if (meta_match[k] == '@') {
+                meta_match += k + 1;
+                /* file */
+@@ -1415,7 +1433,7 @@ static void security_nullderef_scan(Compiler *cc, char *filename) {
+                    k++;
+                }
+                current_file[k] = 0;
+-               
++
+                if (meta_match[k] == ':') {
+                    current_line = atoi(meta_match + k + 1);
+                }
+@@ -1552,7 +1570,7 @@ static void security_bounds_scan(Compiler *cc, char *filename) {
+           while (ptr[k] && ptr[k] != ' ' && k < 63) { array_name[k] = ptr[k]; k++; }
+           array_name[k] = 0;
+       }
+-      
++
+       ptr = strstr(lp[i], "index=");
+       if (ptr) {
+           ptr += 6;
+@@ -1568,7 +1586,7 @@ static void security_bounds_scan(Compiler *cc, char *filename) {
+           while (ptr[k] && ptr[k] != ' ' && k < 31) { size_str[k] = ptr[k]; k++; }
+           size_str[k] = 0;
+       }
+-      
++
+       ptr = strstr(lp[i], "@");
+       if (ptr) {
+           ptr += 1;
+@@ -2222,16 +2240,16 @@ int zcc_main(int argc, char **argv) {
+       extern int ir_deserialize_json(ir_module_t *mod, const char *in_filename, Compiler *cc);
+       ZCC_IR_INIT();
+       g_ir_module = ir_module_create();
+-      
++
+       cc = (Compiler *)calloc(1, sizeof(Compiler));
+       cc->filename = "replayed_ir";
+-      
++
+       int parse_ret = ir_deserialize_json(g_ir_module, g_replay_ir_path, cc);
+       if (parse_ret != 0) {
+           fprintf(stderr, "zcc: failed to deserialize IR graph '%s'\n", g_replay_ir_path);
+           return 1;
+       }
+-      
++
+       if (!output_file) output_file = "a.out";
+       { size_t _ol = strlen(output_file); if (_ol >= 2 && output_file[_ol-2] == '.' && output_file[_ol-1] == 's') { strncpy(asm_file, output_file, sizeof(asm_file)-1); } else { sprintf(asm_file, "%s.s", output_file); } }
+       cc->out = fopen(asm_file, "w");
+@@ -2239,13 +2257,13 @@ int zcc_main(int argc, char **argv) {
+           fprintf(stderr, "zcc: cannot open output file '%s'\n", asm_file);
+           return 1;
+       }
+-      
++
+       /* CG-IR-OPT-001: fold IR_CONST->IR_RET before lowering */
+       /* { extern int ir_fold_const_ret_module(ir_module_t *mod);
+         ir_fold_const_ret_module(g_ir_module); } */
+       /* Run the standard optimization passes if requested! */
+       /* ir_pm_run_default(g_ir_module, 1); */
+-      
++
+       /* Lower to x86-64 assembly! */
+       extern void ir_module_lower_x86(const ir_module_t *mod, FILE *out, int safe_div);
+       ir_module_lower_x86(g_ir_module, cc->out, cc->safe_div);
+@@ -2259,7 +2277,7 @@ int zcc_main(int argc, char **argv) {
+       if (opt_peephole_replay) {
+           peephole_optimize(asm_file);
+       }
+-      
++
+       /* Now go to linking phase cleanly! */
+       stop_at_asm = 0;
+       if (compile_only) stop_at_asm = 1;
+@@ -2560,7 +2578,7 @@ int zcc_main(int argc, char **argv) {
+     if (getenv("ZCC_OFFLINE_HUNT")) {
+         if (!enable_telemetry_stdout) printf("[WARDEN] Offline mode active. Bypassing PyTorch IPC. Dumping raw telemetry...\n");
+         extern void evm_decompile(const unsigned char*, size_t, const char*, int);
+-        
++
+         if (symbolic_mode) {
+             extern void evm_run_symbolic_from_bytecode(const unsigned char* bytecode, size_t len, int smt_mode);
+             evm_run_symbolic_from_bytecode((const unsigned char*)source, source_len, g_smt_mode);
+@@ -2568,7 +2586,7 @@ int zcc_main(int argc, char **argv) {
+             /* Dump decompiled pseudo-code directly to stderr for inspection */
+             evm_decompile((const unsigned char*)source, source_len, "/dev/stderr", abi_mode);
          }
--        for (bi = 0; bi < 10; bi++) {
-+        for (bi = 0; bi < 12; bi++) {
-           ft = type_func(cc, cc->ty_int);
-           ft->num_params = 1;
-           ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
-@@ -3167,7 +3167,7 @@ int zcc_main(int argc, char **argv) {
-   int opt_peephole = 1;
-   if (getenv("ZCC_OPT") && strcmp(getenv("ZCC_OPT"), "0") == 0) opt_peephole = 0;
-   if (getenv("ZCC_OPT_PEEPHOLE") && strcmp(getenv("ZCC_OPT_PEEPHOLE"), "0") == 0) opt_peephole = 0;
--  if (opt_peephole) {
-+  if (opt_peephole || backend_ops) {
-     peephole_optimize(asm_file);
+-        
++
+         free(source);
+         return 0;
+     }
+@@ -2581,7 +2599,7 @@ int zcc_main(int argc, char **argv) {
+ 
+     if (!enable_telemetry_stdout) printf("[WARDEN] Initializing zero-day MEV hunt mode...\n");
+     ipc_bridge_init();
+-    
++
+     FILE *tx = ipc_bridge_open_tx();
+     if (tx) {
+         if (!enable_telemetry_stdout) printf("[WARDEN] Streaming decompiled AST to PyTorch orchestrator...\n");
+@@ -2589,15 +2607,15 @@ int zcc_main(int argc, char **argv) {
+         /* We write it directly using evm_decompile to the pipe path */
+         fclose(tx); /* Let evm_decompile open it */
+         evm_decompile((const unsigned char*)source, source_len, "/tmp/warden_tx.pipe", abi_mode);
+-        
++
+         if (!enable_telemetry_stdout) printf("[WARDEN] Awaiting synthesized IR payload...\n");
+         char *payload = ipc_bridge_receive();
+         if (payload) {
+             if (!enable_telemetry_stdout) printf("[WARDEN] Exploit payload received. Length: %zu bytes.\n", strlen(payload));
+-            
++
+             extern void ipc_bridge_compile_and_strike(char *payload);
+             ipc_bridge_compile_and_strike(payload);
+-            
++
+             free(payload);
+             free(source);
+             return 0;
+@@ -2623,14 +2641,14 @@ int zcc_main(int argc, char **argv) {
+   if (prove_mode) {
+     extern void evm_symbolic_run(const unsigned char* bytecode, size_t len, const char* prop);
+     evm_symbolic_run((const unsigned char*)source, source_len, prove_prop ? prove_prop : "no-revert");
+-    
++
+     // Export proof to SMT2
+     extern ir_module_t* g_ir_module;
+     if (g_ir_module && g_ir_module->func_count > 0) {
+         extern void export_smt2(ir_func_t* graph, const char* path);
+         export_smt2(g_ir_module->funcs[0], smt_out_file[0] ? smt_out_file : "proof.smt2");
+     }
+-    
++
+     free(source);
+     return 0;
    }
-   if (g_oneiro_enabled && asm_file) {
-@@ -3386,6 +3386,22 @@ int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long
-     *out_bits = n;
-     return 1;
-   }
-+  if (strcmp(fname, "__builtin_clrsb") == 0) {
-+    int sv = (int)arg0_bits;
-+    unsigned int u = ((unsigned int)sv ^ (unsigned int)(sv < 0 ? -1 : 0)) << 1 | 1U;
-+    int n = 0;
-+    while ((u & 0x80000000U) == 0) { n++; u <<= 1; }
-+    *out_bits = n;
-+    return 1;
-+  }
-+  if (strcmp(fname, "__builtin_clrsbl") == 0 || strcmp(fname, "__builtin_clrsbll") == 0) {
-+    long long sv = arg0_bits;
-+    unsigned long long u = ((unsigned long long)sv ^ (unsigned long long)(sv < 0 ? -1LL : 0LL)) << 1 | 1ULL;
-+    int n = 0;
-+    while ((u & 0x8000000000000000ULL) == 0) { n++; u <<= 1; }
-+    *out_bits = n;
-+    return 1;
-+  }
+@@ -2669,7 +2687,7 @@ int zcc_main(int argc, char **argv) {
+           if (!enable_telemetry_stdout) printf("zcc: out of memory\n");
+           free(source); return 1;
+       }
+-      
++
+       stop_at_asm = 0;
+       strncpy(asm_file, output_file ? output_file : "a.s", 250);
+       int alf = 0; while (asm_file[alf]) alf++;
+@@ -2678,13 +2696,13 @@ int zcc_main(int argc, char **argv) {
+       } else {
+           asm_file[alf] = '.'; asm_file[alf + 1] = 's'; asm_file[alf + 2] = 0;
+       }
+-      
++
+       cc->out = fopen(asm_file, "w");
+       if (!cc->out) {
+           printf("zcc: cannot write '%s'\n", asm_file);
+           free(source); free(cc); return 1;
+       }
+-      
++
+       char sym[256];
+       int si = 0;
+       const char *p = input_file;
+@@ -2699,13 +2717,13 @@ int zcc_main(int argc, char **argv) {
+           p++;
+       }
+       sym[si] = '\0';
+-      
++
+       fprintf(cc->out, ".data\n");
+       fprintf(cc->out, ".global %s_data\n", sym);
+       fprintf(cc->out, ".global %s_len\n", sym);
+       fprintf(cc->out, ".align 8\n");
+       fprintf(cc->out, "%s_data:\n", sym);
+-      
++
+       int col = 0;
+       for (i = 0; i < source_len; i++) {
+           if (col == 0) fprintf(cc->out, "  .byte ");
+@@ -2720,7 +2738,7 @@ int zcc_main(int argc, char **argv) {
+       }
+       fprintf(cc->out, "  .byte 0x00\n");
+       fprintf(cc->out, "\n%s_len:\n  .long %d\n", sym, source_len);
+-      
++
+       fclose(cc->out);
+       if (!enable_telemetry_stdout) printf("[OK] Asset %s compiled to assembly.\n", input_file);
+       goto link_phase;
+@@ -3036,7 +3054,7 @@ int zcc_main(int argc, char **argv) {
+   zcc_telem_phase(3, "constant_folding", "OK", p3_us, "nodes_folded", 0, "dce_eliminated", 0, "errors", 0);
+   zcc_oracle_log_pass("constant_folding", "_global", (double)(p3_end - p3_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
+   if (!enable_telemetry_stdout) printf("[Phase 4] SystemV ABI X86-64 Codegen... OK\n");
+-  
++
+   long p4_start = clock();
+   if (g_ir_primary && g_ir_module) {
+       /* Dummy pass to generate IR. We write the AST codegen to a temp file or just let it overwrite.
+@@ -3405,6 +3423,39 @@ int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long
    return 0;
  }
  
-@@ -3569,6 +3585,32 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
++int zcc_eval_const_bit_builtin2(const char *fname, long long arg0_bits, long long arg1_bits, long long *out_bits) {
++  if (!fname || !out_bits) return 0;
++  if (strcmp(fname, "__builtin_rotateleft32") == 0) {
++    unsigned int v = (unsigned int)arg0_bits;
++    unsigned int s = (unsigned int)arg1_bits & 31U;
++    unsigned int r = s ? ((v << s) | (v >> (32U - s))) : v;
++    *out_bits = (long long)r;
++    return 1;
++  }
++  if (strcmp(fname, "__builtin_rotateright32") == 0) {
++    unsigned int v = (unsigned int)arg0_bits;
++    unsigned int s = (unsigned int)arg1_bits & 31U;
++    unsigned int r = s ? ((v >> s) | (v << (32U - s))) : v;
++    *out_bits = (long long)r;
++    return 1;
++  }
++  if (strcmp(fname, "__builtin_rotateleft64") == 0) {
++    unsigned long long v = (unsigned long long)arg0_bits;
++    unsigned int s = (unsigned int)arg1_bits & 63U;
++    unsigned long long r = s ? ((v << s) | (v >> (64U - s))) : v;
++    *out_bits = (long long)r;
++    return 1;
++  }
++  if (strcmp(fname, "__builtin_rotateright64") == 0) {
++    unsigned long long v = (unsigned long long)arg0_bits;
++    unsigned int s = (unsigned int)arg1_bits & 63U;
++    unsigned long long r = s ? ((v >> s) | (v << (64U - s))) : v;
++    *out_bits = (long long)r;
++    return 1;
++  }
++  return 0;
++}
++
+ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
+   if (!cc || !node || !node->func_name[0]) return 0;
+   const char *fn = node->func_name;
+@@ -3412,6 +3463,8 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
+   int is_a64 = (backend_ops && !is_rv64 && backend_ops->ptr_size == 8);
+   const char *r32 = g_win64_abi_mode ? "ecx" : "edi";
+   const char *r64 = g_win64_abi_mode ? "rcx" : "rdi";
++  const char *s32 = g_win64_abi_mode ? "edx" : "esi";
++  const char *s64 = g_win64_abi_mode ? "rdx" : "rsi";
+ 
+   if (strcmp(fn, "__builtin_clz") == 0) {
+     if (!backend_ops) {
+@@ -3611,6 +3664,46 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
      } else return 0;
      return 1;
    }
-+  if (strcmp(fn, "__builtin_clrsb") == 0) {
++  if (strcmp(fn, "__builtin_rotateleft32") == 0) {
 +    if (!backend_ops) {
-+      fprintf(cc->out, "    movl %%%s, %%eax\n    sarl $31, %%eax\n    xorl %%%s, %%eax\n    addl %%eax, %%eax\n    orl $1, %%eax\n    bsrl %%eax, %%eax\n    xorl $31, %%eax\n", r32, r32);
++      fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    roll %%cl, %%eax\n", r32, s32);
 +    } else if (is_a64) {
-+      fprintf(cc->out, "    cls w0, w0\n");
++      fprintf(cc->out, "    neg w1, w1\n    ror w0, w0, w1\n");
 +    } else if (is_rv64) {
-+      int lbl = cc->label_count++;
-+      fprintf(cc->out, "    slli t0, a0, 32\n    srai t1, t0, 63\n    xor t0, t0, t1\n    slli t0, t0, 1\n    li t1, 1\n    slli t1, t1, 32\n    or t0, t0, t1\n    li a0, 0\n"
-+                       ".Lrv_clrsb_loop_%d:\n    bltz t0, .Lrv_clrsb_done_%d\n    slli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_clrsb_loop_%d\n"
-+                       ".Lrv_clrsb_done_%d:\n", lbl, lbl, lbl, lbl);
++      fprintf(cc->out, "    andi t0, a1, 31\n    sllw t1, a0, t0\n    negw t2, a1\n    andi t2, t2, 31\n    srlw t3, a0, t2\n    or a0, t1, t3\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
 +    } else return 0;
 +    return 1;
 +  }
-+  if (strcmp(fn, "__builtin_clrsbl") == 0 || strcmp(fn, "__builtin_clrsbll") == 0) {
++  if (strcmp(fn, "__builtin_rotateright32") == 0) {
 +    if (!backend_ops) {
-+      fprintf(cc->out, "    movq %%%s, %%rax\n    sarq $63, %%rax\n    xorq %%%s, %%rax\n    addq %%rax, %%rax\n    orq $1, %%rax\n    bsrq %%rax, %%rax\n    xorq $63, %%rax\n", r64, r64);
++      fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    rorl %%cl, %%eax\n", r32, s32);
 +    } else if (is_a64) {
-+      fprintf(cc->out, "    cls x0, x0\n");
++      fprintf(cc->out, "    ror w0, w0, w1\n");
 +    } else if (is_rv64) {
-+      int lbl = cc->label_count++;
-+      fprintf(cc->out, "    srai t1, a0, 63\n    xor t0, a0, t1\n    slli t0, t0, 1\n    ori t0, t0, 1\n    li a0, 0\n"
-+                       ".Lrv_clrsb_loop_%d:\n    bltz t0, .Lrv_clrsb_done_%d\n    slli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_clrsb_loop_%d\n"
-+                       ".Lrv_clrsb_done_%d:\n", lbl, lbl, lbl, lbl);
++      fprintf(cc->out, "    andi t0, a1, 31\n    srlw t1, a0, t0\n    negw t2, a1\n    andi t2, t2, 31\n    sllw t3, a0, t2\n    or a0, t1, t3\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
++    } else return 0;
++    return 1;
++  }
++  if (strcmp(fn, "__builtin_rotateleft64") == 0) {
++    if (!backend_ops) {
++      fprintf(cc->out, "    movq %%%s, %%rax\n    movq %%%s, %%rcx\n    rolq %%cl, %%rax\n", r64, s64);
++    } else if (is_a64) {
++      fprintf(cc->out, "    neg x1, x1\n    ror x0, x0, x1\n");
++    } else if (is_rv64) {
++      fprintf(cc->out, "    andi t0, a1, 63\n    sll t1, a0, t0\n    neg t2, a1\n    andi t2, t2, 63\n    srl t3, a0, t2\n    or a0, t1, t3\n");
++    } else return 0;
++    return 1;
++  }
++  if (strcmp(fn, "__builtin_rotateright64") == 0) {
++    if (!backend_ops) {
++      fprintf(cc->out, "    movq %%%s, %%rax\n    movq %%%s, %%rcx\n    rorq %%cl, %%rax\n", r64, s64);
++    } else if (is_a64) {
++      fprintf(cc->out, "    ror x0, x0, x1\n");
++    } else if (is_rv64) {
++      fprintf(cc->out, "    andi t0, a1, 63\n    srl t1, a0, t0\n    neg t2, a1\n    andi t2, t2, 63\n    sll t3, a0, t2\n    or a0, t1, t3\n");
 +    } else return 0;
 +    return 1;
 +  }
@@ -206,178 +442,196 @@ index 61e3daa94..e2a120558 100644
  }
  
 diff --git a/part6_wasm.c b/part6_wasm.c
-index f00ceb219..652e48265 100644
+index 652e48265..159ea1572 100644
 --- a/part6_wasm.c
 +++ b/part6_wasm.c
-@@ -1437,6 +1437,47 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
-                     wasm_buf_append_u8(&fn->body, WASM_OP_SELECT);
+@@ -1580,6 +1580,26 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                      break;
                  }
-+                if (strcmp(bfn, "clrsb") == 0 && lmap->tmp_val_idx >= 0) {
+             }
++            if (strncmp(node->func_name, "__builtin_", 10) == 0 && node->num_args == 2 &&
++                node->args && node->args[0] && node->args[1]) {
++                const char *bfn = node->func_name + 10;
++                if (strcmp(bfn, "rotateleft32") == 0 || strcmp(bfn, "rotateright32") == 0) {
 +                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
-+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_int);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
-+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
-+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
-+                    wasm_buf_append_sleb128(&fn->body, 31);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_S);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_XOR);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
-+                    wasm_buf_append_sleb128(&fn->body, 1);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHL);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
-+                    wasm_buf_append_sleb128(&fn->body, 1);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CLZ);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_uint);
++                    wasm_buf_append_u8(&fn->body, (strcmp(bfn, "rotateleft32") == 0) ? WASM_OP_I32_ROTL : WASM_OP_I32_ROTR);
 +                    break;
 +                }
-+                if ((strcmp(bfn, "clrsbl") == 0 || strcmp(bfn, "clrsbll") == 0) && lmap->tmp_i64_idx >= 0) {
++                if (strcmp(bfn, "rotateleft64") == 0 || strcmp(bfn, "rotateright64") == 0) {
 +                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
-+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I64, cc->ty_longlong);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
-+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
-+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
-+                    wasm_buf_append_sleb128_i64(&fn->body, 63);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_SHR_S);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_XOR);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
-+                    wasm_buf_append_sleb128_i64(&fn->body, 1);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_SHL);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
-+                    wasm_buf_append_sleb128_i64(&fn->body, 1);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_OR);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CLZ);
-+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I64, cc->ty_ulonglong);
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I64, cc->ty_ulonglong);
++                    wasm_buf_append_u8(&fn->body, (strcmp(bfn, "rotateleft64") == 0) ? WASM_OP_I64_ROTL : WASM_OP_I64_ROTR);
 +                    break;
-+                }
-                 if (strcmp(bfn, "bswap16") == 0 && lmap->tmp_val_idx >= 0) {
-                     wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
-                     wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_ushort);
-@@ -1825,6 +1866,7 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
-     Node *acc_var = NULL;
-     Node *a_base = NULL;
-     Node *b_base = NULL;
-+    Node *b_scalar = NULL;
-     if (!dst_base && loop_body->kind == ND_COMPOUND_ASSIGN && loop_body->compound_op == ND_ADD &&
-         loop_body->lhs && loop_body->lhs->kind == ND_VAR) {
-         const char *acc_name = loop_body->lhs->sym ? loop_body->lhs->sym->name : loop_body->lhs->name;
-@@ -1853,20 +1895,38 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
-         }
-     }
-     if (!is_reduction) {
-+        Node *rhs_op = NULL;
-         if (loop_body->kind == ND_COMPOUND_ASSIGN) {
-             op_kind = loop_body->compound_op;
-             a_base = dst_base;
-             esz_a = esz_d;
-             f32_a = f32_d;
--            b_base = wasm_match_indexed_ptr(loop_body->rhs, ivar_name, &esz_b, &f32_b);
-+            rhs_op = loop_body->rhs;
-+            b_base = wasm_match_indexed_ptr(rhs_op, ivar_name, &esz_b, &f32_b);
-         } else {
-             Node *rhs = loop_body->rhs;
-             if (!rhs) return;
-             op_kind = rhs->kind;
-             a_base = wasm_match_indexed_ptr(rhs->lhs, ivar_name, &esz_a, &f32_a);
--            b_base = wasm_match_indexed_ptr(rhs->rhs, ivar_name, &esz_b, &f32_b);
-+            rhs_op = rhs->rhs;
-+            b_base = wasm_match_indexed_ptr(rhs_op, ivar_name, &esz_b, &f32_b);
-         }
--        if (!dst_base || !a_base || !b_base) return;
-+        if (!b_base && rhs_op) {
-+            Node *u = rhs_op;
-+            while (u && u->kind == ND_CAST) u = u->lhs;
-+            if (u && (u->kind == ND_NUM || u->kind == ND_FLIT)) {
-+                b_scalar = rhs_op;
-+                f32_b = f32_d;
-+            } else if (u && u->kind == ND_VAR) {
-+                const char *sn = u->sym ? u->sym->name : u->name;
-+                const char *dn = dst_base ? (dst_base->sym ? dst_base->sym->name : dst_base->name) : NULL;
-+                if (sn && sn[0] && strcmp(sn, ivar_name) != 0 && (!dn || strcmp(sn, dn) != 0)) {
-+                    b_scalar = rhs_op;
-+                    f32_b = f32_d;
 +                }
 +            }
-+        }
-+        if (!dst_base || !a_base || (!b_base && !b_scalar)) return;
-         if (f32_d != f32_a || f32_d != f32_b) return;
+             int callee_idx = node->func_name[0] ? wasm_find_func_idx(mod, node->func_name) : -1;
+             int a;
+             for (a = 0; a < node->num_args; a++) {
+@@ -1931,12 +1951,14 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
      }
  
-@@ -1951,16 +2011,25 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
-             wasm_emit_typed_store(&fn->body, acc_var->type ? acc_var->type : cc->ty_int, 0);
-         }
+     uint32_t simd_op = 0;
++    int is_shift_op = 0;
+     if (is_reduction) {
+         simd_op = (is_reduction == 2) ? WASM_SIMD_I32X4_MUL : WASM_SIMD_I32X4_ADD;
+     } else if (f32_d) {
+         if (op_kind == ND_ADD) simd_op = WASM_SIMD_F32X4_ADD;
+         else if (op_kind == ND_SUB) simd_op = WASM_SIMD_F32X4_SUB;
+         else if (op_kind == ND_MUL) simd_op = WASM_SIMD_F32X4_MUL;
++        else if (op_kind == ND_DIV) simd_op = WASM_SIMD_F32X4_DIV;
      } else {
--        /* Stack: dst_addr, v128.load(a_addr), v128.load(b_addr), simd_op, v128.store */
-+        /* Stack: dst_addr, v128.load(a_addr), v128.load(b_addr) OR splat(b_scalar), simd_op, v128.store */
-         wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, dst_base, ivar);
-         wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, a_base, ivar);
-         wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
-         wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
-         wasm_emit_memarg_safe(&fn->body, 2, 0);
--        wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, b_base, ivar);
--        wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
--        wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
--        wasm_emit_memarg_safe(&fn->body, 2, 0);
-+        if (b_base) {
-+            wasm_emit_indexed_addr4(cc, mod, fn, lmap, gmap, b_base, ivar);
-+            wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
-+            wasm_buf_append_uleb128(&fn->body, WASM_SIMD_V128_LOAD);
-+            wasm_emit_memarg_safe(&fn->body, 2, 0);
-+        } else {
-+            wasm_lower_expr(cc, mod, fn, lmap, gmap, b_scalar);
-+            wasm_emit_type_conversion(&fn->body, wasm_node_valtype(b_scalar), b_scalar->type,
-+                                      f32_d ? WASM_TYPE_F32 : WASM_TYPE_I32,
-+                                      f32_d ? cc->ty_float : cc->ty_int);
-+            wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
-+            wasm_buf_append_uleb128(&fn->body, f32_d ? WASM_SIMD_F32X4_SPLAT : WASM_SIMD_I32X4_SPLAT);
+         if (op_kind == ND_ADD) simd_op = WASM_SIMD_I32X4_ADD;
+         else if (op_kind == ND_SUB) simd_op = WASM_SIMD_I32X4_SUB;
+@@ -1944,6 +1966,16 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
+         else if (op_kind == ND_BAND) simd_op = WASM_SIMD_V128_AND;
+         else if (op_kind == ND_BOR) simd_op = WASM_SIMD_V128_OR;
+         else if (op_kind == ND_BXOR) simd_op = WASM_SIMD_V128_XOR;
++        else if (op_kind == ND_SHL && b_scalar && !b_base) {
++            simd_op = WASM_SIMD_I32X4_SHL;
++            is_shift_op = 1;
++        } else if (op_kind == ND_SHR && b_scalar && !b_base) {
++            Type *aty = (loop_body->kind == ND_COMPOUND_ASSIGN)
++                            ? (loop_body->lhs ? loop_body->lhs->type : NULL)
++                            : (loop_body->rhs && loop_body->rhs->lhs ? loop_body->rhs->lhs->type : NULL);
++            simd_op = (aty && is_unsigned_type(aty)) ? WASM_SIMD_I32X4_SHR_U : WASM_SIMD_I32X4_SHR_S;
++            is_shift_op = 1;
 +        }
+     }
+     if (!simd_op) return;
+ 
+@@ -2027,8 +2059,10 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
+             wasm_emit_type_conversion(&fn->body, wasm_node_valtype(b_scalar), b_scalar->type,
+                                       f32_d ? WASM_TYPE_F32 : WASM_TYPE_I32,
+                                       f32_d ? cc->ty_float : cc->ty_int);
+-            wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+-            wasm_buf_append_uleb128(&fn->body, f32_d ? WASM_SIMD_F32X4_SPLAT : WASM_SIMD_I32X4_SPLAT);
++            if (!is_shift_op) {
++                wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
++                wasm_buf_append_uleb128(&fn->body, f32_d ? WASM_SIMD_F32X4_SPLAT : WASM_SIMD_I32X4_SPLAT);
++            }
+         }
          wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
          wasm_buf_append_uleb128(&fn->body, simd_op);
-         wasm_buf_append_u8(&fn->body, WASM_OP_SIMD_PREFIX);
+diff --git a/src/codegen.c b/src/codegen.c
+index f69d087b6..54593d62b 100644
+--- a/src/codegen.c
++++ b/src/codegen.c
+@@ -4325,9 +4325,13 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
+         } else if (strcmp(mnemonic, "sarq") == 0 ||
+                    strcmp(mnemonic, "shlq") == 0 ||
+                    strcmp(mnemonic, "shrq") == 0 ||
++                   strcmp(mnemonic, "rolq") == 0 ||
++                   strcmp(mnemonic, "rorq") == 0 ||
+                    strcmp(mnemonic, "sarl") == 0 ||
+                    strcmp(mnemonic, "shll") == 0 ||
+                    strcmp(mnemonic, "shrl") == 0 ||
++                   strcmp(mnemonic, "roll") == 0 ||
++                   strcmp(mnemonic, "rorl") == 0 ||
+                    strcmp(mnemonic, "sarw") == 0 ||
+                    strcmp(mnemonic, "shlw") == 0 ||
+                    strcmp(mnemonic, "shrw") == 0 ||
+@@ -4364,16 +4368,14 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
+               opcode = 0xc1;
+             }
+ 
+-            int shift_type = 0;
+-            if (strncmp(mnemonic, "sar", 3) == 0)
+-              shift_type = 2;
+-            else if (strncmp(mnemonic, "shr", 3) == 0)
+-              shift_type = 1;
+-
+-            if (shift_type == 2) {
++            if (strncmp(mnemonic, "sar", 3) == 0) {
+               modrm = 0xf8 | (reg2 & 7);
+-            } else if (shift_type == 1) {
++            } else if (strncmp(mnemonic, "shr", 3) == 0) {
+               modrm = 0xe8 | (reg2 & 7);
++            } else if (strncmp(mnemonic, "rol", 3) == 0) {
++              modrm = 0xc0 | (reg2 & 7);
++            } else if (strncmp(mnemonic, "ror", 3) == 0) {
++              modrm = 0xc8 | (reg2 & 7);
+             } else {
+               modrm = 0xe0 | (reg2 & 7);
+             }
+@@ -4414,16 +4416,14 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
+               opcode = 0xd3;
+             }
+ 
+-            int shift_type = 0;
+-            if (strncmp(mnemonic, "sar", 3) == 0)
+-              shift_type = 2;
+-            else if (strncmp(mnemonic, "shr", 3) == 0)
+-              shift_type = 1;
+-
+-            if (shift_type == 2) {
++            if (strncmp(mnemonic, "sar", 3) == 0) {
+               modrm = 0xf8 | (reg2 & 7);
+-            } else if (shift_type == 1) {
++            } else if (strncmp(mnemonic, "shr", 3) == 0) {
+               modrm = 0xe8 | (reg2 & 7);
++            } else if (strncmp(mnemonic, "rol", 3) == 0) {
++              modrm = 0xc0 | (reg2 & 7);
++            } else if (strncmp(mnemonic, "ror", 3) == 0) {
++              modrm = 0xc8 | (reg2 & 7);
+             } else {
+               modrm = 0xe0 | (reg2 & 7);
+             }
 diff --git a/src/wasm_emit.c b/src/wasm_emit.c
-index 473cfe66e..4aca1eabc 100644
+index 4aca1eabc..9e8d3f903 100644
 --- a/src/wasm_emit.c
 +++ b/src/wasm_emit.c
 @@ -499,7 +499,7 @@ int wasm_module_emit_binary(const WasmModule *mod, WASMBuffer *out) {
      {
          WASMBuffer prove_sec;
          const char *sec_name = ".zcc.prove";
--        const char *payload = "{\"compiler\":\"zcc-omega\",\"prove\":\"ZCC-PROVE-11..13\",\"simd128\":true,\"quad_isa\":true}";
-+        const char *payload = "{\"compiler\":\"zcc-omega\",\"prove\":\"ZCC-PROVE-11..14\",\"simd128\":true,\"quad_isa\":true}";
+-        const char *payload = "{\"compiler\":\"zcc-omega\",\"prove\":\"ZCC-PROVE-11..14\",\"simd128\":true,\"quad_isa\":true}";
++        const char *payload = "{\"compiler\":\"zcc-omega\",\"prove\":\"ZCC-PROVE-11..15\",\"simd128\":true,\"quad_isa\":true}";
          size_t nlen = strlen(sec_name);
          size_t plen = strlen(payload);
          wasm_buf_init(&prove_sec);
-diff --git a/zcc_test_suite.sh b/zcc_test_suite.sh
-index defd85a99..9e026a675 100644
---- a/zcc_test_suite.sh
-+++ b/zcc_test_suite.sh
-@@ -480,11 +480,7 @@ int classify(int x) {
- }
- int main() { return classify(2); }
- EOF
--if [ "$QUICK" = "1" ]; then
--    skip "switch_stmt (hang prevention)"
--else
--    test_file "switch_stmt" "$TESTDIR/t_switch.c" 20
--fi
-+test_file "switch_stmt" "$TESTDIR/t_switch.c" 20
+diff --git a/src/wasm_emit.h b/src/wasm_emit.h
+index bdcf6fca8..3c536418c 100644
+--- a/src/wasm_emit.h
++++ b/src/wasm_emit.h
+@@ -149,6 +149,8 @@ typedef enum {
+     WASM_OP_I32_SHL      = 0x74,
+     WASM_OP_I32_SHR_S    = 0x75,
+     WASM_OP_I32_SHR_U    = 0x76,
++    WASM_OP_I32_ROTL     = 0x77,
++    WASM_OP_I32_ROTR     = 0x78,
+     WASM_OP_I64_CLZ      = 0x79,
+     WASM_OP_I64_CTZ      = 0x7A,
+     WASM_OP_I64_POPCNT   = 0x7B,
+@@ -165,6 +167,8 @@ typedef enum {
+     WASM_OP_I64_SHL      = 0x86,
+     WASM_OP_I64_SHR_S    = 0x87,
+     WASM_OP_I64_SHR_U    = 0x88,
++    WASM_OP_I64_ROTL     = 0x89,
++    WASM_OP_I64_ROTR     = 0x8A,
+     WASM_OP_F32_ABS      = 0x8B,
+     WASM_OP_F32_NEG      = 0x8C,
+     WASM_OP_F32_CEIL     = 0x8D,
+@@ -233,13 +237,17 @@ typedef enum {
+     WASM_SIMD_V128_AND          = 0x4E,
+     WASM_SIMD_V128_OR           = 0x50,
+     WASM_SIMD_V128_XOR          = 0x51,
++    WASM_SIMD_I32X4_SHL         = 0xAB,
++    WASM_SIMD_I32X4_SHR_S       = 0xAC,
++    WASM_SIMD_I32X4_SHR_U       = 0xAD,
+     WASM_SIMD_I32X4_ADD         = 0xAE,
+     WASM_SIMD_I32X4_SUB         = 0xB1,
+     WASM_SIMD_I32X4_MUL         = 0xB5,
+     WASM_SIMD_I32X4_DOT_I16X8_S = 0xBA,
+     WASM_SIMD_F32X4_ADD         = 0xE4,
+     WASM_SIMD_F32X4_SUB         = 0xE5,
+-    WASM_SIMD_F32X4_MUL         = 0xE6
++    WASM_SIMD_F32X4_MUL         = 0xE6,
++    WASM_SIMD_F32X4_DIV         = 0xE7
+ } WASMSimdOpcode;
  
- step "Category 7: String and Global Operations"
- 
-@@ -579,11 +575,7 @@ int main() {
-     return 1;
- }
- EOF
--if [ "$QUICK" = "1" ]; then
--    skip "alloc_pattern (IR hang guard: ZCC-SWITCH-IRLOOP)"
--else
--    test_file "alloc_pattern" "$TESTDIR/t_alloc_pattern.c" 0
--fi
-+test_file "alloc_pattern" "$TESTDIR/t_alloc_pattern.c" 0
- 
- # ══════════════════════════════════════════════════════════════════
- # CATEGORY 11: Full Selfhost (unless --quick)
+ /* Dynamic Byte Buffer for Section Construction */
