@@ -3337,6 +3337,25 @@ int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long
     *out_bits = n;
     return 1;
   }
+  if (strcmp(fname, "__builtin_bswap16") == 0) {
+    unsigned int v = (unsigned int)arg0_bits & 0xFFFFU;
+    *out_bits = (long long)(((v & 0xFFU) << 8) | ((v >> 8) & 0xFFU));
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_bswap32") == 0) {
+    unsigned int v = (unsigned int)arg0_bits;
+    unsigned int r = ((v & 0xFFU) << 24) | (((v >> 8) & 0xFFU) << 16) | (((v >> 16) & 0xFFU) << 8) | ((v >> 24) & 0xFFU);
+    *out_bits = (long long)r;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_bswap64") == 0) {
+    unsigned long long v = (unsigned long long)arg0_bits;
+    unsigned long long r = 0;
+    int b;
+    for (b = 0; b < 8; b++) { r = (r << 8) | (v & 0xFFULL); v >>= 8; }
+    *out_bits = (long long)r;
+    return 1;
+  }
   return 0;
 }
 
@@ -3350,7 +3369,9 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
 
   if (strcmp(fn, "__builtin_clz") == 0) {
     if (!backend_ops) {
-      fprintf(cc->out, "    bsrl %%%s, %%eax\n    xorl $31, %%eax\n", r32);
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    testl %%%s, %%%s\n    je .Lx86_clz32_z_%d\n    bsrl %%%s, %%eax\n    xorl $31, %%eax\n    jmp .Lx86_clz32_d_%d\n"
+                       ".Lx86_clz32_z_%d:\n    movl $32, %%eax\n.Lx86_clz32_d_%d:\n", r32, r32, lbl, r32, lbl, lbl, lbl);
     } else if (is_a64) {
       fprintf(cc->out, "    clz w0, w0\n");
     } else if (is_rv64) {
@@ -3363,7 +3384,9 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
   }
   if (strcmp(fn, "__builtin_clzl") == 0 || strcmp(fn, "__builtin_clzll") == 0) {
     if (!backend_ops) {
-      fprintf(cc->out, "    bsrq %%%s, %%rax\n    xorq $63, %%rax\n", r64);
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    testq %%%s, %%%s\n    je .Lx86_clz64_z_%d\n    bsrq %%%s, %%rax\n    xorq $63, %%rax\n    jmp .Lx86_clz64_d_%d\n"
+                       ".Lx86_clz64_z_%d:\n    movl $64, %%eax\n.Lx86_clz64_d_%d:\n", r64, r64, lbl, r64, lbl, lbl, lbl);
     } else if (is_a64) {
       fprintf(cc->out, "    clz x0, x0\n");
     } else if (is_rv64) {
@@ -3376,7 +3399,9 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
   }
   if (strcmp(fn, "__builtin_ctz") == 0) {
     if (!backend_ops) {
-      fprintf(cc->out, "    bsfl %%%s, %%eax\n", r32);
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    testl %%%s, %%%s\n    je .Lx86_ctz32_z_%d\n    bsfl %%%s, %%eax\n    jmp .Lx86_ctz32_d_%d\n"
+                       ".Lx86_ctz32_z_%d:\n    movl $32, %%eax\n.Lx86_ctz32_d_%d:\n", r32, r32, lbl, r32, lbl, lbl, lbl);
     } else if (is_a64) {
       fprintf(cc->out, "    rbit w0, w0\n    clz w0, w0\n");
     } else if (is_rv64) {
@@ -3389,7 +3414,9 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
   }
   if (strcmp(fn, "__builtin_ctzl") == 0 || strcmp(fn, "__builtin_ctzll") == 0) {
     if (!backend_ops) {
-      fprintf(cc->out, "    bsfq %%%s, %%rax\n", r64);
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    testq %%%s, %%%s\n    je .Lx86_ctz64_z_%d\n    bsfq %%%s, %%rax\n    jmp .Lx86_ctz64_d_%d\n"
+                       ".Lx86_ctz64_z_%d:\n    movl $64, %%eax\n.Lx86_ctz64_d_%d:\n", r64, r64, lbl, r64, lbl, lbl, lbl);
     } else if (is_a64) {
       fprintf(cc->out, "    rbit x0, x0\n    clz x0, x0\n");
     } else if (is_rv64) {
@@ -3442,6 +3469,17 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
                        "    srli t1, a0, 8\n    andi t1, t1, 255\n    slli t1, t1, 16\n    or t0, t0, t1\n"
                        "    srli t1, a0, 16\n    andi t1, t1, 255\n    slli t1, t1, 8\n    or t0, t0, t1\n"
                        "    srli t1, a0, 24\n    andi t1, t1, 255\n    or a0, t0, t1\n");
+    }
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_bswap64") == 0 && (is_a64 || is_rv64)) {
+    if (is_a64) {
+      fprintf(cc->out, "    rev x0, x0\n");
+    } else {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    mv t0, a0\n    li a0, 0\n    li t2, 8\n"
+                       ".Lrv_bs64_loop_%d:\n    slli a0, a0, 8\n    andi t1, t0, 255\n    or a0, a0, t1\n"
+                       "    srli t0, t0, 8\n    addi t2, t2, -1\n    bnez t2, .Lrv_bs64_loop_%d\n", lbl, lbl);
     }
     return 1;
   }

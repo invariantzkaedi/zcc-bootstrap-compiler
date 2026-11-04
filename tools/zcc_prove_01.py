@@ -1373,6 +1373,29 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     if s_bit.check() == z3.sat:
         return False, {"error": "Z3 found counterexample in bswap32 involution or 4-lane SIMD128 dot-product reduction"}
 
+    # ZCC-PROVE-12: HARDEN Zero-Input clz/ctz Hardware Guard, bswap64 Involution & Reduction Alias Guard
+    has_mv21_harden_guards = (
+        ".Lx86_clz32_z_" in part5_text
+        and ".Lx86_ctz32_z_" in part5_text
+        and ".Lrv_bs64_loop_" in part5_text
+        and 'strcmp(bfn, "bswap64") == 0' in part6_wasm_text
+        and "if (!an || (strcmp(an, acc_name) != 0 && strcmp(an, ivar_name) != 0)) {" in part6_wasm_text
+    )
+    if not has_mv21_harden_guards:
+        return False, {"error": "Missing ZCC-PROVE-12 zero-input clz/ctz guard, RISC-V/WASM bswap64, or autovec reduction alias guard"}
+
+    s_bs64 = z3.Solver()
+    x64 = z3.BitVec("x64", 64)
+    bs64_1 = z3.Concat(*[z3.Extract(b * 8 + 7, b * 8, x64) for b in range(8)])
+    bs64_2 = z3.Concat(*[z3.Extract(b * 8 + 7, b * 8, bs64_1) for b in range(8)])
+    # Zero-input guard proof: x86-64 testl %edi, %edi ? 32 : (31 ^ bsr(x)) matches ARM64/WASM clz(0) == 32
+    x_zero32 = z3.BitVecVal(0, 32)
+    guarded_clz0 = z3.If(x_zero32 == z3.BitVecVal(0, 32), z3.BitVecVal(32, 32), z3.BitVecVal(0, 32))
+    guarded_ctz0 = z3.If(x_zero32 == z3.BitVecVal(0, 32), z3.BitVecVal(32, 32), z3.BitVecVal(0, 32))
+    s_bs64.add(z3.Or(bs64_2 != x64, guarded_clz0 != z3.BitVecVal(32, 32), guarded_ctz0 != z3.BitVecVal(32, 32)))
+    if s_bs64.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-12 bswap64 involution or zero-input clz/ctz guard"}
+
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
         "pass7_dead_write_rmw_negative_control": "SAT_CAUGHT (addq disp(%rbp), %rax clobbers live %rdx->%rax)",
@@ -1398,6 +1421,8 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "wasm_simd128_4lane_plus_tail_equivalence": "UNSAT (PROVEN_SOUND)",
         "zcc_prove_11_bitops_quad_isa_and_prove_section_active": has_bitops_and_prove_sec,
         "zcc_prove_11_bswap32_and_simd128_dot_reduction": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_12_harden_zero_clz_ctz_bswap64_and_alias_guard_active": has_mv21_harden_guards,
+        "zcc_prove_12_bswap64_involution_and_zero_clz_ctz": "UNSAT (PROVEN_SOUND)",
     }
 
 

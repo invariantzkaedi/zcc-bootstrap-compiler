@@ -1,0 +1,1 @@
+bash scripts/run_mv02_gate.sh 2>&1 | tee docs/evidence/2026-11-03/wasm-mv21-harden/stdout.log

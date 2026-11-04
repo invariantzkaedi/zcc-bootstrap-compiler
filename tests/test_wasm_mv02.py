@@ -944,6 +944,110 @@ int main(void) {
                 self.assertEqual(rwt.returncode, 0, rwt.stderr)
                 self.assertEqual(rwt.stdout.strip(), "52")
 
+    def test_12_harden_zero_clz_ctz_bswap64_quad_isa_and_autovec_alias_guard(self) -> None:
+        """
+        MV-21 / BITOPS-HARDEN-01 / ZCC-PROVE-12:
+        1. Zero-input (`x == 0`) hardware guard on x86-64 `__builtin_clz/clzl/clzll` and `__builtin_ctz/ctzl/ctzll`
+           (`testl`/`testq` + `je .Lx86_clz32_z_...` / `.Lx86_ctz32_z_...` -> `movl $32/$64, %eax`) so `x == 0`
+           deterministically returns 32/64 even when `%eax` is polluted with `0x77777777` prior to the call.
+        2. Compile-time constant folding in `part5.c` for `__builtin_bswap16`, `__builtin_bswap32`, `__builtin_bswap64`.
+        3. Full 64-bit `__builtin_bswap64` Quad-ISA lowering across x86-64 (`bswapq %rax`), ARM64 (`rev x0, x0`),
+           RISC-V 64 (`.Lrv_bs64_loop_`), and WASM32 (`i64.shr_u` / `i64.shl` / `i64.or`).
+        4. Quad-ISA Bit-Exact Differential Execution Lock on zero-input `clz(0)`/`ctz(0)` + `bswap64`:
+           x86-64 ELF, ARM64 (qemu-aarch64-static), RISC-V 64 (qemu-riscv64-static), and WASM32 (Node.js V8 + Wasmtime)
+           all return exact exit status 129.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            harden_c = pathlib.Path(tmp) / "quad_harden_mv21.c"
+            harden_c.write_text(
+                r"""
+int g_clz0 = __builtin_clz(0U);
+int g_ctz0 = __builtin_ctz(0U);
+unsigned int g_bs16 = __builtin_bswap16(0x1234U);
+unsigned int g_bs32 = __builtin_bswap32(0x12345678U);
+unsigned long long g_bs64 = __builtin_bswap64(0x0102030405060708ULL);
+
+int pollute_eax(int x) {
+    return x + 0x77777770;
+}
+
+int test_zero_bitops(unsigned int z) {
+    pollute_eax(7);
+    int a = __builtin_clz(z);
+    pollute_eax(7);
+    int b = __builtin_ctz(z);
+    unsigned long long c = __builtin_bswap64(0x1122334455667788ULL);
+    int ok64 = (c == 0x8877665544332211ULL) ? 1 : 0;
+    return a + b + ok64;
+}
+
+int main(void) {
+    if (g_bs16 != 0x3412U) return 10;
+    if (g_bs32 != 0x78563412U) return 11;
+    if (g_bs64 != 0x0807060504030201ULL) return 12;
+    return g_clz0 + g_ctz0 + test_zero_bitops(0U);
+}
+""",
+                encoding="utf-8",
+            )
+
+            # 1. x86-64 assembly & native ELF execution
+            x86_s = pathlib.Path(tmp) / "harden_x86.s"
+            x86_bin = pathlib.Path(tmp) / "harden_x86"
+            r_x86_s = subprocess.run([str(ZCC_BIN), "-S", str(harden_c), "-o", str(x86_s)], capture_output=True, text=True)
+            self.assertEqual(r_x86_s.returncode, 0, r_x86_s.stderr)
+            x86_txt = x86_s.read_text(encoding="utf-8")
+            self.assertIn(".Lx86_clz32_z_", x86_txt, "Missing x86-64 zero-input guard label on __builtin_clz")
+            self.assertIn(".Lx86_ctz32_z_", x86_txt, "Missing x86-64 zero-input guard label on __builtin_ctz")
+            self.assertIn("bswapq %rax", x86_txt, "Missing bswapq %rax on x86-64 __builtin_bswap64")
+            r_x86_b = subprocess.run([str(ZCC_BIN), str(harden_c), "-o", str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_b.returncode, 0, r_x86_b.stderr)
+            r_x86_run = subprocess.run([str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_run.returncode, 129)
+
+            # 2. ARM64 assembly & QEMU execution
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                arm_s = pathlib.Path(tmp) / "harden_arm64.s"
+                arm_o = pathlib.Path(tmp) / "harden_arm64.o"
+                arm_bin = pathlib.Path(tmp) / "harden_arm64"
+                r_arm_s = subprocess.run([str(ZCC_BIN), "--target=arm64", "-S", str(harden_c), "-o", str(arm_s)], capture_output=True, text=True)
+                self.assertEqual(r_arm_s.returncode, 0, r_arm_s.stderr)
+                arm_txt = arm_s.read_text(encoding="utf-8")
+                self.assertIn("rev x0, x0", arm_txt, "Missing rev x0, x0 on ARM64 __builtin_bswap64")
+                arm_s.write_text(arm_txt + "\n.text\n.globl _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n", encoding="utf-8")
+                ras = subprocess.run(["aarch64-linux-gnu-as", str(arm_s), "-o", str(arm_o)], capture_output=True, text=True)
+                self.assertEqual(ras.returncode, 0, ras.stderr)
+                rld = subprocess.run(["aarch64-linux-gnu-ld", str(arm_o), "-o", str(arm_bin)], capture_output=True, text=True)
+                self.assertEqual(rld.returncode, 0, rld.stderr)
+                rq_arm = subprocess.run(["qemu-aarch64-static", str(arm_bin)], capture_output=True, text=True)
+                self.assertEqual(rq_arm.returncode, 129)
+
+            # 3. RISC-V 64 assembly & QEMU execution
+            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
+                rv_s = pathlib.Path(tmp) / "harden_rv64.s"
+                rv_bin = pathlib.Path(tmp) / "harden_rv64"
+                r_rv_s = subprocess.run([str(ZCC_BIN), "--target=riscv64", "-S", str(harden_c), "-o", str(rv_s)], capture_output=True, text=True)
+                self.assertEqual(r_rv_s.returncode, 0, r_rv_s.stderr)
+                rv_txt = rv_s.read_text(encoding="utf-8")
+                self.assertIn(".Lrv_bs64_loop_", rv_txt, "Missing .Lrv_bs64_loop_ on RISC-V 64 __builtin_bswap64")
+                rgcc = subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(rgcc.returncode, 0, rgcc.stderr)
+                rq_rv = subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(rq_rv.returncode, 129)
+
+            # 4. WASM32 execution (Node.js V8 + Wasmtime)
+            wasm_out = pathlib.Path(tmp) / "harden.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(harden_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            if shutil.which("wasm-validate"):
+                rv = subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True, text=True)
+                self.assertEqual(rv.returncode, 0, rv.stderr)
+            self.assertEqual(run_wasm_node(wasm_out), 129)
+            if WASMTIME_BIN.exists():
+                rwt = subprocess.run([str(WASMTIME_BIN), "run", "--invoke", "main", str(wasm_out)], capture_output=True, text=True)
+                self.assertEqual(rwt.returncode, 0, rwt.stderr)
+                self.assertEqual(rwt.stdout.strip(), "129")
+
 
 if __name__ == "__main__":
     unittest.main()
