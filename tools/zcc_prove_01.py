@@ -1407,7 +1407,7 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         and 'strcmp(bfn, "parity") == 0' in part6_wasm_text
         and "if (backend_ops->ptr_size != 4) return;" in part4_text
         and "else if (backend_ops && backend_ops->emit_store) {" in part4_text
-        and "ZCC-PROVE-11..13" in wasm_emit_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
     )
     if not has_mv22_guards:
         return False, {"error": "Missing ZCC-PROVE-13 ffs/parity Quad-ISA, tmp_v128_idx accumulator, or ARM64/RISC-V compound-assign guards"}
@@ -1424,6 +1424,34 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     s_mv22.add(z3.Or((pop8 & z3.BitVecVal(1, 8)) != xor8, ffs_zero != z3.BitVecVal(0, 8)))
     if s_mv22.check() == z3.sat:
         return False, {"error": "Z3 found counterexample in ZCC-PROVE-13 parity popcount&1 / XOR-fold or ffs(0) equivalence"}
+
+    # 14. ZCC-PROVE-14: __builtin_clrsb Quad-ISA, SIMD128 scalar-broadcast splat & ND_LAND/ND_LOR hardening
+    has_mv23_guards = (
+        "sarl $31, %%eax\\n    xorl %%%s, %%eax\\n    addl %%eax, %%eax\\n    orl $1, %%eax\\n    bsrl %%eax, %%eax\\n    xorl $31, %%eax" in part5_text
+        and "cls w0, w0" in part5_text
+        and ".Lrv_clrsb_loop_" in part5_text
+        and "if (opt_peephole || backend_ops)" in part5_text
+        and 'strcmp(bfn, "clrsb") == 0' in part6_wasm_text
+        and "WASM_SIMD_I32X4_SPLAT" in part6_wasm_text
+        and "cset x0, ne" in part4_text
+        and "ZCC-PROVE-11..14" in wasm_emit_text
+    )
+    if not has_mv23_guards:
+        return False, {"error": "Missing ZCC-PROVE-14 clrsb Quad-ISA, SIMD128 splat, or ND_LAND/ND_LOR multi-backend guards"}
+
+    s_mv23 = z3.Solver()
+    x8 = z3.BitVec("x8", 8)
+    # Prove branchless clrsb8(x) == clz8(((x ^ (x >>s 7)) << 1) | 1) matches specification (count of bits 6..0 matching bit 7)
+    u8 = (x8 ^ (x8 >> 7)) << 1 | z3.BitVecVal(1, 8)
+    clz_u8 = z3.BitVecVal(7, 8)
+    for b in range(1, 8):
+        clz_u8 = z3.If(z3.Extract(b, b, u8) == z3.BitVecVal(1, 1), z3.BitVecVal(7 - b, 8), clz_u8)
+    spec_clrsb8 = z3.BitVecVal(7, 8)
+    for b in range(7):
+        spec_clrsb8 = z3.If(z3.Extract(b, b, x8) != z3.Extract(7, 7, x8), z3.BitVecVal(6 - b, 8), spec_clrsb8)
+    s_mv23.add(clz_u8 != spec_clrsb8)
+    if s_mv23.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-14 branchless clrsb identity"}
 
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
@@ -1454,6 +1482,8 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "zcc_prove_12_bswap64_involution_and_zero_clz_ctz": "UNSAT (PROVEN_SOUND)",
         "zcc_prove_13_ffs_parity_v128_accum_and_cmp_assign_active": has_mv22_guards,
         "zcc_prove_13_ffs_and_parity_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_14_clrsb_simd128_splat_and_logic_ops_active": has_mv23_guards,
+        "zcc_prove_14_branchless_clrsb_equivalence": "UNSAT (PROVEN_SOUND)",
     }
 
 

@@ -3198,7 +3198,8 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    je .L%d\n", lbl1);
     } else {
       if (backend_ops) {
-        fprintf(cc->out, "    cmp r0, #0\n");
+        if (!(backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j'))
+          fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
       } else {
         if (node->lhs && node->lhs->type && type_size(node->lhs->type) <= 4) {
           fprintf(cc->out, "    cmpl $0, %%eax\n");
@@ -3229,15 +3230,14 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    movzbl %%al, %%eax\n");
     } else {
       if (backend_ops) {
-        int l_true = new_label(cc);
-        int l_end = new_label(cc);
-        fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
-        fprintf(cc->out, "    bne .L%d\n", l_true);
-        fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x0, #0\n" : "    movs r0, #0\n");
-        fprintf(cc->out, "    b .L%d\n", l_end);
-        fprintf(cc->out, ".L%d:\n", l_true);
-        fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x0, #1\n" : "    movs r0, #1\n");
-        fprintf(cc->out, ".L%d:\n", l_end);
+        if (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j') {
+          fprintf(cc->out, "    snez a0, a0\n");
+        } else if (backend_ops->ptr_size == 8) {
+          fprintf(cc->out, "    cmp x0, #0\n    cset x0, ne\n");
+        } else {
+          int l_true = new_label(cc), l_end = new_label(cc);
+          fprintf(cc->out, "    cmp r0, #0\n    bne .L%d\n    movs r0, #0\n    b .L%d\n.L%d:\n    movs r0, #1\n.L%d:\n", l_true, l_end, l_true, l_end);
+        }
       } else {
         if (node->rhs && node->rhs->type && type_size(node->rhs->type) <= 4) {
           fprintf(cc->out, "    cmpl $0, %%eax\n");
@@ -3254,7 +3254,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     /* Short-circuit false label: LHS was falsy, result = 0 */
     fprintf(cc->out, ".L%d:\n", lbl1);
     ZCC_EMIT_LABEL(land_lbl, node->line);
-    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x0, #0\n" : "    movs r0, #0\n");
+    if (backend_ops) backend_ops->emit_num(cc, 0);
     else fprintf(cc->out, "    movq $0, %%rax\n");
     fprintf(cc->out, ".L%d:\n", lbl2);
     ZCC_EMIT_LABEL(land_lbl2, node->line);
@@ -3291,8 +3291,9 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    jne .L%d\n", lbl1);
     } else {
       if (backend_ops) {
-        fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
-        fprintf(cc->out, "    bne .L%d\n", lbl1);
+        if (!(backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j'))
+          fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
+        emit_label_fmt(cc, lbl1, FMT_JNE);
       } else {
         if (node->lhs && node->lhs->type && type_size(node->lhs->type) <= 4) {
           fprintf(cc->out, "    cmpl $0, %%eax\n");
@@ -3321,8 +3322,9 @@ void codegen_expr(Compiler *cc, Node *node) {
       fprintf(cc->out, "    jne .L%d\n", lbl1);
     } else {
       if (backend_ops) {
-        fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
-        fprintf(cc->out, "    bne .L%d\n", lbl1);
+        if (!(backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j'))
+          fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
+        emit_label_fmt(cc, lbl1, FMT_JNE);
       } else {
         if (node->rhs && node->rhs->type && type_size(node->rhs->type) <= 4) {
           fprintf(cc->out, "    cmpl $0, %%eax\n");
@@ -3332,13 +3334,13 @@ void codegen_expr(Compiler *cc, Node *node) {
         fprintf(cc->out, "    jne .L%d\n", lbl1);
       }
     }
-    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x0, #0\n" : "    movs r0, #0\n");
+    if (backend_ops) backend_ops->emit_num(cc, 0);
     else fprintf(cc->out, "    movq $0, %%rax\n");
     emit_label_fmt(cc, lbl2, FMT_JMP);
     ZCC_EMIT_BR(lor_lbl2, node->line);
     fprintf(cc->out, ".L%d:\n", lbl1);
     ZCC_EMIT_LABEL(lor_lbl1, node->line);
-    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x0, #1\n" : "    movs r0, #1\n");
+    if (backend_ops) backend_ops->emit_num(cc, 1);
     else fprintf(cc->out, "    movq $1, %%rax\n");
     fprintf(cc->out, ".L%d:\n", lbl2);
     ZCC_EMIT_LABEL(lor_lbl2, node->line);
@@ -3761,7 +3763,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     lbl2 = new_label(cc);
     codegen_expr_checked(cc, node->cond);
     ir_save_result(ternary_cond_ir);
-    if (backend_ops) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
+    if (backend_ops) { if (!(backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j')) fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n"); }
     else {
       /* CG-FLOAT-012: float/double ternary condition needs SSE zero-compare */
       int tern_is_float = node->cond && node->cond->type &&
@@ -5483,7 +5485,8 @@ void codegen_stmt(Compiler *cc, Node *node) {
       codegen_expr_checked(cc, node->cond);
       ir_save_result(cond_ir);
       if (backend_ops) {
-        fprintf(cc->out, "    cmp r0, #0\n");
+        if (!(backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j'))
+          fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    cmp x0, #0\n" : "    cmp r0, #0\n");
       } else {
         if (node->cond && node->cond->type && type_size(node->cond->type) <= 4) {
           fprintf(cc->out, "    cmpl $0, %%eax\n");

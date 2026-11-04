@@ -542,17 +542,17 @@ void init_compiler(Compiler *cc) {
 
       /* Bit-manipulation intrinsics */
       {
-        const char *b32[] = {"__builtin_clz", "__builtin_ctz", "__builtin_popcount", "__builtin_ffs", "__builtin_parity"};
-        const char *b64[] = {"__builtin_clzl", "__builtin_clzll", "__builtin_ctzl", "__builtin_ctzll", "__builtin_popcountl", "__builtin_popcountll", "__builtin_ffsl", "__builtin_ffsll", "__builtin_parityl", "__builtin_parityll"};
+        const char *b32[] = {"__builtin_clz", "__builtin_ctz", "__builtin_popcount", "__builtin_ffs", "__builtin_parity", "__builtin_clrsb"};
+        const char *b64[] = {"__builtin_clzl", "__builtin_clzll", "__builtin_ctzl", "__builtin_ctzll", "__builtin_popcountl", "__builtin_popcountll", "__builtin_ffsl", "__builtin_ffsll", "__builtin_parityl", "__builtin_parityll", "__builtin_clrsbl", "__builtin_clrsbll"};
         int bi;
-        for (bi = 0; bi < 5; bi++) {
+        for (bi = 0; bi < 6; bi++) {
           ft = type_func(cc, cc->ty_int);
           ft->num_params = 1;
           ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
           ft->params[0] = cc->ty_uint;
           sym = scope_add(cc, b32[bi], ft); sym->is_global = 1;
         }
-        for (bi = 0; bi < 10; bi++) {
+        for (bi = 0; bi < 12; bi++) {
           ft = type_func(cc, cc->ty_int);
           ft->num_params = 1;
           ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
@@ -3167,7 +3167,7 @@ int zcc_main(int argc, char **argv) {
   int opt_peephole = 1;
   if (getenv("ZCC_OPT") && strcmp(getenv("ZCC_OPT"), "0") == 0) opt_peephole = 0;
   if (getenv("ZCC_OPT_PEEPHOLE") && strcmp(getenv("ZCC_OPT_PEEPHOLE"), "0") == 0) opt_peephole = 0;
-  if (opt_peephole) {
+  if (opt_peephole || backend_ops) {
     peephole_optimize(asm_file);
   }
   if (g_oneiro_enabled && asm_file) {
@@ -3386,6 +3386,22 @@ int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long
     *out_bits = n;
     return 1;
   }
+  if (strcmp(fname, "__builtin_clrsb") == 0) {
+    int sv = (int)arg0_bits;
+    unsigned int u = ((unsigned int)sv ^ (unsigned int)(sv < 0 ? -1 : 0)) << 1 | 1U;
+    int n = 0;
+    while ((u & 0x80000000U) == 0) { n++; u <<= 1; }
+    *out_bits = n;
+    return 1;
+  }
+  if (strcmp(fname, "__builtin_clrsbl") == 0 || strcmp(fname, "__builtin_clrsbll") == 0) {
+    long long sv = arg0_bits;
+    unsigned long long u = ((unsigned long long)sv ^ (unsigned long long)(sv < 0 ? -1LL : 0LL)) << 1 | 1ULL;
+    int n = 0;
+    while ((u & 0x8000000000000000ULL) == 0) { n++; u <<= 1; }
+    *out_bits = n;
+    return 1;
+  }
   return 0;
 }
 
@@ -3566,6 +3582,32 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
       fprintf(cc->out, "    mv t0, a0\n    li a0, 0\n"
                        ".Lrv_par_loop_%d:\n    beqz t0, .Lrv_par_done_%d\n    andi t1, t0, 1\n    xor a0, a0, t1\n    srli t0, t0, 1\n    j .Lrv_par_loop_%d\n"
                        ".Lrv_par_done_%d:\n", lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_clrsb") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    movl %%%s, %%eax\n    sarl $31, %%eax\n    xorl %%%s, %%eax\n    addl %%eax, %%eax\n    orl $1, %%eax\n    bsrl %%eax, %%eax\n    xorl $31, %%eax\n", r32, r32);
+    } else if (is_a64) {
+      fprintf(cc->out, "    cls w0, w0\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    slli t0, a0, 32\n    srai t1, t0, 63\n    xor t0, t0, t1\n    slli t0, t0, 1\n    li t1, 1\n    slli t1, t1, 32\n    or t0, t0, t1\n    li a0, 0\n"
+                       ".Lrv_clrsb_loop_%d:\n    bltz t0, .Lrv_clrsb_done_%d\n    slli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_clrsb_loop_%d\n"
+                       ".Lrv_clrsb_done_%d:\n", lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_clrsbl") == 0 || strcmp(fn, "__builtin_clrsbll") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    movq %%%s, %%rax\n    sarq $63, %%rax\n    xorq %%%s, %%rax\n    addq %%rax, %%rax\n    orq $1, %%rax\n    bsrq %%rax, %%rax\n    xorq $63, %%rax\n", r64, r64);
+    } else if (is_a64) {
+      fprintf(cc->out, "    cls x0, x0\n");
+    } else if (is_rv64) {
+      int lbl = cc->label_count++;
+      fprintf(cc->out, "    srai t1, a0, 63\n    xor t0, a0, t1\n    slli t0, t0, 1\n    ori t0, t0, 1\n    li a0, 0\n"
+                       ".Lrv_clrsb_loop_%d:\n    bltz t0, .Lrv_clrsb_done_%d\n    slli t0, t0, 1\n    addi a0, a0, 1\n    j .Lrv_clrsb_loop_%d\n"
+                       ".Lrv_clrsb_done_%d:\n", lbl, lbl, lbl, lbl);
     } else return 0;
     return 1;
   }

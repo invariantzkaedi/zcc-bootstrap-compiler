@@ -1,0 +1,9 @@
+git log --all --oneline --format='%h %ad %s' --date=short | head -30
+make zcc
+make selfhost
+bash scripts/run_mv02_gate.sh 2>&1 | tee /tmp/mv23_gate_run.log
+python3 tools/test_function_fidelity.py
+./zcc -S /tmp/mv23_inspect.c -o docs/evidence/2026-11-04/wasm-mv23-onward/mv23_x86_64.s
+./zcc --target=arm64 -S /tmp/mv23_inspect.c -o docs/evidence/2026-11-04/wasm-mv23-onward/mv23_arm64.s
+./zcc --target=riscv64 -S /tmp/mv23_inspect.c -o docs/evidence/2026-11-04/wasm-mv23-onward/mv23_riscv64.s
+./zcc --target=wasm32 -c /tmp/mv23_inspect.c -o docs/evidence/2026-11-04/wasm-mv23-onward/mv23_wasm32.wasm

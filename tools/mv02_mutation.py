@@ -859,6 +859,42 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_13_ffs_parity_quad_isa_v128_accum_and_compound_assign && python3 tools/zcc_prove_01.py",
     },
+    {
+        "id": "MV23-01",
+        "desc": "part5.c zcc_emit_bit_builtin_call omits sarl $31 sign-masking on x86-64 __builtin_clrsb, returning wrong count on negative inputs",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    movl %%%s, %%eax\\n    sarl $31, %%eax\\n    xorl %%%s, %%eax\\n    addl %%eax, %%eax\\n    orl $1, %%eax\\n    bsrl %%eax, %%eax\\n    xorl $31, %%eax\\n", r32, r32);',
+        "new": '      fprintf(cc->out, "    movl %%%s, %%eax\\n    addl %%eax, %%eax\\n    orl $1, %%eax\\n    bsrl %%eax, %%eax\\n    xorl $31, %%eax\\n", r32); /* MV23-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_14_clrsb_quad_isa_simd128_splat_and_logic_ops",
+    },
+    {
+        "id": "MV23-02",
+        "desc": "part5.c zcc_emit_bit_builtin_call emits clz w0, w0 instead of cls w0, w0 on ARM64 __builtin_clrsb",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    cls w0, w0\\n");',
+        "new": '      fprintf(cc->out, "    clz w0, w0\\n"); /* MV23-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_14_clrsb_quad_isa_simd128_splat_and_logic_ops",
+    },
+    {
+        "id": "MV23-03",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop disables scalar-broadcast splat (b_scalar), breaking SIMD128 i32x4.splat emission",
+        "file": "part6_wasm.c",
+        "old": '        if (!b_base && rhs_op) {',
+        "new": '        if (0 && !b_base && rhs_op) { /* MV23-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_14_clrsb_quad_isa_simd128_splat_and_logic_ops",
+    },
+    {
+        "id": "MV23-04",
+        "desc": "part4.c ND_LAND emits cset x0, eq instead of cset x0, ne on ARM64, inverting logical AND result and breaking ZCC-PROVE-14",
+        "file": "part4.c",
+        "old": '          fprintf(cc->out, "    cmp x0, #0\\n    cset x0, ne\\n");',
+        "new": '          fprintf(cc->out, "    cmp x0, #0\\n    cset x0, eq\\n"); /* MV23-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_14_clrsb_quad_isa_simd128_splat_and_logic_ops && python3 tools/zcc_prove_01.py",
+    },
 ]
 
 

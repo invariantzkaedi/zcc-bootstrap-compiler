@@ -1151,7 +1151,7 @@ int main(void) {
             r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv22_c), "-o", str(wasm_out)], capture_output=True, text=True)
             self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
             wb = wasm_out.read_bytes()
-            self.assertIn(b"ZCC-PROVE-11..13", wb, "Missing ZCC-PROVE-11..13 in .zcc.prove custom section")
+            self.assertIn(b"ZCC-PROVE-11..", wb, "Missing ZCC-PROVE-11.. in .zcc.prove custom section")
             self.assertEqual(wb.count(b"\xfd\x00"), 2, "Expected exactly 2 v128.load opcodes in vec_dot_v128 with $tmp_v128 scratch local")
             self.assertEqual(wb.count(b"\xfd\xb5\x01"), 1, "Expected exactly 1 i32x4.mul opcode in vec_dot_v128 with $tmp_v128 scratch local")
             if shutil.which("wasm-validate"):
@@ -1162,6 +1162,119 @@ int main(void) {
                 rwt = subprocess.run([str(WASMTIME_BIN), "run", "--invoke", "main", str(wasm_out)], capture_output=True, text=True)
                 self.assertEqual(rwt.returncode, 0, rwt.stderr)
                 self.assertEqual(rwt.stdout.strip(), "97")
+
+    def test_14_clrsb_quad_isa_simd128_splat_and_logic_ops(self) -> None:
+        """
+        MV-23 / BITOPS-CLRSB-01 / ARCH-LOGIC-01 / WASM-SIMD128-SPLAT-01 / ZCC-PROVE-14:
+        1. Compile-time constant folding in part5.c for __builtin_clrsb/clrsbl/clrsbll.
+        2. Runtime branchless lowering across all 4 ISAs (x86-64 sarl+xorl+addl+orl+bsrl, ARM64 cls w0, w0 / cls x0, x0,
+           RISC-V 64 .Lrv_clrsb_loop_, WASM32 i32.shr_s 31 + i32.xor + i32.shl 1 + i32.or 1 + i32.clz).
+        3. Multi-backend ND_LAND (&&), ND_LOR (||), and ND_TERNARY (?:) hardening on ARM64 (cset x0, ne) and RISC-V 64 (snez a0, a0)
+           Plus ZCC_OPT=0 backend_normalize_asm guarantee.
+        4. WASM SIMD128 scalar-broadcast loop auto-vectorization (i32x4.splat 0xFD 0x11 / f32x4.splat 0xFD 0x13).
+        5. Quad-ISA Bit-Exact Differential Execution Lock: x86-64 ELF, ARM64 (qemu-aarch64-static, ZCC_OPT=1 & ZCC_OPT=0),
+           RISC-V 64 (qemu-riscv64-static), and WASM32 (Node.js V8 + Wasmtime) all return exact exit status 162.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            mv23_c = pathlib.Path(tmp) / "quad_mv23.c"
+            mv23_c.write_text(
+                r"""
+int g_clrsb0 = __builtin_clrsb(0);
+int g_clrsb_m1 = __builtin_clrsb(-1);
+int g_clrsb_m16 = __builtin_clrsb(-16);
+
+void vec_scale_splat(int *dst, const int *a, int n, int k) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = a[i] * k;
+    }
+}
+
+int test_logic_and_clrsb(int a, int b, int c, int x) {
+    int r1 = (a && b) ? 10 : 20;
+    int r2 = (a || c) ? 30 : 40;
+    int r3 = (a && c);
+    int r4 = (a || b);
+    int s1 = __builtin_clrsb(x);
+    int s2 = __builtin_clrsb(~x);
+    return r1 + r2 + r3 + r4 + s1 + s2;
+}
+
+int main(void) {
+    int a[4] = {1, 2, 3, 4};
+    int dst[4] = {0, 0, 0, 0};
+    vec_scale_splat(dst, a, 4, 3);
+    int vsum = dst[0] + dst[1] + dst[2] + dst[3];
+    int lres = test_logic_and_clrsb(0, 5, 1, -16);
+    if (g_clrsb0 != 31) return 1;
+    if (g_clrsb_m1 != 31) return 2;
+    return g_clrsb_m16 + vsum + lres;
+}
+""",
+                encoding="utf-8",
+            )
+
+            # 1. x86-64 assembly & native ELF execution
+            x86_s = pathlib.Path(tmp) / "mv23_x86.s"
+            x86_bin = pathlib.Path(tmp) / "mv23_x86"
+            r_x86_s = subprocess.run([str(ZCC_BIN), "-S", str(mv23_c), "-o", str(x86_s)], capture_output=True, text=True)
+            self.assertEqual(r_x86_s.returncode, 0, r_x86_s.stderr)
+            x86_txt = x86_s.read_text(encoding="utf-8")
+            self.assertIn("sarl $31, %eax", x86_txt, "Missing sarl $31, %eax on x86-64 __builtin_clrsb")
+            self.assertIn("orl $1, %eax", x86_txt, "Missing orl $1, %eax branchless guard on x86-64 __builtin_clrsb")
+            r_x86_b = subprocess.run([str(ZCC_BIN), str(mv23_c), "-o", str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_b.returncode, 0, r_x86_b.stderr)
+            r_x86_run = subprocess.run([str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_run.returncode, 162)
+
+            # 2. ARM64 assembly & QEMU execution (ZCC_OPT=1 and ZCC_OPT=0)
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                for opt in ["1", "0"]:
+                    arm_s = pathlib.Path(tmp) / f"mv23_arm64_{opt}.s"
+                    arm_o = pathlib.Path(tmp) / f"mv23_arm64_{opt}.o"
+                    arm_bin = pathlib.Path(tmp) / f"mv23_arm64_{opt}"
+                    env = dict(os.environ, ZCC_OPT=opt)
+                    r_arm_s = subprocess.run([str(ZCC_BIN), "--target=arm64", "-S", str(mv23_c), "-o", str(arm_s)], env=env, capture_output=True, text=True)
+                    self.assertEqual(r_arm_s.returncode, 0, r_arm_s.stderr)
+                    arm_txt = arm_s.read_text(encoding="utf-8")
+                    self.assertIn("cls w0, w0", arm_txt, "Missing cls w0, w0 on ARM64 __builtin_clrsb")
+                    self.assertIn("cset x0, ne", arm_txt, "Missing cset x0, ne on ARM64 ND_LAND")
+                    arm_s.write_text(arm_txt + "\n.text\n.globl _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n", encoding="utf-8")
+                    ras = subprocess.run(["aarch64-linux-gnu-as", str(arm_s), "-o", str(arm_o)], capture_output=True, text=True)
+                    self.assertEqual(ras.returncode, 0, ras.stderr)
+                    rld = subprocess.run(["aarch64-linux-gnu-ld", str(arm_o), "-o", str(arm_bin)], capture_output=True, text=True)
+                    self.assertEqual(rld.returncode, 0, rld.stderr)
+                    rq_arm = subprocess.run(["qemu-aarch64-static", str(arm_bin)], capture_output=True, text=True)
+                    self.assertEqual(rq_arm.returncode, 162)
+
+            # 3. RISC-V 64 assembly & QEMU execution
+            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
+                rv_s = pathlib.Path(tmp) / "mv23_rv64.s"
+                rv_bin = pathlib.Path(tmp) / "mv23_rv64"
+                r_rv_s = subprocess.run([str(ZCC_BIN), "--target=riscv64", "-S", str(mv23_c), "-o", str(rv_s)], capture_output=True, text=True)
+                self.assertEqual(r_rv_s.returncode, 0, r_rv_s.stderr)
+                rv_txt = rv_s.read_text(encoding="utf-8")
+                self.assertIn(".Lrv_clrsb_loop_", rv_txt, "Missing .Lrv_clrsb_loop_ on RISC-V 64 __builtin_clrsb")
+                self.assertIn("snez a0, a0", rv_txt, "Missing snez a0, a0 on RISC-V 64 ND_LAND")
+                rgcc = subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(rgcc.returncode, 0, rgcc.stderr)
+                rq_rv = subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(rq_rv.returncode, 162)
+
+            # 4. WASM32 SIMD128 scalar-broadcast splat + clrsb + ZCC-PROVE-11..14
+            wasm_out = pathlib.Path(tmp) / "mv23.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv23_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            wb = wasm_out.read_bytes()
+            self.assertIn(b"ZCC-PROVE-11..14", wb, "Missing ZCC-PROVE-11..14 in .zcc.prove custom section")
+            self.assertEqual(wb.count(b"\xfd\x11"), 1, "Expected i32x4.splat (0xfd 0x11) in vec_scale_splat")
+            if shutil.which("wasm-validate"):
+                rv = subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True, text=True)
+                self.assertEqual(rv.returncode, 0, rv.stderr)
+            self.assertEqual(run_wasm_node(wasm_out), 162)
+            if WASMTIME_BIN.exists():
+                rwt = subprocess.run([str(WASMTIME_BIN), "run", "--invoke", "main", str(wasm_out)], capture_output=True, text=True)
+                self.assertEqual(rwt.returncode, 0, rwt.stderr)
+                self.assertEqual(rwt.stdout.strip(), "162")
 
 
 if __name__ == "__main__":
