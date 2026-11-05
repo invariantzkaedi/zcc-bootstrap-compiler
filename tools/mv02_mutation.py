@@ -2,17 +2,20 @@
 """
 tools/mv02_mutation.py — Controlled Adversarial Semantic & Harness Mutation Verifier (WASM-MV-02)
 Supports both single-mutation CLI invocation (--repo/--file/--old/--new/--build/--test)
-and full 9-mutation + 7-seed-defect-class ledger execution (--run-ledger).
+and full multi-process parallel + incremental object-cache ledger execution (--run-ledger [--jobs N]).
 """
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -23,7 +26,7 @@ def sha256(path: pathlib.Path) -> str:
     return h.hexdigest()
 
 
-def run(cmd: str, cwd: pathlib.Path, timeout: int = 120):
+def run(cmd: str, cwd: pathlib.Path, timeout: int = 120, env: dict = None):
     return subprocess.run(
         cmd,
         cwd=str(cwd),
@@ -32,18 +35,36 @@ def run(cmd: str, cwd: pathlib.Path, timeout: int = 120):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         timeout=timeout,
+        env=env,
     )
 
 
+def parse_makefile_var(makefile_path: pathlib.Path, var_name: str) -> list:
+    txt = makefile_path.read_text(encoding="utf-8", errors="replace")
+    m = re.search(rf"^{re.escape(var_name)}\s*=\s*(.+)$", txt, re.MULTILINE)
+    if not m:
+        return []
+    return m.group(1).strip().split()
+
+
+_MV02_TESTS_NEEDED = (
+    "wasm_mv02_signedness.c",
+    "x86_mv02_imm64.c",
+    "typedef_compatible.c",
+    "typedef_incompatible.c",
+    "test_wasm_mv02.py",
+)
+
+
 def copy_repo_fast(src: pathlib.Path, dst: pathlib.Path):
-    """Copy compiler source and tests needed for isolated mutation build & test."""
+    """Copy compiler source and MV-02 test files into /tmp without DrvFS directory symlinks."""
     dst.mkdir(parents=True, exist_ok=True)
     for item in src.iterdir():
         name = item.name
         if name == ".git":
             continue
         if item.is_file() and (
-            name.endswith((".c", ".h", ".inc", ".py", ".sh", ".md"))
+            name.endswith((".c", ".h", ".inc", ".py", ".sh", ".md", ".tsv"))
             or name in ("Makefile", "zcc")
         ):
             for attempt in range(5):
@@ -54,27 +75,140 @@ def copy_repo_fast(src: pathlib.Path, dst: pathlib.Path):
                         shutil.copymode(item, dst / name)
                         break
                 except OSError:
-                    pass
-        elif name in ("src", "tests") and item.is_dir():
+                    time.sleep(0.05)
+        elif name in ("include", "src", "scripts", "templates", ".github") and item.is_dir():
             shutil.copytree(item, dst / name, dirs_exist_ok=True)
+        elif name == "tests" and item.is_dir():
+            (dst / "tests").mkdir(parents=True, exist_ok=True)
+            for tname in _MV02_TESTS_NEEDED:
+                tp = item / tname
+                if tp.exists():
+                    for attempt in range(5):
+                        try:
+                            (dst / "tests" / tname).write_bytes(tp.read_bytes())
+                            break
+                        except OSError:
+                            time.sleep(0.05)
+        elif name == "docs" and item.is_dir():
+            if (item / "lexicon").is_dir():
+                shutil.copytree(item / "lexicon", dst / "docs" / "lexicon", dirs_exist_ok=True)
         elif name == "tools" and item.is_dir():
             (dst / "tools").mkdir(parents=True, exist_ok=True)
             for tf in item.glob("*.py"):
-                (dst / "tools" / tf.name).write_bytes(tf.read_bytes())
-        elif item.is_dir() and not (dst / name).exists():
-            os.symlink(item, dst / name)
+                for attempt in range(5):
+                    try:
+                        (dst / "tools" / tf.name).write_bytes(tf.read_bytes())
+                        break
+                    except OSError:
+                        time.sleep(0.05)
 
 
 _BASELINE_TEST_CACHE = {}
 _STAGE_DIR = None
+_OBJ_CACHE_META = None
+
+
+def prepare_obj_cache(stage: pathlib.Path) -> dict:
+    """Pre-compile zcc.o and all PASSES .o files in parallel inside stage/.obj_cache."""
+    makefile = stage / "Makefile"
+    parts = parse_makefile_var(makefile, "PARTS")
+    passes = parse_makefile_var(makefile, "PASSES")
+    cflags = "-O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Iinclude -I."
+    obj_dir = stage / ".obj_cache"
+    obj_dir.mkdir(parents=True, exist_ok=True)
+
+    # Ensure bridge headers and amalgamated zcc.c are up to date
+    run("python3 sync_bridge.py part1.c zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc", stage)
+    with (stage / "zcc.c").open("wb") as out_f:
+        for p in parts:
+            out_f.write((stage / p).read_bytes())
+
+    compile_Units = [("zcc.c", obj_dir / "zcc.o", f"cc {cflags} -Dmain=zcc_main -c zcc.c -o {obj_dir / 'zcc.o'}")]
+    pass_objs = {}
+    for idx, psrc in enumerate(passes):
+        safe_name = f"pass_{idx:03d}_{psrc.replace('/', '_')}.o"
+        obj_path = obj_dir / safe_name
+        pass_objs[psrc] = str(obj_path)
+        compile_Units.append((psrc, obj_path, f"cc {cflags} -c {psrc} -o {obj_path}"))
+
+    def _compile_unit(unit):
+        _, _, cmd = unit
+        r = run(cmd, stage)
+        if r.returncode != 0:
+            raise RuntimeError(f"Failed precompiling {cmd}: {r.stdout}")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(os.cpu_count() or 8, 16)) as ex:
+        list(ex.map(_compile_unit, compile_Units))
+
+    # Link baseline zcc binary once in stage if not present or rebuild identically
+    all_objs = [str(obj_dir / "zcc.o")] + [pass_objs[p] for p in passes]
+    link_cmd = f"cc {cflags} -o zcc {' '.join(all_objs)} -lm -Wl,-s && strip --strip-all zcc"
+    r = run(link_cmd, stage)
+    if r.returncode != 0:
+        raise RuntimeError(f"Failed linking baseline zcc in stage: {r.stdout}")
+
+    return {
+        "parts": parts,
+        "passes": passes,
+        "cflags": cflags,
+        "zcc_obj": str(obj_dir / "zcc.o"),
+        "pass_objs": pass_objs,
+        "base_bin_hash": sha256(stage / "zcc"),
+    }
 
 
 def get_stage_dir(repo: pathlib.Path) -> pathlib.Path:
-    global _STAGE_DIR
+    global _STAGE_DIR, _OBJ_CACHE_META
     if _STAGE_DIR is None:
         _STAGE_DIR = pathlib.Path(tempfile.mkdtemp(prefix="zcc_mv02_stage_"))
         copy_repo_fast(repo, _STAGE_DIR)
+        _OBJ_CACHE_META = prepare_obj_cache(_STAGE_DIR)
     return _STAGE_DIR
+
+
+def fast_incremental_build(work: pathlib.Path, rel_file: str, meta: dict):
+    """Recompile only the mutated translation unit and link against cached .o files."""
+    cflags = meta["cflags"]
+    parts = meta["parts"]
+    passes = meta["passes"]
+    zcc_obj = meta["zcc_obj"]
+    pass_objs = dict(meta["pass_objs"])
+
+    if rel_file in parts or rel_file.endswith((".h", ".inc")):
+        with (work / "zcc.c").open("wb") as out_f:
+            for p in parts:
+                out_f.write((work / p).read_bytes())
+        local_zcc_obj = str(work / "mut_zcc.o")
+        r = run(f"cc {cflags} -Dmain=zcc_main -c zcc.c -o {local_zcc_obj}", work)
+        if r.returncode != 0:
+            return r
+        zcc_obj = local_zcc_obj
+
+    if rel_file in pass_objs:
+        local_pass_obj = str(work / "mut_pass.o")
+        r = run(f"cc {cflags} -c {rel_file} -o {local_pass_obj}", work)
+        if r.returncode != 0:
+            return r
+        pass_objs[rel_file] = local_pass_obj
+    elif rel_file.endswith(".h"):
+        # If a header in src/ or include/ was mutated, also recompile matching .c in passes if present
+        stem_c = rel_file[:-2] + ".c"
+        if stem_c in pass_objs:
+            local_pass_obj = str(work / "mut_hdr_pass.o")
+            r = run(f"cc {cflags} -c {stem_c} -o {local_pass_obj}", work)
+            if r.returncode != 0:
+                return r
+            pass_objs[stem_c] = local_pass_obj
+
+    all_objs = [zcc_obj] + [pass_objs[p] for p in passes]
+    link_cmd = f"cc {cflags} -o zcc {' '.join(all_objs)} -lm -Wl,-s && strip --strip-all zcc"
+    return run(link_cmd, work)
+
+
+def isolate_test_cmd(test_cmd: str, worker_tmp: pathlib.Path) -> str:
+    """Redirect hardcoded /tmp/ artifact paths inside test_cmd to worker-private temp dir."""
+    wtmp = str(worker_tmp).rstrip("/") + "/"
+    return test_cmd.replace("/tmp/", wtmp)
 
 
 def run_single_mutation(
@@ -85,11 +219,19 @@ def run_single_mutation(
     build_cmd: str,
     test_cmd: str,
     mutation_id: str = "CUSTOM",
+    stage_dir: pathlib.Path = None,
+    obj_meta: dict = None,
+    baseline_ok: bool = False,
 ) -> dict:
-    stage = get_stage_dir(repo)
+    t0 = time.monotonic()
+    stage = stage_dir if stage_dir is not None else get_stage_dir(repo)
+    meta = obj_meta if obj_meta is not None else _OBJ_CACHE_META
     with tempfile.TemporaryDirectory(prefix=f"zcc_mv02_{mutation_id}_") as tmp:
-        work = pathlib.Path(tmp) / "repo"
-        shutil.copytree(stage, work, symlinks=True)
+        tmp_path = pathlib.Path(tmp)
+        work = tmp_path / "repo"
+        wtmp = tmp_path / "wtmp"
+        wtmp.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(stage, work, symlinks=True, ignore=shutil.ignore_patterns(".obj_cache"))
         target = work / rel_file
         original = target.read_text(encoding="utf-8")
         if old_str not in original:
@@ -100,30 +242,29 @@ def run_single_mutation(
                 "killed": False,
             }
 
-        # 1. Baseline build & test (reuse repo baseline binary if already built)
+        isolated_test_cmd = isolate_test_cmd(test_cmd, wtmp)
+        env = os.environ.copy()
+        env["TMPDIR"] = str(wtmp)
+
+        # 1. Baseline build & test
         zcc_bin = work / "zcc"
-        if not zcc_bin.exists():
-            base_build = run(build_cmd, work)
-            if base_build.returncode != 0:
+        base_bin_hash = meta["base_bin_hash"] if (meta and zcc_bin.exists()) else (sha256(zcc_bin) if zcc_bin.exists() else "N/A")
+        if not baseline_ok:
+            cache_key = (base_bin_hash, test_cmd)
+            if cache_key not in _BASELINE_TEST_CACHE:
+                _BASELINE_TEST_CACHE[cache_key] = run(isolated_test_cmd, work, env=env)
+            base_test = _BASELINE_TEST_CACHE[cache_key]
+            if base_test.returncode != 0:
                 return {
                     "mutation_id": mutation_id,
-                    "status": "ERROR_BASELINE_BUILD_FAILED",
-                    "output": base_build.stdout[-800:],
+                    "status": "ERROR_BASELINE_TEST_FAILED",
+                    "baseline_exit": base_test.returncode,
+                    "output": base_test.stdout[-800:],
                     "killed": False,
                 }
-        base_bin_hash = sha256(zcc_bin) if zcc_bin.exists() else "N/A"
-        cache_key = (base_bin_hash, test_cmd)
-        if cache_key not in _BASELINE_TEST_CACHE:
-            _BASELINE_TEST_CACHE[cache_key] = run(test_cmd, work)
-        base_test = _BASELINE_TEST_CACHE[cache_key]
-        if base_test.returncode != 0:
-            return {
-                "mutation_id": mutation_id,
-                "status": "ERROR_BASELINE_TEST_FAILED",
-                "baseline_exit": base_test.returncode,
-                "output": base_test.stdout[-800:],
-                "killed": False,
-            }
+            base_exit = base_test.returncode
+        else:
+            base_exit = 0
 
         # 2. Apply single mutation
         mutated = original.replace(old_str, new_str, 1)
@@ -135,7 +276,10 @@ def run_single_mutation(
             if zcc_bin.exists():
                 zcc_bin.unlink()
 
-        mut_build = run(build_cmd, work)
+        if build_cmd == "make zcc" and meta is not None and not rel_file.startswith(("tests/", "tools/")):
+            mut_build = fast_incremental_build(work, rel_file, meta)
+        else:
+            mut_build = run(build_cmd, work, env=env)
         if mut_build.returncode != 0:
             return {
                 "mutation_id": mutation_id,
@@ -145,7 +289,7 @@ def run_single_mutation(
                 "killed": False,
             }
         mut_bin_hash = sha256(zcc_bin) if zcc_bin.exists() else "N/A"
-        mut_test = run(test_cmd, work)
+        mut_test = run(isolated_test_cmd, work, env=env)
 
         killed = mut_test.returncode != 0 and (
             base_bin_hash != mut_bin_hash or rel_file.startswith(("tests/", "tools/"))
@@ -156,11 +300,12 @@ def run_single_mutation(
             "mutated_source_sha256": mut_src_hash,
             "baseline_binary_sha256": base_bin_hash,
             "mutated_binary_sha256": mut_bin_hash,
-            "baseline_exit": base_test.returncode,
+            "baseline_exit": base_exit,
             "mutated_build_exit": mut_build.returncode,
             "mutated_test_exit": mut_test.returncode,
             "killed": killed,
             "status": "KILLED" if killed else "SURVIVED",
+            "elapsed_sec": round(time.monotonic() - t0, 2),
             "counterexample_output": mut_test.stdout.strip()[-600:],
         }
 
@@ -245,7 +390,7 @@ LEDGER_MUTATIONS = [
         "old": "EXECUTED_VECTOR_COUNT_GUARD = True",
         "new": "EXECUTED_VECTOR_COUNT_GUARD = False  # MV02-08",
         "build": "true",
-        "test": "python3 -m unittest discover -s tests -p 'test_wasm_mv02.py' -v",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_04_seven_defect_class_seed_sensitivity",
     },
     {
         "id": "MV02-09",
@@ -254,7 +399,7 @@ LEDGER_MUTATIONS = [
         "old": "ARTIFACT_FRESHNESS_GUARD = True",
         "new": "ARTIFACT_FRESHNESS_GUARD = False  # MV02-09",
         "build": "true",
-        "test": "python3 -m unittest discover -s tests -p 'test_wasm_mv02.py' -v",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_04_seven_defect_class_seed_sensitivity",
     },
     {
         "id": "MV03-01",
@@ -317,7 +462,7 @@ LEDGER_MUTATIONS = [
         "old": "  if (idx_reg >= 0 && (idx_reg & 8))\n    rex |= 0x02;",
         "new": "  if (0 && idx_reg >= 0 && (idx_reg & 8))\n    rex |= 0x02; /* MV04-03 */",
         "build": "make zcc",
-        "test": "python3 -m unittest discover -s tests -p 'test_wasm_mv02.py' -v",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_05_mv04_gnu_as_binary_encoding_equivalence",
     },
     {
         "id": "MV05-01",
@@ -934,6 +1079,51 @@ LEDGER_MUTATIONS = [
 ]
 
 
+def _worker_run_mutation(task: tuple) -> tuple:
+    idx, m, repo_str, stage_str, obj_meta = task
+    res = run_single_mutation(
+        repo=pathlib.Path(repo_str),
+        rel_file=m["file"],
+        old_str=m["old"],
+        new_str=m["new"],
+        build_cmd=m["build"],
+        test_cmd=m["test"],
+        mutation_id=m["id"],
+        stage_dir=pathlib.Path(stage_str),
+        obj_meta=obj_meta,
+        baseline_ok=True,
+    )
+    res["description"] = m["desc"]
+    return idx, res
+
+
+def normalize_baseline_cmd(cmd: str) -> str:
+    """Collapse test commands that differ only in their /tmp/x86_mvXX_YY output binary name."""
+    return re.sub(r"/tmp/x86_mv\d+(?:_\d+|_mut)\b", "/tmp/x86_mv_base_bin", cmd)
+
+
+def prewarm_baseline_tests(stage: pathlib.Path) -> tuple:
+    """Verify each unique normalized test_cmd passes on the unmutated stage directory in isolated sandboxes."""
+    unique_cmds = sorted({normalize_baseline_cmd(m["test"]) for m in LEDGER_MUTATIONS})
+
+    def _check_cmd(cmd: str):
+        with tempfile.TemporaryDirectory(prefix="zcc_mv02_base_wtmp_") as wtmp:
+            wtmp_path = pathlib.Path(wtmp)
+            bwork = wtmp_path / "repo"
+            shutil.copytree(stage, bwork, symlinks=True, ignore=shutil.ignore_patterns(".obj_cache"))
+            env = os.environ.copy()
+            env["TMPDIR"] = str(wtmp_path)
+            iso_cmd = isolate_test_cmd(cmd, wtmp_path)
+            r = run(iso_cmd, bwork, env=env)
+            return cmd, r.returncode, r.stdout[-800:]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(unique_cmds), os.cpu_count() or 8, 16)) as ex:
+        for cmd, rc, out in ex.map(_check_cmd, unique_cmds):
+            if rc != 0:
+                return False, cmd, rc, out
+    return True, "", 0, ""
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default=".")
@@ -944,38 +1134,94 @@ def main() -> int:
     ap.add_argument("--test")
     ap.add_argument("--run-ledger", action="store_true")
     ap.add_argument("--out-json", default="")
+    ap.add_argument(
+        "-j",
+        "--jobs",
+        type=int,
+        default=min(os.cpu_count() or 8, 16),
+        help="Number of parallel worker processes for --run-ledger (default: up to 16 CPU cores)",
+    )
     args = ap.parse_args()
 
     repo = pathlib.Path(args.repo).resolve()
 
     if args.run_ledger:
-        results = []
+        t_start = time.monotonic()
+        jobs = max(1, args.jobs)
+        print(
+            f"[MV-02] Initializing local /tmp stage & pre-compiling object cache (jobs={jobs})...",
+            flush=True,
+        )
+        stage = get_stage_dir(repo)
+        meta = _OBJ_CACHE_META
+        t_stage = time.monotonic() - t_start
+        print(
+            f"[MV-02] Stage ready in {t_stage:.2f}s (base_sha256={meta['base_bin_hash'][:16]}...). "
+            f"Pre-verifying unique baseline test commands...",
+            flush=True,
+        )
+        ok, failed_cmd, rc, out = prewarm_baseline_tests(stage)
+        if not ok:
+            print(f"[MV-02] ERROR: Baseline test command failed (exit={rc}): {failed_cmd}\n{out}", flush=True)
+            return 1
+        print(
+            f"[MV-02] Baseline tests verified in {time.monotonic() - t_start:.2f}s. "
+            f"Dispatching {len(LEDGER_MUTATIONS)} adversarial mutations across {jobs} worker processes...",
+            flush=True,
+        )
+
+        tasks = [
+            (idx, m, str(repo), str(stage), meta)
+            for idx, m in enumerate(LEDGER_MUTATIONS)
+        ]
+        ordered_results = [None] * len(LEDGER_MUTATIONS)
         all_killed = True
-        for m in LEDGER_MUTATIONS:
-            print(f"[MV-02] Running {m['id']}: {m['desc']} ...", flush=True)
-            res = run_single_mutation(
-                repo=repo,
-                rel_file=m["file"],
-                old_str=m["old"],
-                new_str=m["new"],
-                build_cmd=m["build"],
-                test_cmd=m["test"],
-                mutation_id=m["id"],
-            )
-            res["description"] = m["desc"]
-            results.append(res)
-            print(
-                f"  -> {m['id']}: status={res['status']} baseline_exit={res.get('baseline_exit')} "
-                f"mut_build_exit={res.get('mutated_build_exit')} mut_test_exit={res.get('mutated_test_exit')}",
-                flush=True,
-            )
-            if not res.get("killed", False):
-                all_killed = False
+
+        if jobs == 1:
+            for task in tasks:
+                idx, res = _worker_run_mutation(task)
+                ordered_results[idx] = res
+                m = LEDGER_MUTATIONS[idx]
+                print(
+                    f"  -> [{idx + 1:02d}/{len(LEDGER_MUTATIONS)}] {m['id']}: status={res['status']} "
+                    f"baseline_exit={res.get('baseline_exit')} mut_build_exit={res.get('mutated_build_exit')} "
+                    f"mut_test_exit={res.get('mutated_test_exit')} ({res.get('elapsed_sec', 0):.2f}s)",
+                    flush=True,
+                )
+                if not res.get("killed", False):
+                    all_killed = False
+        else:
+            completed_count = 0
+            with concurrent.futures.ProcessPoolExecutor(max_workers=jobs) as pool:
+                future_map = {pool.submit(_worker_run_mutation, t): t[0] for t in tasks}
+                for fut in concurrent.futures.as_completed(future_map):
+                    idx, res = fut.result()
+                    ordered_results[idx] = res
+                    completed_count += 1
+                    m = LEDGER_MUTATIONS[idx]
+                    print(
+                        f"  -> [{completed_count:02d}/{len(LEDGER_MUTATIONS)}] {m['id']} ({m['file']}): "
+                        f"status={res['status']} baseline_exit={res.get('baseline_exit')} "
+                        f"mut_build_exit={res.get('mutated_build_exit')} mut_test_exit={res.get('mutated_test_exit')} "
+                        f"({res.get('elapsed_sec', 0):.2f}s)",
+                        flush=True,
+                    )
+                    if not res.get("killed", False):
+                        all_killed = False
+
+        results = ordered_results
         if args.out_json:
             out_p = pathlib.Path(args.out_json)
             out_p.parent.mkdir(parents=True, exist_ok=True)
             out_p.write_text(json.dumps(results, indent=2), encoding="utf-8")
-        print(f"[MV-02] Ledger summary: {sum(1 for r in results if r.get('killed'))}/{len(results)} mutations killed.")
+        total_elapsed = time.monotonic() - t_start
+        killed_cnt = sum(1 for r in results if r and r.get("killed"))
+        print(
+            f"[MV-02] Ledger summary: {killed_cnt}/{len(results)} mutations killed "
+            f"in {total_elapsed:.2f}s ({jobs} workers).",
+            flush=True,
+        )
+        shutil.rmtree(stage, ignore_errors=True)
         return 0 if all_killed else 1
 
     if not (args.file and args.old and args.new and args.test):
