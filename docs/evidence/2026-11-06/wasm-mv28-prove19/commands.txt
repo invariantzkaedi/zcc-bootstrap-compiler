@@ -1,0 +1,10 @@
+make selfhost
+cmp -s zcc2.s zcc3.s && cmp -s zcc2 zcc3
+./zcc -c /tmp/mv02_abi_lib.c -o /tmp/mv02_zcc_lib.o && gcc -O2 -c /tmp/mv02_abi_main.c -o /tmp/mv02_gcc_main.o && gcc /tmp/mv02_zcc_lib.o /tmp/mv02_gcc_main.o -o /tmp/mv02_interop_1 && /tmp/mv02_interop_1
+gcc -O2 -c /tmp/mv02_abi_lib.c -o /tmp/mv02_gcc_lib.o && ./zcc -c /tmp/mv02_abi_main.c -o /tmp/mv02_zcc_main.o && gcc /tmp/mv02_gcc_lib.o /tmp/mv02_zcc_main.o -o /tmp/mv02_interop_2 && /tmp/mv02_interop_2
+bash zcc_test_suite.sh --quick
+python3 -m unittest discover -s tests -p "test_wasm_i64.py" -v
+python3 -m unittest discover -s tests -p "test_wasm_mv02.py" -v
+python3 ZCC_ORACLE_NEGATIVE_CONTROLS.py
+python3 tools/zcc_prove_01.py --out-json /tmp/zcc_prove_19.json
+python3 tools/mv02_mutation.py --repo . --run-ledger --out-json /tmp/mv28_mutation_ledger.json

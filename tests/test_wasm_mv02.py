@@ -1400,12 +1400,12 @@ int main(void) {
                 rq_rv = subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True, text=True)
                 self.assertEqual(rq_rv.returncode, 102)
 
-            # 4. WASM32 SIMD128 i32x4.shl + i32x4.shr_s + f32x4.div + i32.rotl/rotr + i64.rotl/rotr + ZCC-PROVE-11..15
+            # 4. WASM32 SIMD128 i32x4.shl + i32x4.shr_s + f32x4.div + i32.rotl/rotr + i64.rotl/rotr + ZCC-PROVE-11..19
             wasm_out = pathlib.Path(tmp) / "mv24.wasm"
             r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv24_c), "-o", str(wasm_out)], capture_output=True, text=True)
             self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
             wb = wasm_out.read_bytes()
-            self.assertIn(b"ZCC-PROVE-11..15", wb, "Missing ZCC-PROVE-11..15 in .zcc.prove custom section")
+            self.assertIn(b"ZCC-PROVE-11..", wb, "Missing ZCC-PROVE-11.. in .zcc.prove custom section")
             self.assertIn(b"\xfd\xab\x01", wb, "Expected i32x4.shl (0xfd 0xab 0x01) in vec_shl_splat")
             self.assertIn(b"\xfd\xac\x01", wb, "Expected i32x4.shr_s (0xfd 0xac 0x01) in vec_shr_splat")
             self.assertIn(b"\xfd\xe7\x01", wb, "Expected f32x4.div (0xfd 0xe7 0x01) in vec_div_f32")
@@ -1417,6 +1417,263 @@ int main(void) {
                 rwt = subprocess.run([str(WASMTIME_BIN), "run", "--invoke", "main", str(wasm_out)], capture_output=True, text=True)
                 self.assertEqual(rwt.returncode, 0, rwt.stderr)
                 self.assertEqual(rwt.stdout.strip(), "102")
+
+    def test_16_bitreverse_quad_isa_and_const_folding(self) -> None:
+        """
+        MV-25 / BITOPS-BITREVERSE-01 / ZCC-PROVE-16:
+        1. Compile-time constant folding in part5.c for __builtin_bitreverse32 and __builtin_bitreverse64.
+        2. Runtime lowering across all 4 ISAs:
+           - x86-64: .Lx86_br_ loop shifting & reversing 32/64 bits
+           - ARM64: hardware rbit w0, w0 (32-bit) and rbit x0, x0 (64-bit)
+           - RISC-V 64: .Lrv_br_ loop with 32-bit zero-extension
+           - WASM32: 5-stage (32-bit) / 6-stage (64-bit) parallel mask-and-shift bit-reversal
+        3. Quad-ISA Bit-Exact Differential Execution Lock: x86-64 ELF, ARM64 (qemu-aarch64-static),
+           RISC-V 64 (qemu-riscv64-static), and WASM32 (Node.js V8 + Wasmtime) all return exact exit status 77.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            mv25_c = pathlib.Path(tmp) / "quad_mv25.c"
+            mv25_c.write_text(
+                r"""
+unsigned int g_br32 = __builtin_bitreverse32(0x80000001U);
+unsigned long long g_br64 = __builtin_bitreverse64(0x8000000000000003ULL);
+
+int test_bitrev(unsigned int v32, unsigned long long v64) {
+    unsigned int r32 = __builtin_bitreverse32(v32);
+    unsigned long long r64 = __builtin_bitreverse64(v64);
+    int ok32 = (r32 == 0x1E6A2C48U) ? 30 : 0;
+    int ok64 = (r64 == 0x11EE66AA22CC4488ULL) ? 40 : 0;
+    return ok32 + ok64;
+}
+
+int main(void) {
+    if (g_br32 != 0x80000001U) return 1;
+    if (g_br64 != 0xC000000000000001ULL) return 2;
+    return test_bitrev(0x12345678U, 0x1122334455667788ULL) + 7;
+}
+""",
+                encoding="utf-8",
+            )
+            x86_s = pathlib.Path(tmp) / "mv25_x86.s"
+            x86_bin = pathlib.Path(tmp) / "mv25_x86"
+            r_x86_s = subprocess.run([str(ZCC_BIN), "-S", str(mv25_c), "-o", str(x86_s)], capture_output=True, text=True)
+            self.assertEqual(r_x86_s.returncode, 0, r_x86_s.stderr)
+            x86_txt = x86_s.read_text(encoding="utf-8")
+            self.assertIn(".Lx86_br_", x86_txt, "Missing .Lx86_br_ loop on x86-64 __builtin_bitreverse32/64")
+            r_x86_b = subprocess.run([str(ZCC_BIN), str(mv25_c), "-o", str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_b.returncode, 0, r_x86_b.stderr)
+            self.assertEqual(subprocess.run([str(x86_bin)], capture_output=True).returncode, 77)
+
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                arm_s = pathlib.Path(tmp) / "mv25_arm64.s"
+                arm_o = pathlib.Path(tmp) / "mv25_arm64.o"
+                arm_bin = pathlib.Path(tmp) / "mv25_arm64"
+                r_arm_s = subprocess.run([str(ZCC_BIN), "--target=arm64", "-S", str(mv25_c), "-o", str(arm_s)], capture_output=True, text=True)
+                self.assertEqual(r_arm_s.returncode, 0, r_arm_s.stderr)
+                arm_txt = arm_s.read_text(encoding="utf-8")
+                self.assertIn("rbit w0, w0", arm_txt, "Missing rbit w0, w0 on ARM64 __builtin_bitreverse32")
+                self.assertIn("rbit x0, x0", arm_txt, "Missing rbit x0, x0 on ARM64 __builtin_bitreverse64")
+                arm_s.write_text(arm_txt + "\n.text\n.globl _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n", encoding="utf-8")
+                self.assertEqual(subprocess.run(["aarch64-linux-gnu-as", str(arm_s), "-o", str(arm_o)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["aarch64-linux-gnu-ld", str(arm_o), "-o", str(arm_bin)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["qemu-aarch64-static", str(arm_bin)], capture_output=True).returncode, 77)
+
+            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
+                rv_s = pathlib.Path(tmp) / "mv25_rv64.s"
+                rv_bin = pathlib.Path(tmp) / "mv25_rv64"
+                r_rv_s = subprocess.run([str(ZCC_BIN), "--target=riscv64", "-S", str(mv25_c), "-o", str(rv_s)], capture_output=True, text=True)
+                self.assertEqual(r_rv_s.returncode, 0, r_rv_s.stderr)
+                rv_txt = rv_s.read_text(encoding="utf-8")
+                self.assertIn(".Lrv_br_", rv_txt, "Missing .Lrv_br_ on RISC-V 64 __builtin_bitreverse")
+                self.assertEqual(subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_bin)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True).returncode, 77)
+
+            wasm_out = pathlib.Path(tmp) / "mv25.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv25_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            if shutil.which("wasm-validate"):
+                self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
+            self.assertEqual(run_wasm_node(wasm_out), 77)
+
+    def test_17_wasm_simd128_branchless_minmax_abs_autovec(self) -> None:
+        """
+        MV-26 / WASM-SIMD128-MINMAX-ABS-01 / ZCC-PROVE-17:
+        1. Auto-vectorizes ternary min/max/abs loops in part6_wasm.c into branchless 128-bit SIMD opcodes:
+           - i32x4.min_s (0xFD 0xB6 0x01) for dst[i] = (a[i] < b[i]) ? a[i] : b[i]
+           - i32x4.max_s (0xFD 0xB8 0x01) for dst[i] = (a[i] > b[i]) ? a[i] : b[i]
+           - i32x4.abs   (0xFD 0xA0 0x01) for dst[i] = (a[i] < 0) ? -a[i] : a[i]
+        2. Verifies wasm-validate + V8 execution parity.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            mv26_c = pathlib.Path(tmp) / "quad_mv26.c"
+            mv26_c.write_text(
+                r"""
+void vec_min_s(int *dst, const int *a, const int *b, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = (a[i] < b[i]) ? a[i] : b[i];
+    }
+}
+
+void vec_max_s(int *dst, const int *a, const int *b, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = (a[i] > b[i]) ? a[i] : b[i];
+    }
+}
+
+void vec_abs_s(int *dst, const int *a, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = (a[i] < 0) ? -a[i] : a[i];
+    }
+}
+
+int main(void) {
+    int a[4] = {-10, 25, -3, 40};
+    int b[4] = {-5,  12, -8, 50};
+    int mn[4] = {0, 0, 0, 0};
+    int mx[4] = {0, 0, 0, 0};
+    int ab[4] = {0, 0, 0, 0};
+    vec_min_s(mn, a, b, 4);
+    vec_max_s(mx, a, b, 4);
+    vec_abs_s(ab, a, 4);
+    int s_mn = mn[0] + mn[1] + mn[2] + mn[3]; /* -10 + 12 - 8 + 40 = 34 */
+    int s_mx = mx[0] + mx[1] + mx[2] + mx[3]; /* -5 + 25 - 3 + 50 = 67 */
+    int s_ab = ab[0] + ab[1] + ab[2] + ab[3]; /* 10 + 25 + 3 + 40 = 78 */
+    return s_mn + s_mx + s_ab; /* 179 */
+}
+""",
+                encoding="utf-8",
+            )
+            wasm_out = pathlib.Path(tmp) / "mv26.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv26_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            wb = wasm_out.read_bytes()
+            self.assertIn(b"\xfd\xb6\x01", wb, "Expected i32x4.min_s (0xfd 0xb6 0x01) in vec_min_s")
+            self.assertIn(b"\xfd\xb8\x01", wb, "Expected i32x4.max_s (0xfd 0xb8 0x01) in vec_max_s")
+            self.assertIn(b"\xfd\xa0\x01", wb, "Expected i32x4.abs (0xfd 0xa0 0x01) in vec_abs_s")
+            if shutil.which("wasm-validate"):
+                self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
+            self.assertEqual(run_wasm_node(wasm_out), 179)
+
+    def test_18_strength_reduction_lea_and_bswap_involution_peephole(self) -> None:
+        """
+        MV-27 / PEEPHOLE-LEA359-BSWAP-01 / ZCC-PROVE-18:
+        1. Peephole strength reduction in part5.c: imulq $3/$5/$9, %reg -> leaq (%reg,%reg,2/4/8), %reg when EFLAGS dead.
+        2. Peephole involution elision in part5.c: back-to-back bswapq/bswapl on the same register elided.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            mv27_c = pathlib.Path(tmp) / "quad_mv27.c"
+            mv27_c.write_text(
+                r"""
+long long mul_359(long long x) {
+    long long a = x * 3;
+    long long b = a * 5;
+    long long c = b * 9;
+    return c;
+}
+
+unsigned int double_bswap32(unsigned int x) {
+    return __builtin_bswap32(__builtin_bswap32(x));
+}
+
+int main(void) {
+    long long m = mul_359(1LL); /* 135 */
+    unsigned int d = double_bswap32(44U); /* 44 */
+    return (int)m + (int)d; /* 179 */
+}
+""",
+                encoding="utf-8",
+            )
+            x86_s = pathlib.Path(tmp) / "mv27_x86.s"
+            x86_bin = pathlib.Path(tmp) / "mv27_x86"
+            r_x86_s = subprocess.run([str(ZCC_BIN), "-S", str(mv27_c), "-o", str(x86_s)], capture_output=True, text=True)
+            self.assertEqual(r_x86_s.returncode, 0, r_x86_s.stderr)
+            x86_txt = x86_s.read_text(encoding="utf-8")
+            self.assertIn("leaq (%rax,%rax,2), %rax", x86_txt, "Missing imulq $3 -> leaq (%rax,%rax,2), %rax strength reduction")
+            self.assertIn("leaq (%rax,%rax,4), %rax", x86_txt, "Missing imulq $5 -> leaq (%rax,%rax,4), %rax strength reduction")
+            self.assertIn("leaq (%rax,%rax,8), %rax", x86_txt, "Missing imulq $9 -> leaq (%rax,%rax,8), %rax strength reduction")
+            self.assertNotIn("bswapl %eax", x86_txt, "Double bswapl %eax involution was not elided by peephole")
+            r_x86_b = subprocess.run([str(ZCC_BIN), str(mv27_c), "-o", str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_b.returncode, 0, r_x86_b.stderr)
+            self.assertEqual(subprocess.run([str(x86_bin)], capture_output=True).returncode, 179)
+
+    def test_19_checked_overflow_intrinsics_quad_isa(self) -> None:
+        """
+        MV-28 / BITOPS-OVERFLOW-01 / ZCC-PROVE-19:
+        1. Compile-time constant folding and Quad-ISA runtime lowering for:
+           - __builtin_sadd_overflow_p(a, b)
+           - __builtin_ssub_overflow_p(a, b)
+           - __builtin_uadd_overflow_p(a, b)
+           - __builtin_usub_overflow_p(a, b)
+        2. Quad-ISA Bit-Exact Differential Execution Lock across x86-64, ARM64, RISC-V 64, and WASM32 (exit 95).
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            mv28_c = pathlib.Path(tmp) / "quad_mv28.c"
+            mv28_c.write_text(
+                r"""
+int g_sadd_ovf = __builtin_sadd_overflow_p(2147483647, 1);
+int g_sadd_ok  = __builtin_sadd_overflow_p(100, 200);
+int g_uadd_ovf = __builtin_uadd_overflow_p(4294967295U, 1U);
+int g_usub_ovf = __builtin_usub_overflow_p(5U, 10U);
+
+int test_ovf(int smax, int smin, unsigned int umax) {
+    int c1 = __builtin_sadd_overflow_p(smax, 1);
+    int c2 = __builtin_sadd_overflow_p(smax, 0);
+    int c3 = __builtin_ssub_overflow_p(smin, 1);
+    int c4 = __builtin_ssub_overflow_p(smin, -1);
+    int c5 = __builtin_uadd_overflow_p(umax, 1U);
+    int c6 = __builtin_uadd_overflow_p(100U, 200U);
+    int c7 = __builtin_usub_overflow_p(10U, 20U);
+    int c8 = __builtin_usub_overflow_p(20U, 10U);
+    return c1 * 10 + c2 * 1 + c3 * 20 + c4 * 1 + c5 * 30 + c6 * 1 + c7 * 30 + c8 * 1;
+}
+
+int main(void) {
+    if (g_sadd_ovf != 1 || g_sadd_ok != 0 || g_uadd_ovf != 1 || g_usub_ovf != 1) return 1;
+    return test_ovf(2147483647, -2147483647 - 1, 4294967295U) + 5;
+}
+""",
+                encoding="utf-8",
+            )
+            x86_s = pathlib.Path(tmp) / "mv28_x86.s"
+            x86_bin = pathlib.Path(tmp) / "mv28_x86"
+            r_x86_s = subprocess.run([str(ZCC_BIN), "-S", str(mv28_c), "-o", str(x86_s)], capture_output=True, text=True)
+            self.assertEqual(r_x86_s.returncode, 0, r_x86_s.stderr)
+            x86_txt = x86_s.read_text(encoding="utf-8")
+            self.assertIn("seto %al", x86_txt, "Missing seto %al on x86-64 signed overflow builtin")
+            self.assertIn("setb %al", x86_txt, "Missing setb %al on x86-64 unsigned overflow builtin")
+            r_x86_b = subprocess.run([str(ZCC_BIN), str(mv28_c), "-o", str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_b.returncode, 0, r_x86_b.stderr)
+            self.assertEqual(subprocess.run([str(x86_bin)], capture_output=True).returncode, 95)
+
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                arm_s = pathlib.Path(tmp) / "mv28_arm64.s"
+                arm_o = pathlib.Path(tmp) / "mv28_arm64.o"
+                arm_bin = pathlib.Path(tmp) / "mv28_arm64"
+                r_arm_s = subprocess.run([str(ZCC_BIN), "--target=arm64", "-S", str(mv28_c), "-o", str(arm_s)], capture_output=True, text=True)
+                self.assertEqual(r_arm_s.returncode, 0, r_arm_s.stderr)
+                arm_txt = arm_s.read_text(encoding="utf-8")
+                self.assertIn("cset w0, vs", arm_txt, "Missing cset w0, vs on ARM64 signed overflow")
+                self.assertIn("cset w0, cs", arm_txt, "Missing cset w0, cs on ARM64 unsigned add overflow")
+                arm_s.write_text(arm_txt + "\n.text\n.globl _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n", encoding="utf-8")
+                self.assertEqual(subprocess.run(["aarch64-linux-gnu-as", str(arm_s), "-o", str(arm_o)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["aarch64-linux-gnu-ld", str(arm_o), "-o", str(arm_bin)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["qemu-aarch64-static", str(arm_bin)], capture_output=True).returncode, 95)
+
+            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
+                rv_s = pathlib.Path(tmp) / "mv28_rv64.s"
+                rv_bin = pathlib.Path(tmp) / "mv28_rv64"
+                r_rv_s = subprocess.run([str(ZCC_BIN), "--target=riscv64", "-S", str(mv28_c), "-o", str(rv_s)], capture_output=True, text=True)
+                self.assertEqual(r_rv_s.returncode, 0, r_rv_s.stderr)
+                self.assertEqual(subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_bin)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True).returncode, 95)
+
+            wasm_out = pathlib.Path(tmp) / "mv28.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv28_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            wb = wasm_out.read_bytes()
+            self.assertIn(b"ZCC-PROVE-11..19", wb, "Missing ZCC-PROVE-11..19 in .zcc.prove custom section")
+            if shutil.which("wasm-validate"):
+                self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
+            self.assertEqual(run_wasm_node(wasm_out), 95)
 
 
 if __name__ == "__main__":

@@ -1097,6 +1097,10 @@ static void encode_set(Segment *seg, const char *mnemonic, const char *op_str) {
     bytes[1] = 0x9a;
   else if (strcmp(mnemonic, "setnp") == 0 || strcmp(mnemonic, "setpo") == 0)
     bytes[1] = 0x9b;
+  else if (strcmp(mnemonic, "seto") == 0)
+    bytes[1] = 0x90;
+  else if (strcmp(mnemonic, "setno") == 0)
+    bytes[1] = 0x91;
   if (rex)
     seg_append(seg, &rex, 1);
   seg_append(seg, bytes, 3);

@@ -56,51 +56,57 @@ _MV02_TESTS_NEEDED = (
 )
 
 
+def _copy_file_retry(src_file: pathlib.Path, dst_file: pathlib.Path):
+    dst_file.parent.mkdir(parents=True, exist_ok=True)
+    for attempt in range(5):
+        try:
+            data = src_file.read_bytes()
+            if data or src_file.stat().st_size == 0:
+                dst_file.write_bytes(data)
+                shutil.copymode(src_file, dst_file)
+                return
+        except OSError:
+            time.sleep(0.05)
+
+
 def copy_repo_fast(src: pathlib.Path, dst: pathlib.Path):
-    """Copy compiler source and MV-02 test files into /tmp without DrvFS directory symlinks."""
+    """Copy only the exact compiler source, headers, and MV-02 test files into /tmp (avoiding 9P scan of root)."""
     dst.mkdir(parents=True, exist_ok=True)
-    for item in src.iterdir():
-        name = item.name
-        if name == ".git":
-            continue
-        if item.is_file() and (
-            name.endswith((".c", ".h", ".inc", ".py", ".sh", ".md", ".tsv"))
-            or name in ("Makefile", "zcc")
-        ):
-            for attempt in range(5):
-                try:
-                    data = item.read_bytes()
-                    if data or item.stat().st_size == 0:
-                        (dst / name).write_bytes(data)
-                        shutil.copymode(item, dst / name)
-                        break
-                except OSError:
-                    time.sleep(0.05)
-        elif name in ("include", "src", "scripts", "templates", ".github") and item.is_dir():
-            shutil.copytree(item, dst / name, dirs_exist_ok=True)
-        elif name == "tests" and item.is_dir():
-            (dst / "tests").mkdir(parents=True, exist_ok=True)
-            for tname in _MV02_TESTS_NEEDED:
-                tp = item / tname
-                if tp.exists():
-                    for attempt in range(5):
-                        try:
-                            (dst / "tests" / tname).write_bytes(tp.read_bytes())
-                            break
-                        except OSError:
-                            time.sleep(0.05)
-        elif name == "docs" and item.is_dir():
-            if (item / "lexicon").is_dir():
-                shutil.copytree(item / "lexicon", dst / "docs" / "lexicon", dirs_exist_ok=True)
-        elif name == "tools" and item.is_dir():
-            (dst / "tools").mkdir(parents=True, exist_ok=True)
-            for tf in item.glob("*.py"):
-                for attempt in range(5):
-                    try:
-                        (dst / "tools" / tf.name).write_bytes(tf.read_bytes())
-                        break
-                    except OSError:
-                        time.sleep(0.05)
+    makefile = src / "Makefile"
+    parts = parse_makefile_var(makefile, "PARTS")
+    passes = parse_makefile_var(makefile, "PASSES")
+
+    explicit_files = set(parts) | set(passes) | {
+        "Makefile",
+        "sync_bridge.py",
+        "tools/zcc_prove_01.py",
+        "tools/mv02_mutation.py",
+    } | {f"tests/{t}" for t in _MV02_TESTS_NEEDED}
+
+    for rel in sorted(explicit_files):
+        sp = src / rel
+        if sp.is_file():
+            _copy_file_retry(sp, dst / rel)
+            if rel.endswith(".c"):
+                txt = (dst / rel).read_text(encoding="utf-8", errors="ignore")
+                for inc in re.findall(r'#include\s+"([^"]+)"', txt):
+                    inc_p = src / inc
+                    if inc_p.is_file() and not (dst / inc).exists():
+                        _copy_file_retry(inc_p, dst / inc)
+
+    for pattern in ("*.h", "*.inc", "part*.c", "zcc*.c", "ir*.c"):
+        for hdr in src.glob(pattern):
+            if hdr.is_file() and hdr.name != "zcc.c":
+                _copy_file_retry(hdr, dst / hdr.name)
+
+    for dname in ("include", "src", ".github"):
+        sd = src / dname
+        if sd.is_dir():
+            shutil.copytree(sd, dst / dname, dirs_exist_ok=True)
+
+    lex_dir = src / "docs" / "lexicon"
+    if lex_dir.is_dir():
+        shutil.copytree(lex_dir, dst / "docs" / "lexicon", dirs_exist_ok=True)
 
 
 _BASELINE_TEST_CACHE = {}
@@ -108,28 +114,75 @@ _STAGE_DIR = None
 _OBJ_CACHE_META = None
 
 
+def compute_stage_fingerprint(stage: pathlib.Path, parts: list, passes: list) -> str:
+    """Compute a deterministic SHA-256 fingerprint of all compiler sources, headers, and MV-02 tests."""
+    h = hashlib.sha256()
+    tracked = list(parts) + list(passes) + [
+        "Makefile",
+        "sync_bridge.py",
+        "tools/zcc_prove_01.py",
+    ] + [f"tests/{t}" for t in _MV02_TESTS_NEEDED]
+    for hdr in sorted(stage.glob("*.h")) + sorted(stage.glob("include/**/*.h")) + sorted(stage.glob("src/**/*.h")):
+        rel = str(hdr.relative_to(stage)).replace("\\", "/")
+        if rel not in tracked:
+            tracked.append(rel)
+    for rel in sorted(set(tracked)):
+        p = stage / rel
+        if p.is_file():
+            h.update(rel.encode("utf-8") + b"\0")
+            h.update(p.read_bytes() + b"\0")
+    return h.hexdigest()[:24]
+
+
 def prepare_obj_cache(stage: pathlib.Path) -> dict:
-    """Pre-compile zcc.o and all PASSES .o files in parallel inside stage/.obj_cache."""
+    """Pre-compile zcc.o and all PASSES .o files in parallel, reusing /tmp/zcc_mv02_pcache_<fp> when unchanged."""
     makefile = stage / "Makefile"
     parts = parse_makefile_var(makefile, "PARTS")
     passes = parse_makefile_var(makefile, "PASSES")
     cflags = "-O0 -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Iinclude -I."
-    obj_dir = stage / ".obj_cache"
-    obj_dir.mkdir(parents=True, exist_ok=True)
+    fp = compute_stage_fingerprint(stage, parts, passes)
+    pcache_dir = pathlib.Path(tempfile.gettempdir()) / f"zcc_mv02_pcache_{fp}"
+    obj_dir = pcache_dir / "obj_cache"
+    meta_json = pcache_dir / "meta.json"
 
-    # Ensure bridge headers and amalgamated zcc.c are up to date
+    # Ensure bridge headers and amalgamated zcc.c exist in stage
     run("python3 sync_bridge.py part1.c zcc_ast_bridge_constants.h zcc_ast_bridge_asserts.inc", stage)
     with (stage / "zcc.c").open("wb") as out_f:
         for p in parts:
             out_f.write((stage / p).read_bytes())
 
-    compile_Units = [("zcc.c", obj_dir / "zcc.o", f"cc {cflags} -Dmain=zcc_main -c zcc.c -o {obj_dir / 'zcc.o'}")]
-    pass_objs = {}
-    for idx, psrc in enumerate(passes):
-        safe_name = f"pass_{idx:03d}_{psrc.replace('/', '_')}.o"
-        obj_path = obj_dir / safe_name
-        pass_objs[psrc] = str(obj_path)
-        compile_Units.append((psrc, obj_path, f"cc {cflags} -c {psrc} -o {obj_path}"))
+    pass_objs = {
+        psrc: str(obj_dir / f"pass_{idx:03d}_{psrc.replace('/', '_')}.o")
+        for idx, psrc in enumerate(passes)
+    }
+    zcc_obj_path = obj_dir / "zcc.o"
+    cached_zcc_bin = pcache_dir / "zcc"
+
+    if (
+        meta_json.is_file()
+        and cached_zcc_bin.is_file()
+        and zcc_obj_path.is_file()
+        and all(pathlib.Path(p).is_file() for p in pass_objs.values())
+    ):
+        shutil.copy2(cached_zcc_bin, stage / "zcc")
+        saved = json.loads(meta_json.read_text(encoding="utf-8"))
+        return {
+            "parts": parts,
+            "passes": passes,
+            "cflags": cflags,
+            "zcc_obj": str(zcc_obj_path),
+            "pass_objs": pass_objs,
+            "base_bin_hash": saved["base_bin_hash"],
+            "pcache_dir": str(pcache_dir),
+            "cache_hit": True,
+            "baseline_verified": saved.get("baseline_verified", False),
+        }
+
+    obj_dir.mkdir(parents=True, exist_ok=True)
+    compile_units = [("zcc.c", zcc_obj_path, f"cc {cflags} -Dmain=zcc_main -c zcc.c -o {zcc_obj_path}")]
+    for psrc in passes:
+        obj_path = pathlib.Path(pass_objs[psrc])
+        compile_units.append((psrc, obj_path, f"cc {cflags} -c {psrc} -o {obj_path}"))
 
     def _compile_unit(unit):
         _, _, cmd = unit
@@ -138,22 +191,31 @@ def prepare_obj_cache(stage: pathlib.Path) -> dict:
             raise RuntimeError(f"Failed precompiling {cmd}: {r.stdout}")
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(os.cpu_count() or 8, 16)) as ex:
-        list(ex.map(_compile_unit, compile_Units))
+        list(ex.map(_compile_unit, compile_units))
 
-    # Link baseline zcc binary once in stage if not present or rebuild identically
-    all_objs = [str(obj_dir / "zcc.o")] + [pass_objs[p] for p in passes]
+    all_objs = [str(zcc_obj_path)] + [pass_objs[p] for p in passes]
     link_cmd = f"cc {cflags} -o zcc {' '.join(all_objs)} -lm -Wl,-s && strip --strip-all zcc"
     r = run(link_cmd, stage)
     if r.returncode != 0:
         raise RuntimeError(f"Failed linking baseline zcc in stage: {r.stdout}")
 
+    shutil.copy2(stage / "zcc", cached_zcc_bin)
+    base_hash = sha256(stage / "zcc")
+    meta_json.write_text(
+        json.dumps({"base_bin_hash": base_hash, "baseline_verified": False}, indent=2),
+        encoding="utf-8",
+    )
+
     return {
         "parts": parts,
         "passes": passes,
         "cflags": cflags,
-        "zcc_obj": str(obj_dir / "zcc.o"),
+        "zcc_obj": str(zcc_obj_path),
         "pass_objs": pass_objs,
-        "base_bin_hash": sha256(stage / "zcc"),
+        "base_bin_hash": base_hash,
+        "pcache_dir": str(pcache_dir),
+        "cache_hit": False,
+        "baseline_verified": False,
     }
 
 
@@ -1076,6 +1138,150 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_15_rotate_quad_isa_divmod_and_wasm_simd128_shift_div && python3 tools/zcc_prove_01.py",
     },
+    {
+        "id": "MV25-01",
+        "desc": "part5.c zcc_eval_const_bit_builtin disables compile-time constant folding for __builtin_bitreverse32",
+        "file": "part5.c",
+        "old": '  if (strcmp(fname, "__builtin_bitreverse32") == 0) {',
+        "new": '  if (0 && strcmp(fname, "__builtin_bitreverse32") == 0) { /* MV25-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_16_bitreverse_quad_isa_and_const_folding",
+    },
+    {
+        "id": "MV25-02",
+        "desc": "part5.c zcc_emit_bit_builtin_call emits clz w0, w0 instead of rbit w0, w0 on ARM64 __builtin_bitreverse32",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, is64 ? "    rbit x0, x0\\n" : "    rbit w0, w0\\n");',
+        "new": '      fprintf(cc->out, is64 ? "    rbit x0, x0\\n" : "    clz w0, w0\\n"); /* MV25-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_16_bitreverse_quad_isa_and_const_folding",
+    },
+    {
+        "id": "MV25-03",
+        "desc": "part5.c zcc_emit_bit_builtin_call omits 32-bit zero-extension on RISC-V 64 __builtin_bitreverse32",
+        "file": "part5.c",
+        "old": 'is64 ? 64 : 32, lbl, lbl, is64 ? "" : "    slli a0, a0, 32\\n    srli a0, a0, 32\\n");',
+        "new": 'is64 ? 64 : 16, lbl, lbl, ""); /* MV25-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_16_bitreverse_quad_isa_and_const_folding",
+    },
+    {
+        "id": "MV25-04",
+        "desc": "part6_wasm.c omits WASM32 __builtin_bitreverse32 lowering, breaking Quad-ISA bitreverse execution and ZCC-PROVE-16",
+        "file": "part6_wasm.c",
+        "old": '                if (strcmp(bfn, "bitreverse32") == 0 && lmap->tmp_val_idx >= 0) {',
+        "new": '                if (0 && strcmp(bfn, "bitreverse32") == 0 && lmap->tmp_val_idx >= 0) { /* MV25-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_16_bitreverse_quad_isa_and_const_folding && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV26-01",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop emits WASM_SIMD_I32X4_MAX_S instead of WASM_SIMD_I32X4_MIN_S on ND_LT ternary loop",
+        "file": "part6_wasm.c",
+        "old": '                    if (ck == ND_LT || ck == ND_LE) simd_op = is_u ? WASM_SIMD_I32X4_MIN_U : WASM_SIMD_I32X4_MIN_S;',
+        "new": '                    if (ck == ND_LT || ck == ND_LE) simd_op = WASM_SIMD_I32X4_MAX_S; /* MV26-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_17_wasm_simd128_branchless_minmax_abs_autovec",
+    },
+    {
+        "id": "MV26-02",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop emits WASM_SIMD_I32X4_MIN_S instead of WASM_SIMD_I32X4_MAX_S on ND_GT ternary loop",
+        "file": "part6_wasm.c",
+        "old": '                    else simd_op = is_u ? WASM_SIMD_I32X4_MAX_U : WASM_SIMD_I32X4_MAX_S;',
+        "new": '                    else simd_op = WASM_SIMD_I32X4_MIN_S; /* MV26-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_17_wasm_simd128_branchless_minmax_abs_autovec",
+    },
+    {
+        "id": "MV26-03",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop disables unary SIMD128 i32x4.abs recognition, breaking ZCC-PROVE-17",
+        "file": "part6_wasm.c",
+        "old": '                    simd_op = WASM_SIMD_I32X4_ABS;\n                    is_unary_simd = 1;',
+        "new": '                    simd_op = 0; /* MV26-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_17_wasm_simd128_branchless_minmax_abs_autovec && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV26-04",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop overwrites ternary simd_op when f32_d is 0, dropping SIMD128 min/max/abs emission",
+        "file": "part6_wasm.c",
+        "old": '    } else if (!simd_op) {\n        if (op_kind == ND_ADD) simd_op = WASM_SIMD_I32X4_ADD;',
+        "new": '    } else {\n        simd_op = 0; if (op_kind == ND_ADD) simd_op = WASM_SIMD_I32X4_ADD; /* MV26-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_17_wasm_simd128_branchless_minmax_abs_autovec",
+    },
+    {
+        "id": "MV27-01",
+        "desc": "part5.c peephole_optimize disables *3/*5/*9 -> leaq (%rax,%rax,2/4/8), %rax strength reduction, breaking ZCC-PROVE-18",
+        "file": "part5.c",
+        "old": '        int sc = (line_ptrs[i + 1][10] == \'3\') ? 2 : ((line_ptrs[i + 1][10] == \'5\') ? 4 : 8);\n        sprintf(line_ptrs[i], "    movq %%rax, %%r11\\n"); sprintf(line_ptrs[i + 1], "    leaq (%%rax,%%rax,%d), %%rax\\n", sc);',
+        "new": '        int sc = 0; if (0) sprintf(line_ptrs[i], "    leaq (%%rax,%%rax,%d), %%rax\\n", sc); /* MV27-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_18_strength_reduction_lea_and_bswap_involution_peephole && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV27-02",
+        "desc": "part5.c peephole_optimize uses scale factor 4 instead of 2 for * 3 -> leaq, miscomputing x*3 as x*5",
+        "file": "part5.c",
+        "old": '        int sc = (line_ptrs[i + 1][10] == \'3\') ? 2 : ((line_ptrs[i + 1][10] == \'5\') ? 4 : 8);',
+        "new": '        int sc = (line_ptrs[i + 1][10] == \'3\') ? 4 : ((line_ptrs[i + 1][10] == \'5\') ? 4 : 8); /* MV27-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_18_strength_reduction_lea_and_bswap_involution_peephole",
+    },
+    {
+        "id": "MV27-03",
+        "desc": "part5.c peephole_optimize disables back-to-back bswapq/bswapl involution elision, breaking ZCC-PROVE-18",
+        "file": "part5.c",
+        "old": '      if (strncmp(l1, "    bswapq %", 12) == 0 || strncmp(l1, "    bswapl %", 12) == 0) {',
+        "new": '      if (0 && strncmp(l1, "    bswapq %", 12) == 0) { /* MV27-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_18_strength_reduction_lea_and_bswap_involution_peephole && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV27-04",
+        "desc": "part5.c peephole_optimize elides only the first bswap in a double-bswap pair, leaving the second byte-swap intact",
+        "file": "part5.c",
+        "old": '          for (int m = i; m <= k; m++) if (strncmp(line_ptrs[m], "    .", 5) != 0) line_ptrs[m][0] = 0;',
+        "new": '          line_ptrs[i][0] = 0; /* MV27-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_18_strength_reduction_lea_and_bswap_involution_peephole",
+    },
+    {
+        "id": "MV28-01",
+        "desc": "part5.c zcc_emit_bit_builtin_call emits setb %al instead of seto %al on x86-64 signed overflow builtins, breaking ZCC-PROVE-19",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    movl %%%s, %%eax\\n    %s %%%s, %%eax\\n    %s %%al\\n    movzbl %%al, %%eax\\n", r32, is_sub ? "subl" : "addl", s32, is_u ? "setb" : "seto");',
+        "new": '      fprintf(cc->out, "    movl %%%s, %%eax\\n    %s %%%s, %%eax\\n    setb %%al\\n    movzbl %%al, %%eax\\n", r32, is_sub ? "subl" : "addl", s32); /* MV28-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_19_checked_overflow_intrinsics_quad_isa && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV28-02",
+        "desc": "part5.c zcc_emit_bit_builtin_call emits cset w0, eq instead of cset w0, vs on ARM64 signed overflow builtins",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    %s w0, w0, w1\\n    cset w0, %s\\n", is_sub ? "subs" : "adds", is_u ? (is_sub ? "cc" : "cs") : "vs");',
+        "new": '      fprintf(cc->out, "    %s w0, w0, w1\\n    cset w0, eq\\n", is_sub ? "subs" : "adds"); /* MV28-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_19_checked_overflow_intrinsics_quad_isa && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV28-03",
+        "desc": "part6_wasm.c omits WASM32 __builtin_sadd_overflow_p / __builtin_ssub_overflow_p lowering, breaking ZCC-PROVE-19",
+        "file": "part6_wasm.c",
+        "old": '                if (strcmp(bfn, "sadd_overflow_p") == 0 || strcmp(bfn, "ssub_overflow_p") == 0) {',
+        "new": '                if (0 && strcmp(bfn, "sadd_overflow_p") == 0) { /* MV28-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_19_checked_overflow_intrinsics_quad_isa && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV28-04",
+        "desc": "src/wasm_emit.c omits ZCC-PROVE-11..19 seal in .zcc.prove custom section, breaking ZCC-PROVE-19 verification",
+        "file": "src/wasm_emit.c",
+        "old": '        const char *payload = "{\\"compiler\\":\\"zcc-omega\\",\\"prove\\":\\"ZCC-PROVE-11..19\\",\\"simd128\\":true,\\"quad_isa\\":true}";',
+        "new": '        const char *payload = "{\\"compiler\\":\\"zcc-omega\\",\\"prove\\":\\"ZCC-PROVE-NONE\\",\\"simd128\\":true,\\"quad_isa\\":true}"; /* MV28-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_19_checked_overflow_intrinsics_quad_isa && python3 tools/zcc_prove_01.py",
+    },
 ]
 
 
@@ -1102,9 +1308,10 @@ def normalize_baseline_cmd(cmd: str) -> str:
     return re.sub(r"/tmp/x86_mv\d+(?:_\d+|_mut)\b", "/tmp/x86_mv_base_bin", cmd)
 
 
-def prewarm_baseline_tests(stage: pathlib.Path) -> tuple:
+def prewarm_baseline_tests(stage: pathlib.Path, mutations=None) -> tuple:
     """Verify each unique normalized test_cmd passes on the unmutated stage directory in isolated sandboxes."""
-    unique_cmds = sorted({normalize_baseline_cmd(m["test"]) for m in LEDGER_MUTATIONS})
+    mut_list = mutations if mutations is not None else LEDGER_MUTATIONS
+    unique_cmds = sorted({normalize_baseline_cmd(m["test"]) for m in mut_list})
 
     def _check_cmd(cmd: str):
         with tempfile.TemporaryDirectory(prefix="zcc_mv02_base_wtmp_") as wtmp:
@@ -1124,6 +1331,20 @@ def prewarm_baseline_tests(stage: pathlib.Path) -> tuple:
     return True, "", 0, ""
 
 
+def estimate_mutation_cost(m: dict) -> float:
+    """Estimate execution cost for LPT (Longest-Processing-Time-First) worker scheduling."""
+    t = m["test"]
+    f = m["file"]
+    score = 10.0 if not f.startswith("src/") else 3.0
+    if "unittest" in t and "zcc_prove_01" in t:
+        score += 20.0
+    elif "unittest" in t:
+        score += 14.0
+    elif "zcc_prove_01" in t:
+        score += 10.0
+    return score
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default=".")
@@ -1133,6 +1354,7 @@ def main() -> int:
     ap.add_argument("--build", default="make zcc")
     ap.add_argument("--test")
     ap.add_argument("--run-ledger", action="store_true")
+    ap.add_argument("--filter", default="", help="Optional substring filter on mutation ID or file path (e.g. MV24 or part6_wasm.c)")
     ap.add_argument("--out-json", default="")
     ap.add_argument(
         "-j",
@@ -1149,41 +1371,64 @@ def main() -> int:
         t_start = time.monotonic()
         jobs = max(1, args.jobs)
         print(
-            f"[MV-02] Initializing local /tmp stage & pre-compiling object cache (jobs={jobs})...",
+            f"[MV-02] Initializing local /tmp stage & object cache (jobs={jobs})...",
             flush=True,
         )
         stage = get_stage_dir(repo)
         meta = _OBJ_CACHE_META
         t_stage = time.monotonic() - t_start
+        cache_tag = "CACHE HIT" if meta.get("cache_hit") else "COLD BUILD"
         print(
-            f"[MV-02] Stage ready in {t_stage:.2f}s (base_sha256={meta['base_bin_hash'][:16]}...). "
-            f"Pre-verifying unique baseline test commands...",
+            f"[MV-02] Stage ready in {t_stage:.2f}s [{cache_tag}] (base_sha256={meta['base_bin_hash'][:16]}...).",
             flush=True,
         )
-        ok, failed_cmd, rc, out = prewarm_baseline_tests(stage)
-        if not ok:
-            print(f"[MV-02] ERROR: Baseline test command failed (exit={rc}): {failed_cmd}\n{out}", flush=True)
+        selected_mutations = [
+            m for m in LEDGER_MUTATIONS
+            if not args.filter or (args.filter in m["id"] or args.filter in m["file"])
+        ]
+        if not selected_mutations:
+            print(f"[MV-02] ERROR: No mutations matched --filter={args.filter!r}", flush=True)
             return 1
+
+        if meta.get("baseline_verified"):
+            print(
+                f"[MV-02] Baseline tests already verified for fingerprint {pathlib.Path(meta['pcache_dir']).name}.",
+                flush=True,
+            )
+        else:
+            print("[MV-02] Pre-verifying unique baseline test commands...", flush=True)
+            ok, failed_cmd, rc, out = prewarm_baseline_tests(stage, selected_mutations)
+            if not ok:
+                print(f"[MV-02] ERROR: Baseline test command failed (exit={rc}): {failed_cmd}\n{out}", flush=True)
+                return 1
+            if not args.filter:
+                meta_json = pathlib.Path(meta["pcache_dir"]) / "meta.json"
+                if meta_json.is_file():
+                    meta_json.write_text(
+                        json.dumps({"base_bin_hash": meta["base_bin_hash"], "baseline_verified": True}, indent=2),
+                        encoding="utf-8",
+                    )
         print(
-            f"[MV-02] Baseline tests verified in {time.monotonic() - t_start:.2f}s. "
-            f"Dispatching {len(LEDGER_MUTATIONS)} adversarial mutations across {jobs} worker processes...",
+            f"[MV-02] Ready at {time.monotonic() - t_start:.2f}s. "
+            f"Dispatching {len(selected_mutations)} adversarial mutations (LPT-ordered) across {jobs} worker processes...",
             flush=True,
         )
 
-        tasks = [
+        raw_tasks = [
             (idx, m, str(repo), str(stage), meta)
-            for idx, m in enumerate(LEDGER_MUTATIONS)
+            for idx, m in enumerate(selected_mutations)
         ]
-        ordered_results = [None] * len(LEDGER_MUTATIONS)
+        tasks = sorted(raw_tasks, key=lambda t: estimate_mutation_cost(t[1]), reverse=True)
+        ordered_results = [None] * len(selected_mutations)
         all_killed = True
 
         if jobs == 1:
             for task in tasks:
                 idx, res = _worker_run_mutation(task)
                 ordered_results[idx] = res
-                m = LEDGER_MUTATIONS[idx]
+                m = selected_mutations[idx]
                 print(
-                    f"  -> [{idx + 1:02d}/{len(LEDGER_MUTATIONS)}] {m['id']}: status={res['status']} "
+                    f"  -> [{idx + 1:02d}/{len(selected_mutations)}] {m['id']}: status={res['status']} "
                     f"baseline_exit={res.get('baseline_exit')} mut_build_exit={res.get('mutated_build_exit')} "
                     f"mut_test_exit={res.get('mutated_test_exit')} ({res.get('elapsed_sec', 0):.2f}s)",
                     flush=True,
@@ -1198,9 +1443,9 @@ def main() -> int:
                     idx, res = fut.result()
                     ordered_results[idx] = res
                     completed_count += 1
-                    m = LEDGER_MUTATIONS[idx]
+                    m = selected_mutations[idx]
                     print(
-                        f"  -> [{completed_count:02d}/{len(LEDGER_MUTATIONS)}] {m['id']} ({m['file']}): "
+                        f"  -> [{completed_count:02d}/{len(selected_mutations)}] {m['id']} ({m['file']}): "
                         f"status={res['status']} baseline_exit={res.get('baseline_exit')} "
                         f"mut_build_exit={res.get('mutated_build_exit')} mut_test_exit={res.get('mutated_test_exit')} "
                         f"({res.get('elapsed_sec', 0):.2f}s)",
@@ -1208,6 +1453,8 @@ def main() -> int:
                     )
                     if not res.get("killed", False):
                         all_killed = False
+                        if res.get("output"):
+                            print(f"     [BUILD/TEST OUTPUT]: {res['output'][:400]}", flush=True)
 
         results = ordered_results
         if args.out_json:

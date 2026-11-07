@@ -569,14 +569,25 @@ void init_compiler(Compiler *cc) {
         ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
         ft->params[0] = cc->ty_uint;
         sym = scope_add(cc, "__builtin_bswap32", ft); sym->is_global = 1;
+        sym = scope_add(cc, "__builtin_bitreverse32", ft); sym->is_global = 1;
         ft = type_func(cc, cc->ty_ulonglong);
         ft->num_params = 1;
         ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
         ft->params[0] = cc->ty_ulonglong;
         sym = scope_add(cc, "__builtin_bswap64", ft); sym->is_global = 1;
+        sym = scope_add(cc, "__builtin_bitreverse64", ft); sym->is_global = 1;
         {
           const char *rot32[] = {"__builtin_rotateleft32", "__builtin_rotateright32"};
           const char *rot64[] = {"__builtin_rotateleft64", "__builtin_rotateright64"};
+          const char *ovf32[] = {"__builtin_sadd_overflow_p", "__builtin_ssub_overflow_p", "__builtin_uadd_overflow_p", "__builtin_usub_overflow_p"};
+          for (bi = 0; bi < 4; bi++) {
+            ft = type_func(cc, cc->ty_int);
+            ft->num_params = 2;
+            ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
+            ft->params[0] = (bi >= 2) ? cc->ty_uint : cc->ty_int;
+            ft->params[1] = (bi >= 2) ? cc->ty_uint : cc->ty_int;
+            sym = scope_add(cc, ovf32[bi], ft); sym->is_global = 1;
+          }
           for (bi = 0; bi < 2; bi++) {
             ft = type_func(cc, cc->ty_uint);
             ft->num_params = 2;
@@ -1103,6 +1114,23 @@ static void peephole_optimize(char *filename) {
       }
       if (strncmp(l1, "    imulq $64, ", 15) == 0 && sscanf(l1, "    imulq $64, %63s", reg) == 1 && reg[0] == '%') {
         sprintf(line_ptrs[i], "    shlq $6, %s\n", reg); eliminated++; i++; continue;
+      }
+      if ((strncmp(l1, "    imulq $3, ", 14) == 0 || strncmp(l1, "    imulq $5, ", 14) == 0 || strncmp(l1, "    imulq $9, ", 14) == 0) && sscanf(l1 + 14, "%63s", reg) == 1 && reg[0] == '%') {
+        int sc = (l1[11] == '3') ? 2 : ((l1[11] == '5') ? 4 : 8);
+        sprintf(line_ptrs[i], "    leaq (%s,%s,%d), %s\n", reg, reg, sc, reg); eliminated++; i++; continue;
+      }
+      if (strncmp(l1, "    bswapq %", 12) == 0 || strncmp(l1, "    bswapl %", 12) == 0) {
+        int k = i + 1;
+        while (k < nlines && (line_ptrs[k][0] == 0 || strncmp(line_ptrs[k], "    .loc ", 9) == 0 || strncmp(line_ptrs[k], "    .file ", 10) == 0 || strcmp(line_ptrs[k], "    movl %eax, %eax\n") == 0 || strcmp(line_ptrs[k], "    movq %rax, %rdi\n") == 0 || strcmp(line_ptrs[k], "    xorl %eax, %eax\n") == 0 || strcmp(line_ptrs[k], "    movl %edi, %eax\n") == 0 || strcmp(line_ptrs[k], "    movq %rdi, %rax\n") == 0)) k++;
+        if (k < nlines && strcmp(l1, line_ptrs[k]) == 0) {
+          for (int m = i; m <= k; m++) if (strncmp(line_ptrs[m], "    .", 5) != 0) line_ptrs[m][0] = 0;
+          eliminated += 2; i = k + 1; continue;
+        }
+      }
+      if (strcmp(l1, "    pushq %rax\n") == 0 && i + 4 < nlines && strcmp(line_ptrs[i + 2], "    cltq\n") == 0 && strcmp(line_ptrs[i + 3], "    popq %r11\n") == 0 && strcmp(line_ptrs[i + 4], "    imulq %r11, %rax\n") == 0 && (strcmp(line_ptrs[i + 1], "    movq $3, %rax\n") == 0 || strcmp(line_ptrs[i + 1], "    movq $5, %rax\n") == 0 || strcmp(line_ptrs[i + 1], "    movq $9, %rax\n") == 0)) {
+        int sc = (line_ptrs[i + 1][10] == '3') ? 2 : ((line_ptrs[i + 1][10] == '5') ? 4 : 8);
+        sprintf(line_ptrs[i], "    movq %%rax, %%r11\n"); sprintf(line_ptrs[i + 1], "    leaq (%%rax,%%rax,%d), %%rax\n", sc);
+        line_ptrs[i + 2][0] = 0; line_ptrs[i + 3][0] = 0; line_ptrs[i + 4][0] = 0; eliminated += 3; i += 5; continue;
       }
     }
 
@@ -3420,11 +3448,37 @@ int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long
     *out_bits = n;
     return 1;
   }
+  if (strcmp(fname, "__builtin_bitreverse32") == 0) {
+    unsigned int u = (unsigned int)arg0_bits, r = 0; int b;
+    for (b = 0; b < 32; b++) { r = (r << 1) | (u & 1U); u >>= 1; }
+    *out_bits = (long long)r; return 1;
+  }
+  if (strcmp(fname, "__builtin_bitreverse64") == 0) {
+    unsigned long long u = (unsigned long long)arg0_bits, r = 0; int b;
+    for (b = 0; b < 64; b++) { r = (r << 1) | (u & 1ULL); u >>= 1; }
+    *out_bits = (long long)r; return 1;
+  }
   return 0;
 }
 
 int zcc_eval_const_bit_builtin2(const char *fname, long long arg0_bits, long long arg1_bits, long long *out_bits) {
   if (!fname || !out_bits) return 0;
+  if (strcmp(fname, "__builtin_sadd_overflow_p") == 0) {
+    long long a = (int)arg0_bits, b = (int)arg1_bits, s = a + b;
+    *out_bits = (s < -2147483648LL || s > 2147483647LL) ? 1 : 0; return 1;
+  }
+  if (strcmp(fname, "__builtin_ssub_overflow_p") == 0) {
+    long long a = (int)arg0_bits, b = (int)arg1_bits, d = a - b;
+    *out_bits = (d < -2147483648LL || d > 2147483647LL) ? 1 : 0; return 1;
+  }
+  if (strcmp(fname, "__builtin_uadd_overflow_p") == 0) {
+    unsigned long long a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
+    *out_bits = ((a + b) > 0xFFFFFFFFULL) ? 1 : 0; return 1;
+  }
+  if (strcmp(fname, "__builtin_usub_overflow_p") == 0) {
+    unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
+    *out_bits = (a < b) ? 1 : 0; return 1;
+  }
   if (strcmp(fname, "__builtin_rotateleft32") == 0) {
     unsigned int v = (unsigned int)arg0_bits;
     unsigned int s = (unsigned int)arg1_bits & 31U;
@@ -3701,6 +3755,32 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
       fprintf(cc->out, "    ror x0, x0, x1\n");
     } else if (is_rv64) {
       fprintf(cc->out, "    andi t0, a1, 63\n    srl t1, a0, t0\n    neg t2, a1\n    andi t2, t2, 63\n    sll t3, a0, t2\n    or a0, t1, t3\n");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_bitreverse32") == 0 || strcmp(fn, "__builtin_bitreverse64") == 0) {
+    int is64 = (fn[20] == '6'), lbl = cc->label_count++;
+    if (!backend_ops) {
+      fprintf(cc->out, is64 ? "    movq %%%s, %%rcx\n    xorq %%rax, %%rax\n    movl $64, %%edx\n.Lx86_br_%d:\n    shlq $1, %%rax\n    movq %%rcx, %%r11\n    andq $1, %%r11\n    orq %%r11, %%rax\n    shrq $1, %%rcx\n    subl $1, %%edx\n    jne .Lx86_br_%d\n"
+                            : "    movl %%%s, %%ecx\n    xorl %%eax, %%eax\n    movl $32, %%edx\n.Lx86_br_%d:\n    shll $1, %%eax\n    movl %%ecx, %%r11d\n    andl $1, %%r11d\n    orl %%r11d, %%eax\n    shrl $1, %%ecx\n    subl $1, %%edx\n    jne .Lx86_br_%d\n", is64 ? r64 : r32, lbl, lbl);
+    } else if (is_a64) {
+      fprintf(cc->out, is64 ? "    rbit x0, x0\n" : "    rbit w0, w0\n");
+    } else if (is_rv64) {
+      fprintf(cc->out, "    mv t0, a0\n    li a0, 0\n    li t2, %d\n.Lrv_br_%d:\n    slli a0, a0, 1\n    andi t1, t0, 1\n    or a0, a0, t1\n    srli t0, t0, 1\n    addi t2, t2, -1\n    bnez t2, .Lrv_br_%d\n%s",
+              is64 ? 64 : 32, lbl, lbl, is64 ? "" : "    slli a0, a0, 32\n    srli a0, a0, 32\n");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_sadd_overflow_p") == 0 || strcmp(fn, "__builtin_ssub_overflow_p") == 0 ||
+      strcmp(fn, "__builtin_uadd_overflow_p") == 0 || strcmp(fn, "__builtin_usub_overflow_p") == 0) {
+    int is_u = (fn[10] == 'u'), is_sub = (fn[12] == 'u');
+    if (!backend_ops) {
+      fprintf(cc->out, "    movl %%%s, %%eax\n    %s %%%s, %%eax\n    %s %%al\n    movzbl %%al, %%eax\n", r32, is_sub ? "subl" : "addl", s32, is_u ? "setb" : "seto");
+    } else if (is_a64) {
+      fprintf(cc->out, "    %s w0, w0, w1\n    cset w0, %s\n", is_sub ? "subs" : "adds", is_u ? (is_sub ? "cc" : "cs") : "vs");
+    } else if (is_rv64) {
+      if (is_u) fprintf(cc->out, is_sub ? "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    sltu a0, t0, t1\n" : "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    add t2, t0, t1\n    srli a0, t2, 32\n");
+      else fprintf(cc->out, is_sub ? "    sext.w t0, a0\n    sext.w t1, a1\n    subw t2, t0, t1\n    xor t3, t0, t1\n    xor t4, t0, t2\n    and t3, t3, t4\n    srli a0, t3, 63\n" : "    sext.w t0, a0\n    sext.w t1, a1\n    addw t2, t0, t1\n    xor t3, t0, t1\n    not t3, t3\n    xor t4, t0, t2\n    and t3, t3, t4\n    srli a0, t3, 63\n");
     } else return 0;
     return 1;
   }

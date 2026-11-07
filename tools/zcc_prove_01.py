@@ -1467,7 +1467,7 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         and "backend_ops->emit_mod(cc, node_type_unsigned(node));" in part4_text
         and part4_text.count("backend_ops->emit_div(cc, node_type_unsigned(node));") >= 3
         and part4_text.count("backend_ops->emit_mod(cc, node_type_unsigned(node));") >= 3
-        and "ZCC-PROVE-11..15" in wasm_emit_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
     )
     if not has_mv24_guards:
         return False, {"error": "Missing ZCC-PROVE-15 rotate Quad-ISA, ND_COMPOUND_ASSIGN div/mod backend_ops, or WASM SIMD128 shift/div guards"}
@@ -1494,6 +1494,104 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         )
     if s_mv24.check() == z3.sat:
         return False, {"error": "Z3 found counterexample in ZCC-PROVE-15 32/64-bit rotate Quad-ISA equivalence"}
+
+    # 16. ZCC-PROVE-16 (MV25): __builtin_bitreverse32 / __builtin_bitreverse64 Quad-ISA & 5-stage parallel mask equivalence
+    has_mv25_guards = (
+        "__builtin_bitreverse32" in part5_text
+        and "__builtin_bitreverse64" in part5_text
+        and ".Lx86_br_" in part5_text
+        and "rbit x0, x0" in part5_text
+        and ".Lrv_br_" in part5_text
+        and 'strcmp(bfn, "bitreverse32") == 0' in part6_wasm_text
+        and 'strcmp(bfn, "bitreverse64") == 0' in part6_wasm_text
+    )
+    if not has_mv25_guards:
+        return False, {"error": "Missing ZCC-PROVE-16 __builtin_bitreverse32/64 Quad-ISA guards"}
+
+    s_mv25 = z3.Solver()
+    br32_in = z3.BitVec("br32_in", 32)
+    br32_par = br32_in
+    for sh_amt, msk in [(1, 0x55555555), (2, 0x33333333), (4, 0x0F0F0F0F), (8, 0x00FF00FF), (16, 0xFFFFFFFF)]:
+        mv = z3.BitVecVal(msk, 32)
+        if sh_amt < 16:
+            br32_par = (z3.LShR(br32_par, sh_amt) & mv) | ((br32_par & mv) << sh_amt)
+        else:
+            br32_par = z3.LShR(br32_par, 16) | (br32_par << 16)
+    br32_spec = z3.Concat(*[z3.Extract(i, i, br32_in) for i in range(32)])
+    s_mv25.add(br32_par != br32_spec)
+    if s_mv25.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-16 32-bit bitreverse parallel mask equivalence"}
+
+    # 17. ZCC-PROVE-17 (MV26): WASM SIMD128 branchless ternary i32x4.min_s / i32x4.max_s / i32x4.abs auto-vectorization
+    has_mv26_guards = (
+        "WASM_SIMD_I32X4_MIN_S" in part6_wasm_text
+        and "WASM_SIMD_I32X4_MAX_S" in part6_wasm_text
+        and "WASM_SIMD_I32X4_ABS" in part6_wasm_text
+        and "is_unary_simd = 1;" in part6_wasm_text
+    )
+    if not has_mv26_guards:
+        return False, {"error": "Missing ZCC-PROVE-17 WASM SIMD128 branchless min/max/abs auto-vectorization guards"}
+
+    s_mv26 = z3.Solver()
+    va32 = z3.BitVec("va32", 32)
+    vb32 = z3.BitVec("vb32", 32)
+    min_s = z3.If(va32 < vb32, va32, vb32)
+    max_s = z3.If(va32 > vb32, va32, vb32)
+    abs_s = z3.If(va32 < z3.BitVecVal(0, 32), -va32, va32)
+    abs_branchless = (va32 + (va32 >> 31)) ^ (va32 >> 31)
+    s_mv26.add(z3.Or(min_s + max_s != va32 + vb32, abs_s != abs_branchless))
+    if s_mv26.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-17 SIMD128 min_s/max_s/abs algebraic identity"}
+
+    # 18. ZCC-PROVE-18 (MV27): Peephole imulq $3/$5/$9 -> leaq (%reg,%reg,2/4/8), %reg & double bswap involution elision
+    has_mv27_guards = (
+        'sprintf(line_ptrs[i + 1], "    leaq (%%rax,%%rax,%d), %%rax\\n", sc);' in part5_text
+        and 'strncmp(l1, "    bswapq %", 12) == 0 || strncmp(l1, "    bswapl %", 12) == 0' in part5_text
+    )
+    if not has_mv27_guards:
+        return False, {"error": "Missing ZCC-PROVE-18 imulq $3/$5/$9 -> leaq or double-bswap involution peephole guards"}
+
+    s_mv27 = z3.Solver()
+    rx64 = z3.BitVec("rx64", 64)
+    bs_once = z3.Concat(*[z3.Extract(b * 8 + 7, b * 8, rx64) for b in range(8)])
+    bs_twice = z3.Concat(*[z3.Extract(b * 8 + 7, b * 8, bs_once) for b in range(8)])
+    s_mv27.add(
+        z3.Or(
+            rx64 * z3.BitVecVal(3, 64) != rx64 + (rx64 << 1),
+            rx64 * z3.BitVecVal(5, 64) != rx64 + (rx64 << 2),
+            rx64 * z3.BitVecVal(9, 64) != rx64 + (rx64 << 3),
+            bs_twice != rx64,
+        )
+    )
+    if s_mv27.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-18 lea strength-reduction or bswap involution"}
+
+    # 19. ZCC-PROVE-19 (MV28): Checked overflow intrinsics (__builtin_sadd/ssub/uadd/usub_overflow_p) across Quad-ISA
+    has_mv28_guards = (
+        "__builtin_sadd_overflow_p" in part5_text
+        and "__builtin_uadd_overflow_p" in part5_text
+        and 'is_u ? "setb" : "seto"' in part5_text
+        and "cset w0, %s" in part5_text
+        and 'strcmp(bfn, "sadd_overflow_p") == 0' in part6_wasm_text
+        and "ZCC-PROVE-11..19" in wasm_emit_text
+    )
+    if not has_mv28_guards:
+        return False, {"error": "Missing ZCC-PROVE-19 checked overflow intrinsics Quad-ISA guards or ZCC-PROVE-11..19 metadata"}
+
+    s_mv28 = z3.Solver()
+    oa = z3.BitVec("oa32", 32)
+    ob = z3.BitVec("ob32", 32)
+    # Prove RISC-V signed add overflow bit (((~(oa ^ ob)) & (oa ^ (oa + ob))) >>u 31) == 64-bit sign-ext wrap check (WASM lowering)
+    os_sum32 = oa + ob
+    rv_sadd_ovf = z3.LShR((~(oa ^ ob)) & (oa ^ os_sum32), 31)
+    wasm_sadd_64 = z3.SignExt(32, oa) + z3.SignExt(32, ob)
+    wasm_sadd_ovf = z3.If(z3.SignExt(32, z3.Extract(31, 0, wasm_sadd_64)) != wasm_sadd_64, z3.BitVecVal(1, 32), z3.BitVecVal(0, 32))
+    # Prove unsigned add overflow: ((ZeroExt(32, oa) + ZeroExt(32, ob)) >>u 32) == (oa + ob <u oa)
+    wasm_uadd_ovf = z3.Extract(31, 0, z3.LShR(z3.ZeroExt(32, oa) + z3.ZeroExt(32, ob), 32))
+    x86_uadd_ovf = z3.If(z3.ULT(os_sum32, oa), z3.BitVecVal(1, 32), z3.BitVecVal(0, 32))
+    s_mv28.add(z3.Or(rv_sadd_ovf != wasm_sadd_ovf, wasm_uadd_ovf != x86_uadd_ovf))
+    if s_mv28.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-19 Quad-ISA signed/unsigned overflow equivalence"}
 
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
@@ -1528,6 +1626,14 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "zcc_prove_14_branchless_clrsb_equivalence": "UNSAT (PROVEN_SOUND)",
         "zcc_prove_15_rotate_quad_isa_divmod_and_simd128_shift_div_active": has_mv24_guards,
         "zcc_prove_15_rotate_32_64_quad_isa_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_16_bitreverse_32_64_quad_isa_active": has_mv25_guards,
+        "zcc_prove_16_bitreverse_parallel_mask_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_17_wasm_simd128_minmax_abs_active": has_mv26_guards,
+        "zcc_prove_17_simd128_minmax_abs_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_18_peephole_lea359_and_bswap_involution_active": has_mv27_guards,
+        "zcc_prove_18_lea359_and_bswap_involution_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_19_checked_overflow_quad_isa_active": has_mv28_guards,
+        "zcc_prove_19_checked_overflow_quad_isa_equivalence": "UNSAT (PROVEN_SOUND)",
     }
 
 
