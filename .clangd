@@ -1,0 +1,14 @@
+CompileFlags:
+  Add:
+    - -std=c11
+    - -I.
+
+---
+If:
+  PathMatch: (part4\.c|ir_bridge\.h)
+
+CompileFlags:
+  Add:
+    - -include
+    - part1.c
+    - -DZCC_IR_BRIDGE_ALLOWED=1

@@ -2461,7 +2461,10 @@ Node *parse_postfix(Compiler *cc) {
                     } else if (strcmp(call->func_name, "__builtin_bswap32") == 0 ||
                                strcmp(call->func_name, "__builtin_bitreverse32") == 0 ||
                                strcmp(call->func_name, "__builtin_uadd_sat") == 0 ||
-                               strcmp(call->func_name, "__builtin_usub_sat") == 0) {
+                               strcmp(call->func_name, "__builtin_usub_sat") == 0 ||
+                               strcmp(call->func_name, "__builtin_uavg_floor") == 0 ||
+                               strcmp(call->func_name, "__builtin_uavg_ceil") == 0 ||
+                               strcmp(call->func_name, "__builtin_usad32") == 0) {
                         call->type = cc->ty_uint;
                     } else if (strcmp(call->func_name, "__builtin_bswap64") == 0 ||
                                strcmp(call->func_name, "__builtin_bitreverse64") == 0) {

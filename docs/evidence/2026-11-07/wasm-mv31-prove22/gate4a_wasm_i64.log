@@ -1,0 +1,33 @@
+test_01_regression_corpus_six_way_oracle (test_wasm_i64.TestWasmI64Remediation.test_01_regression_corpus_six_way_oracle)
+Compile and execute tests/wasm_i64_regression.c across ZCC-WASM (Node & Wasmtime), Clang-WASM32, GCC, Clang, and ZCC-x86_64. ... zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 180 macros, total is 216
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[Phase 3] Native AST Constant Folding... OK
+[Phase 4] SystemV ABI X86-64 Codegen... OK
+[Phase 5] Native C Peephole Optimization... OK (656 elided)
+[OK] ZCC Engine Compilation Terminated Successfully.
+ok
+test_02_sleb128_i64_boundary_constants (test_wasm_i64.TestWasmI64Remediation.test_02_sleb128_i64_boundary_constants)
+Verify 64-bit signed LEB128 encoding for INT64_MIN, INT64_MAX, UINT64_MAX, 2^31, 2^32, -2^32. ... ok
+test_03_wasm32_ilp32_data_model_and_layout_parity_with_clang (test_wasm_i64.TestWasmI64Remediation.test_03_wasm32_ilp32_data_model_and_layout_parity_with_clang)
+HYGIENE-WASM-ILP32: Verify sizeof, _Alignof, offsetof, struct layout, and pointer strides match Clang --target=wasm32. ... ok
+test_04_randomized_nonconstant_and_metamorphic_differential (test_wasm_i64.TestWasmI64Remediation.test_04_randomized_nonconstant_and_metamorphic_differential)
+Execute 50 seeded randomized non-constant 64-bit input vectors across ZCC --wasm and Clang --target=wasm32. ... zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 180 macros, total is 216
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[OK] WebAssembly module emitted to /tmp/tmpuw5x3d5r/rand.zcc.wasm
+ok
+test_05_meta_verification_negative_controls (test_wasm_i64.TestWasmI64Remediation.test_05_meta_verification_negative_controls)
+MV-6 / MV-7: Prove the verification harness fails closed on corrupted/truncated/mutated WASM. ... zcc: warning: using synthesized header stub for stdint.h
+pp_process_include: stdint.h added 180 macros, total is 216
+[Phase 1] Lexical Array Bootstrap... OK
+[Phase 2] AST Topological Generation... OK
+[OK] WebAssembly module emitted to /tmp/tmplrydlcxc/clean.wasm
+ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 3.271s
+
+OK

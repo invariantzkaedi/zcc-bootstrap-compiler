@@ -499,7 +499,7 @@ int wasm_module_emit_binary(const WasmModule *mod, WASMBuffer *out) {
     {
         WASMBuffer prove_sec;
         const char *sec_name = ".zcc.prove";
-        const char *payload = "{\"compiler\":\"zcc-omega\",\"prove\":\"ZCC-PROVE-11..21\",\"simd128\":true,\"quad_isa\":true}";
+        const char *payload = "{\"compiler\":\"zcc-omega\",\"prove\":\"ZCC-PROVE-11..22\",\"simd128\":true,\"quad_isa\":true}";
         size_t nlen = strlen(sec_name);
         size_t plen = strlen(payload);
         wasm_buf_init(&prove_sec);

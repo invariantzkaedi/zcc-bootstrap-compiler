@@ -580,7 +580,7 @@ void init_compiler(Compiler *cc) {
           const char *rot32[] = {"__builtin_rotateleft32", "__builtin_rotateright32"};
           const char *rot64[] = {"__builtin_rotateleft64", "__builtin_rotateright64"};
           const char *ovf32[] = {"__builtin_sadd_overflow_p", "__builtin_ssub_overflow_p", "__builtin_smul_overflow_p", "__builtin_uadd_overflow_p", "__builtin_usub_overflow_p", "__builtin_umul_overflow_p"};
-          const char *sat32[] = {"__builtin_sadd_sat", "__builtin_ssub_sat", "__builtin_uadd_sat", "__builtin_usub_sat"};
+          const char *sat32[] = {"__builtin_sadd_sat", "__builtin_ssub_sat", "__builtin_savg_floor", "__builtin_savg_ceil", "__builtin_uadd_sat", "__builtin_usub_sat", "__builtin_uavg_floor", "__builtin_uavg_ceil", "__builtin_usad32"};
           for (bi = 0; bi < 6; bi++) {
             ft = type_func(cc, cc->ty_int);
             ft->num_params = 2;
@@ -589,12 +589,12 @@ void init_compiler(Compiler *cc) {
             ft->params[1] = (bi >= 3) ? cc->ty_uint : cc->ty_int;
             sym = scope_add(cc, ovf32[bi], ft); sym->is_global = 1;
           }
-          for (bi = 0; bi < 4; bi++) {
-            ft = type_func(cc, (bi >= 2) ? cc->ty_uint : cc->ty_int);
+          for (bi = 0; bi < 9; bi++) {
+            ft = type_func(cc, (bi >= 4) ? cc->ty_uint : cc->ty_int);
             ft->num_params = 2;
             ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
-            ft->params[0] = (bi >= 2) ? cc->ty_uint : cc->ty_int;
-            ft->params[1] = (bi >= 2) ? cc->ty_uint : cc->ty_int;
+            ft->params[0] = (bi >= 4) ? cc->ty_uint : cc->ty_int;
+            ft->params[1] = (bi >= 4) ? cc->ty_uint : cc->ty_int;
             sym = scope_add(cc, sat32[bi], ft); sym->is_global = 1;
           }
           for (bi = 0; bi < 2; bi++) {
@@ -3511,6 +3511,18 @@ int zcc_eval_const_bit_builtin2(const char *fname, long long arg0_bits, long lon
     unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
     *out_bits = (long long)(unsigned int)((a < b) ? 0U : (a - b)); return 1;
   }
+  if (strcmp(fname, "__builtin_savg_floor") == 0 || strcmp(fname, "__builtin_savg_ceil") == 0) {
+    int a = (int)arg0_bits, b = (int)arg1_bits;
+    *out_bits = (long long)((fname[15] == 'c') ? ((a | b) - ((a ^ b) >> 1)) : ((a & b) + ((a ^ b) >> 1))); return 1;
+  }
+  if (strcmp(fname, "__builtin_uavg_floor") == 0 || strcmp(fname, "__builtin_uavg_ceil") == 0) {
+    unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
+    *out_bits = (long long)(unsigned int)((fname[15] == 'c') ? ((a | b) - ((a ^ b) >> 1)) : ((a & b) + ((a ^ b) >> 1))); return 1;
+  }
+  if (strcmp(fname, "__builtin_usad32") == 0) {
+    unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
+    *out_bits = (long long)(unsigned int)((a >= b) ? (a - b) : (b - a)); return 1;
+  }
   if (strcmp(fname, "__builtin_rotateleft32") == 0) {
     unsigned int v = (unsigned int)arg0_bits;
     unsigned int s = (unsigned int)arg1_bits & 31U;
@@ -3845,6 +3857,31 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
       if (!is_u) fprintf(cc->out, "    sext.w t0, a0\n    sext.w t1, a1\n    %s t4, t0, t1\n    srai t2, t4, 63\n    li t3, 2147483647\n    xor t2, t2, t3\n    sext.w a0, t4\n    sub t4, t4, a0\n    snez t4, t4\n    neg t4, t4\n    xor t2, t2, a0\n    and t2, t2, t4\n    xor a0, a0, t2\n    sext.w a0, a0\n", is_sub ? "sub" : "add");
       else if (!is_sub) fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    add a0, t0, t1\n    srli t2, a0, 32\n    neg t2, t2\n    or a0, a0, t2\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
       else fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    sub a0, t0, t1\n    srai t2, a0, 63\n    not t2, t2\n    and a0, a0, t2\n");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_savg_floor") == 0 || strcmp(fn, "__builtin_savg_ceil") == 0 ||
+      strcmp(fn, "__builtin_uavg_floor") == 0 || strcmp(fn, "__builtin_uavg_ceil") == 0) {
+    int is_u = (fn[10] == 'u'), is_ceil = (fn[15] == 'c');
+    if (!backend_ops) {
+      fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    xorl %%eax, %%ecx\n    %s $1, %%ecx\n    %s %%%s, %%eax\n    %s %%ecx, %%eax\n    %s\n",
+              r32, s32, is_u ? "shrl" : "sarl", is_ceil ? "orl" : "andl", s32, is_ceil ? "subl" : "addl", is_u ? "movl %eax, %eax" : "movslq %eax, %rax");
+    } else if (is_a64) {
+      fprintf(cc->out, "    eor w2, w0, w1\n    %s w2, w2, #1\n    %s w0, w0, w1\n    %s w0, w0, w2\n%s",
+              is_u ? "lsr" : "asr", is_ceil ? "orr" : "and", is_ceil ? "sub" : "add", is_u ? "" : "    sxtw x0, w0\n");
+    } else if (is_rv64) {
+      if (!is_u) fprintf(cc->out, "    sext.w t0, a0\n    sext.w t1, a1\n    xor t2, t0, t1\n    srai t2, t2, 1\n    %s a0, t0, t1\n    %s a0, a0, t2\n    sext.w a0, a0\n", is_ceil ? "or" : "and", is_ceil ? "sub" : "add");
+      else fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    xor t2, t0, t1\n    srli t2, t2, 1\n    %s a0, t0, t1\n    %s a0, a0, t2\n    slli a0, a0, 32\n    srli a0, a0, 32\n", is_ceil ? "or" : "and", is_ceil ? "sub" : "add");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_usad32") == 0) {
+    if (!backend_ops) {
+      fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    subq %%rcx, %%rax\n    movq %%rax, %%rdx\n    sarq $63, %%rdx\n    xorq %%rdx, %%rax\n    subq %%rdx, %%rax\n    movl %%eax, %%eax\n", r32, s32);
+    } else if (is_a64) {
+      fprintf(cc->out, "    subs w2, w0, w1\n    sub w3, w1, w0\n    csel w0, w2, w3, cs\n");
+    } else if (is_rv64) {
+      fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    sub a0, t0, t1\n    srai t2, a0, 63\n    xor a0, a0, t2\n    sub a0, a0, t2\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
     } else return 0;
     return 1;
   }

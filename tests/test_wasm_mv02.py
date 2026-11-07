@@ -1877,7 +1877,7 @@ int main(void) {
             r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv30_c), "-o", str(wasm_out)], capture_output=True, text=True)
             self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
             wb = wasm_out.read_bytes()
-            self.assertIn(b"ZCC-PROVE-11..21", wb, "Missing ZCC-PROVE-11..21 in .zcc.prove custom section")
+            self.assertIn(b"ZCC-PROVE-11..", wb, "Missing ZCC-PROVE-11.. in .zcc.prove custom section")
             self.assertIn(b"\xfd\xa1\x01", wb, "Expected i32x4.neg (0xfd 0xa1 0x01) in vec_i32_neg")
             self.assertIn(b"\xfd\x4d", wb, "Expected v128.not (0xfd 0x4d) in vec_i32_not")
             self.assertIn(b"\xfd\xe1\x01", wb, "Expected f32x4.neg (0xfd 0xe1 0x01) in vec_f32_neg")
@@ -1888,6 +1888,103 @@ int main(void) {
             if shutil.which("wasm-validate"):
                 self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
             self.assertEqual(run_wasm_node(wasm_out), 142)
+
+    def test_22_savg_uavg_usad32_quad_isa(self) -> None:
+        """
+        MV-31 / BITOPS-AVG-ABSDIFF-01 / ZCC-PROVE-22:
+        1. Overflow-free 32-bit midpoint / halving average intrinsics:
+           __builtin_savg_floor, __builtin_savg_ceil, __builtin_uavg_floor, __builtin_uavg_ceil
+        2. 32-bit unsigned absolute difference intrinsic:
+           __builtin_usad32
+        3. Verifies compile-time constant folding and runtime execution across x86-64, ARM64 (QEMU),
+           RISC-V 64 (QEMU), and WASM32 (Node), plus .zcc.prove ZCC-PROVE-11..22 metadata.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            mv31_c = pathlib.Path(tmp) / "quad_mv31.c"
+            mv31_c.write_text(
+                r"""
+int g_sf_max          = __builtin_savg_floor(2147483647, 2147483647);
+int g_sf_min          = __builtin_savg_floor(-2147483647 - 1, -2147483647 - 1);
+int g_sf_neg          = __builtin_savg_floor(-3, 2);
+int g_sc_neg          = __builtin_savg_ceil(-3, 2);
+int g_sc_max          = __builtin_savg_ceil(2147483646, 2147483647);
+int g_sc_min          = __builtin_savg_ceil(-2147483647 - 1, -2147483647);
+unsigned int g_uf_max = __builtin_uavg_floor(4294967295U, 4294967295U);
+unsigned int g_uf_odd = __builtin_uavg_floor(3U, 4U);
+unsigned int g_uc_odd = __builtin_uavg_ceil(3U, 4U);
+unsigned int g_uc_max = __builtin_uavg_ceil(4294967294U, 4294967295U);
+unsigned int g_usad_lt = __builtin_usad32(10U, 25U);
+unsigned int g_usad_gt = __builtin_usad32(25U, 10U);
+unsigned int g_usad_ex = __builtin_usad32(0U, 4294967295U);
+
+int rt_savg_floor(int a, int b) { return __builtin_savg_floor(a, b); }
+int rt_savg_ceil(int a, int b) { return __builtin_savg_ceil(a, b); }
+unsigned int rt_uavg_floor(unsigned int a, unsigned int b) { return __builtin_uavg_floor(a, b); }
+unsigned int rt_uavg_ceil(unsigned int a, unsigned int b) { return __builtin_uavg_ceil(a, b); }
+unsigned int rt_usad32(unsigned int a, unsigned int b) { return __builtin_usad32(a, b); }
+
+int main(void) {
+    if (g_sf_max != 2147483647 || g_sf_min != (-2147483647 - 1) || g_sf_neg != -1) return 1;
+    if (g_sc_neg != 0 || g_sc_max != 2147483647 || g_sc_min != -2147483647) return 2;
+    if (g_uf_max != 4294967295U || g_uf_odd != 3U || g_uc_odd != 4U || g_uc_max != 4294967295U) return 3;
+    if (g_usad_lt != 15U || g_usad_gt != 15U || g_usad_ex != 4294967295U) return 4;
+
+    if (rt_savg_floor(2147483647, 2147483647) != 2147483647) return 5;
+    if (rt_savg_floor(-2147483647 - 1, -2147483647 - 1) != (-2147483647 - 1)) return 6;
+    if (rt_savg_floor(-3, 2) != -1 || rt_savg_floor(10, 20) != 15) return 7;
+    if (rt_savg_ceil(-3, 2) != 0 || rt_savg_ceil(10, 21) != 16) return 8;
+    if (rt_savg_ceil(2147483646, 2147483647) != 2147483647) return 9;
+    if (rt_savg_ceil(-2147483647 - 1, -2147483647) != -2147483647) return 10;
+
+    if (rt_uavg_floor(4294967295U, 4294967295U) != 4294967295U) return 11;
+    if (rt_uavg_floor(3U, 4U) != 3U) return 12;
+    if (rt_uavg_ceil(3U, 4U) != 4U) return 13;
+    if (rt_uavg_ceil(4294967294U, 4294967295U) != 4294967295U) return 14;
+
+    if (rt_usad32(10U, 25U) != 15U || rt_usad32(25U, 10U) != 15U) return 15;
+    if (rt_usad32(0U, 4294967295U) != 4294967295U || rt_usad32(4294967295U, 0U) != 4294967295U) return 16;
+
+    return 127;
+}
+""",
+                encoding="utf-8",
+            )
+            x86_bin = pathlib.Path(tmp) / "mv31_x86"
+            r_x86 = subprocess.run([str(ZCC_BIN), str(mv31_c), "-o", str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86.returncode, 0, r_x86.stderr)
+            self.assertEqual(subprocess.run([str(x86_bin)], capture_output=True).returncode, 127)
+
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                a64_s = pathlib.Path(tmp) / "mv31_a64.s"
+                a64_o = pathlib.Path(tmp) / "mv31_a64.o"
+                a64_bin = pathlib.Path(tmp) / "mv31_a64"
+                r_a64 = subprocess.run([str(ZCC_BIN), "--target=arm64", "-S", str(mv31_c), "-o", str(a64_s)], capture_output=True, text=True)
+                self.assertEqual(r_a64.returncode, 0, r_a64.stderr)
+                a64_txt = a64_s.read_text(encoding="utf-8")
+                self.assertIn("eor w2, w0, w1", a64_txt)
+                self.assertIn("csel w0, w2, w3, cs", a64_txt)
+                a64_s.write_text(a64_txt + "\n.text\n.globl _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n", encoding="utf-8")
+                self.assertEqual(subprocess.run(["aarch64-linux-gnu-as", str(a64_s), "-o", str(a64_o)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["aarch64-linux-gnu-ld", str(a64_o), "-o", str(a64_bin)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["qemu-aarch64-static", str(a64_bin)], capture_output=True).returncode, 127)
+
+            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
+                rv_s = pathlib.Path(tmp) / "mv31_rv64.s"
+                rv_bin = pathlib.Path(tmp) / "mv31_rv64"
+                r_rv = subprocess.run([str(ZCC_BIN), "--target=riscv64", "-S", str(mv31_c), "-o", str(rv_s)], capture_output=True, text=True)
+                self.assertEqual(r_rv.returncode, 0, r_rv.stderr)
+                r_rgcc = subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(r_rgcc.returncode, 0, r_rgcc.stderr)
+                self.assertEqual(subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True).returncode, 127)
+
+            wasm_out = pathlib.Path(tmp) / "mv31.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv31_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            wb = wasm_out.read_bytes()
+            self.assertIn(b"ZCC-PROVE-11..22", wb, "Missing ZCC-PROVE-11..22 in .zcc.prove custom section")
+            if shutil.which("wasm-validate"):
+                self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
+            self.assertEqual(run_wasm_node(wasm_out), 127)
 
 
 if __name__ == "__main__":

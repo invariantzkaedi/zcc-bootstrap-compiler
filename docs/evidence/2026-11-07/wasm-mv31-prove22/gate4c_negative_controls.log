@@ -1,0 +1,19 @@
+Executing ZCC Oracle Negative Controls & Verification Gauntlet against: /mnt/h/__DOWNLOADS/zcc_github_upload/zcc_quest.py
+--- [MUTATION SELF-TEST] Verifying harness rejection of non-executing / broken stubs ---
+--- [CONTROL 1 / PROBE A] Counterfeit zero-byte files with marker ---
+[probe_a] FAIL: Expected wrapper exit 0, got 3
+[FAIL] Probe A failed validation.
+--- [CONTROL 1 / PROBE A] Counterfeit zero-byte files with marker ---
+[probe_a] FAIL: Wrapper did not render ordinary command success banner
+[FAIL] Probe A failed validation.
+[PASS] Mutation self-test verified: harness rigorously rejects non-executing / broken stubs.
+--- [CONTROL 1 / PROBE A] Counterfeit zero-byte files with marker ---
+[PASS] Probe A correctly executed with exit 0, rendered ordinary success, and rejected counterfeit files.
+--- [CONTROL 2 / PROBE B] Pre-existing identical files with marker ---
+[PASS] Probe B correctly executed with exit 0, rendered ordinary success, and rejected pre-existing files.
+--- [CONTROL 3 / PROBE C] Fabricated provenance with shell comment injection ---
+[PASS] Probe C correctly executed with exit 0, rendered ordinary success, and rejected rogue provenance / comment injection.
+
+========================================================
+★ ALL NEGATIVE CONTROLS PASSED (0 false certifications) ★
+========================================================

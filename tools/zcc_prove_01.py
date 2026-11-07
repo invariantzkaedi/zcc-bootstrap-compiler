@@ -1690,16 +1690,69 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         and "WASM_SIMD_F32X4_SQRT" in part6_wasm_text
         and "WASM_SIMD_F32X4_MIN" in part6_wasm_text
         and "WASM_SIMD_F32X4_MAX" in part6_wasm_text
-        and "ZCC-PROVE-11..21" in wasm_emit_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
     )
     if not has_mv30_guards:
-        return False, {"error": "Missing ZCC-PROVE-21 WASM SIMD128 unary/f32 min-max guards or ZCC-PROVE-11..21 metadata"}
+        return False, {"error": "Missing ZCC-PROVE-21 WASM SIMD128 unary/f32 min-max guards or ZCC-PROVE-11.. metadata"}
 
     s_mv30 = z3.Solver()
     ux32 = z3.BitVec("ux32", 32)
     s_mv30.add(z3.Or(-ux32 != (~ux32) + z3.BitVecVal(1, 32), ~(~ux32) != ux32, -(-ux32) != ux32))
     if s_mv30.check() == z3.sat:
         return False, {"error": "Z3 found counterexample in ZCC-PROVE-21 unary SIMD128 algebraic involution"}
+
+    # 22. ZCC-PROVE-22 (MV31): Overflow-free 32-bit halving average (__builtin_savg/uavg_floor/ceil) & unsigned absolute difference (__builtin_usad32) across Quad-ISA
+    has_mv31_guards = (
+        "__builtin_savg_floor" in part5_text
+        and "__builtin_savg_ceil" in part5_text
+        and "__builtin_uavg_floor" in part5_text
+        and "__builtin_uavg_ceil" in part5_text
+        and "__builtin_usad32" in part5_text
+        and 'is_u ? "shrl" : "sarl"' in part5_text
+        and "eor w2, w0, w1" in part5_text
+        and "csel w0, w2, w3, cs" in part5_text
+        and 'strcmp(bfn, "savg_floor") == 0' in part6_wasm_text
+        and 'strcmp(bfn, "usad32") == 0' in part6_wasm_text
+        and "ZCC-PROVE-11..22" in wasm_emit_text
+    )
+    if not has_mv31_guards:
+        return False, {"error": "Missing ZCC-PROVE-22 savg/uavg/usad32 Quad-ISA guards or ZCC-PROVE-11..22 metadata"}
+
+    s_mv31 = z3.Solver()
+    ha = z3.BitVec("ha32", 32)
+    hb = z3.BitVec("hb32", 32)
+    sha64 = z3.SignExt(32, ha)
+    shb64 = z3.SignExt(32, hb)
+    uha64 = z3.ZeroExt(32, ha)
+    uhb64 = z3.ZeroExt(32, hb)
+    # 22a: Signed floor & ceil halving averages (Dietz 32-bit identity vs 64-bit widened floor/ceil)
+    dietz_savg_floor = (ha & hb) + ((ha ^ hb) >> 1)
+    spec_savg_floor = z3.Extract(31, 0, (sha64 + shb64) >> 1)
+    dietz_savg_ceil = (ha | hb) - ((ha ^ hb) >> 1)
+    spec_savg_ceil = z3.Extract(31, 0, (sha64 + shb64 + z3.BitVecVal(1, 64)) >> 1)
+    # 22b: Unsigned floor & ceil halving averages
+    dietz_uavg_floor = (ha & hb) + z3.LShR(ha ^ hb, 1)
+    spec_uavg_floor = z3.Extract(31, 0, z3.LShR(uha64 + uhb64, 1))
+    dietz_uavg_ceil = (ha | hb) - z3.LShR(ha ^ hb, 1)
+    spec_uavg_ceil = z3.Extract(31, 0, z3.LShR(uha64 + uhb64 + z3.BitVecVal(1, 64), 1))
+    # 22c: Unsigned 32-bit absolute difference (64-bit branchless sign-mask vs ARM64 subs/csel cs vs mathematical spec)
+    udiff = uha64 - uhb64
+    umask = udiff >> 63
+    usad_mask64 = z3.Extract(31, 0, (udiff ^ umask) - umask)
+    usad_arm64 = z3.If(z3.UGE(ha, hb), ha - hb, hb - ha)
+    usad_spec = z3.If(z3.ULT(ha, hb), hb - ha, ha - hb)
+    s_mv31.add(
+        z3.Or(
+            dietz_savg_floor != spec_savg_floor,
+            dietz_savg_ceil != spec_savg_ceil,
+            dietz_uavg_floor != spec_uavg_floor,
+            dietz_uavg_ceil != spec_uavg_ceil,
+            usad_mask64 != usad_spec,
+            usad_arm64 != usad_spec,
+        )
+    )
+    if s_mv31.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-22 savg/uavg/usad32 Quad-ISA equivalence"}
 
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
@@ -1746,6 +1799,8 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "zcc_prove_20_mul_overflow_and_saturating_arith_equivalence": "UNSAT (PROVEN_SOUND)",
         "zcc_prove_21_wasm_simd128_unary_and_f32_minmax_active": has_mv30_guards,
         "zcc_prove_21_wasm_simd128_unary_involution": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_22_savg_uavg_usad32_quad_isa_active": has_mv31_guards,
+        "zcc_prove_22_savg_uavg_usad32_equivalence": "UNSAT (PROVEN_SOUND)",
     }
 
 
