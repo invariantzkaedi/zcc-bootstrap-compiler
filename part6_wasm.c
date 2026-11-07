@@ -1837,13 +1837,14 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
                     break;
                 }
-                if (strcmp(bfn, "usad32") == 0 && lmap->tmp_i64_idx >= 0) {
+                if ((strcmp(bfn, "usad32") == 0 || strcmp(bfn, "ssad32") == 0) && lmap->tmp_i64_idx >= 0) {
+                    int is_u = (bfn[0] == 'u');
                     wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
-                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
-                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_U);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, is_u ? cc->ty_uint : cc->ty_int);
+                    wasm_buf_append_u8(&fn->body, is_u ? WASM_OP_I64_EXTEND_I32_U : WASM_OP_I64_EXTEND_I32_S);
                     wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
-                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_uint);
-                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_U);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, is_u ? cc->ty_uint : cc->ty_int);
+                    wasm_buf_append_u8(&fn->body, is_u ? WASM_OP_I64_EXTEND_I32_U : WASM_OP_I64_EXTEND_I32_S);
                     wasm_buf_append_u8(&fn->body, WASM_OP_I64_SUB);
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
                     wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
@@ -1862,6 +1863,29 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     wasm_buf_append_u8(&fn->body, WASM_OP_I64_SHR_S);
                     wasm_buf_append_u8(&fn->body, WASM_OP_I64_SUB);
                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
+                    break;
+                }
+                if ((strcmp(bfn, "smin32") == 0 || strcmp(bfn, "smax32") == 0 ||
+                     strcmp(bfn, "umin32") == 0 || strcmp(bfn, "umax32") == 0) &&
+                    lmap->tmp_addr_idx >= 0 && lmap->tmp_val_idx >= 0) {
+                    int is_u = (bfn[0] == 'u'), is_max = (bfn[2] == 'a');
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, is_u ? cc->ty_uint : cc->ty_int);
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, is_u ? cc->ty_uint : cc->ty_int);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_addr_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_addr_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                    wasm_buf_append_u8(&fn->body, is_u ? (is_max ? WASM_OP_I32_GT_U : WASM_OP_I32_LT_U)
+                                                       : (is_max ? WASM_OP_I32_GT_S : WASM_OP_I32_LT_S));
+                    wasm_buf_append_u8(&fn->body, WASM_OP_SELECT);
                     break;
                 }
                 if (strcmp(bfn, "rotateleft32") == 0 || strcmp(bfn, "rotateright32") == 0) {

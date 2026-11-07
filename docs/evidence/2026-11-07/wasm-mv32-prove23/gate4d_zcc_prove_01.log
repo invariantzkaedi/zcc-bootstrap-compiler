@@ -1,0 +1,1 @@
+[ZCC-PROVE-01] PASS: 25/25 operand & XMM-liveness classes formally proven UNSAT via Z3 + 5000 differential machine states verified + ZCC-PROVE-02 super-peepholes UNSAT (0 counterexamples; 10/10 negative-control bugs caught; zcc2.s dead-XMM sites verified=0).

@@ -1713,10 +1713,10 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         and "csel w0, w2, w3, cs" in part5_text
         and 'strcmp(bfn, "savg_floor") == 0' in part6_wasm_text
         and 'strcmp(bfn, "usad32") == 0' in part6_wasm_text
-        and "ZCC-PROVE-11..22" in wasm_emit_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
     )
     if not has_mv31_guards:
-        return False, {"error": "Missing ZCC-PROVE-22 savg/uavg/usad32 Quad-ISA guards or ZCC-PROVE-11..22 metadata"}
+        return False, {"error": "Missing ZCC-PROVE-22 savg/uavg/usad32 Quad-ISA guards or ZCC-PROVE-11.. metadata"}
 
     s_mv31 = z3.Solver()
     ha = z3.BitVec("ha32", 32)
@@ -1753,6 +1753,63 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     )
     if s_mv31.check() == z3.sat:
         return False, {"error": "Z3 found counterexample in ZCC-PROVE-22 savg/uavg/usad32 Quad-ISA equivalence"}
+
+    # 23. ZCC-PROVE-23 (MV32): Overflow-free 32-bit signed absolute difference (__builtin_ssad32) & branchless min/max (__builtin_smin32/smax32/umin32/umax32) across Quad-ISA
+    has_mv32_guards = (
+        "__builtin_ssad32" in part5_text
+        and "__builtin_smin32" in part5_text
+        and "__builtin_smax32" in part5_text
+        and "__builtin_umin32" in part5_text
+        and "__builtin_umax32" in part5_text
+        and "csel w0, w2, w3, ge" in part5_text
+        and 'is_max ? "    notq %rdx\\n" : ""' in part5_text
+        and 'strcmp(bfn, "ssad32") == 0' in part6_wasm_text
+        and 'strcmp(bfn, "smin32") == 0' in part6_wasm_text
+        and "ZCC-PROVE-11..23" in wasm_emit_text
+    )
+    if not has_mv32_guards:
+        return False, {"error": "Missing ZCC-PROVE-23 ssad32/smin32/smax32/umin32/umax32 Quad-ISA guards or ZCC-PROVE-11..23 metadata"}
+
+    s_mv32 = z3.Solver()
+    # 23a: Signed 32-bit absolute difference (x86-64/RISC-V/WASM 64-bit sign-mask vs ARM64 cmp/sub/csel ge vs widened spec)
+    sdiff = sha64 - shb64
+    smask = sdiff >> 63
+    ssad_mask64 = z3.Extract(31, 0, (sdiff ^ smask) - smask)
+    ssad_arm64 = z3.If(ha >= hb, ha - hb, hb - ha)
+    ssad_spec = z3.Extract(31, 0, z3.If(sdiff >= z3.BitVecVal(0, 64), sdiff, -sdiff))
+    # 23b: Branchless x86-64 64-bit diff-mask & RISC-V xor-mask min/max vs ARM64/WASM conditional select spec
+    x86_smin = z3.Extract(31, 0, shb64 + (sdiff & smask))
+    x86_smax = z3.Extract(31, 0, shb64 + (sdiff & (~smask)))
+    x86_umin = z3.Extract(31, 0, uhb64 + (udiff & umask))
+    x86_umax = z3.Extract(31, 0, uhb64 + (udiff & (~umask)))
+    rv_smin_mask = -z3.If(ha < hb, z3.BitVecVal(1, 32), z3.BitVecVal(0, 32))
+    rv_smin = hb ^ ((ha ^ hb) & rv_smin_mask)
+    spec_smin = z3.If(ha < hb, ha, hb)
+    rv_smax_mask = -z3.If(hb < ha, z3.BitVecVal(1, 32), z3.BitVecVal(0, 32))
+    rv_smax = hb ^ ((ha ^ hb) & rv_smax_mask)
+    spec_smax = z3.If(ha > hb, ha, hb)
+    rv_umin_mask = -z3.If(z3.ULT(ha, hb), z3.BitVecVal(1, 32), z3.BitVecVal(0, 32))
+    rv_umin = hb ^ ((ha ^ hb) & rv_umin_mask)
+    spec_umin = z3.If(z3.ULT(ha, hb), ha, hb)
+    rv_umax_mask = -z3.If(z3.ULT(hb, ha), z3.BitVecVal(1, 32), z3.BitVecVal(0, 32))
+    rv_umax = hb ^ ((ha ^ hb) & rv_umax_mask)
+    spec_umax = z3.If(z3.UGT(ha, hb), ha, hb)
+    s_mv32.add(
+        z3.Or(
+            ssad_mask64 != ssad_spec,
+            ssad_arm64 != ssad_spec,
+            x86_smin != spec_smin,
+            x86_smax != spec_smax,
+            x86_umin != spec_umin,
+            x86_umax != spec_umax,
+            rv_smin != spec_smin,
+            rv_smax != spec_smax,
+            rv_umin != spec_umin,
+            rv_umax != spec_umax,
+        )
+    )
+    if s_mv32.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-23 ssad32/smin32/smax32/umin32/umax32 Quad-ISA equivalence"}
 
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
@@ -1801,6 +1858,8 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "zcc_prove_21_wasm_simd128_unary_involution": "UNSAT (PROVEN_SOUND)",
         "zcc_prove_22_savg_uavg_usad32_quad_isa_active": has_mv31_guards,
         "zcc_prove_22_savg_uavg_usad32_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_23_ssad32_minmax32_quad_isa_active": has_mv32_guards,
+        "zcc_prove_23_ssad32_minmax32_equivalence": "UNSAT (PROVEN_SOUND)",
     }
 
 

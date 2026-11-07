@@ -1,0 +1,51 @@
+test_01_wasm_mv02_signedness_and_control_flow (test_wasm_mv02.TestWasmMV02Adversarial.test_01_wasm_mv02_signedness_and_control_flow)
+Verify tests/wasm_mv02_signedness.c across ZCC WASM, GCC, and Clang. ... ok
+test_02_x86_mv02_imm64_and_live_r11_preservation (test_wasm_mv02.TestWasmMV02Adversarial.test_02_x86_mv02_imm64_and_live_r11_preservation)
+Verify tests/x86_mv02_imm64.c preserves live %r11/%r10/%r9, %rsp value, and red-zone memory across 64-bit immediate comparison. ... ok
+test_03_typedef_redeclaration_compatibility_and_rejection (test_wasm_mv02.TestWasmMV02Adversarial.test_03_typedef_redeclaration_compatibility_and_rejection)
+Verify compatible typedef redeclaration succeeds and incompatible typedef redeclaration fails closed. ... ok
+test_04_seven_defect_class_seed_sensitivity (test_wasm_mv02.TestWasmMV02Adversarial.test_04_seven_defect_class_seed_sensitivity)
+Verify 50 seeded metamorphic vectors + all 7 defect classes from Section 2.C: ... ok
+test_05_mv04_gnu_as_binary_encoding_equivalence (test_wasm_mv02.TestWasmMV02Adversarial.test_05_mv04_gnu_as_binary_encoding_equivalence)
+MV-04 Independent Assembler Oracle: ... ok
+test_06_zcc_prove_01_peephole_truth_machine (test_wasm_mv02.TestWasmMV02Adversarial.test_06_zcc_prove_01_peephole_truth_machine)
+ZCC-PROVE-01: Formal Z3 SMT + 3,800-state differential machine-state equivalence verifier ... ok
+test_07_mv12_peephole_boost_and_tco_soundness (test_wasm_mv02.TestWasmMV02Adversarial.test_07_mv12_peephole_boost_and_tco_soundness)
+MV-12 + ZCC-PROVE-04: Differential execution of `tests/x86_mv02_imm64.c` under `ZCC_OPT=1` ... ok
+test_08_wasm_v128_simd128_and_x86_mv16_assembler_oracle (test_wasm_mv02.TestWasmMV02Adversarial.test_08_wasm_v128_simd128_and_x86_mv16_assembler_oracle)
+WASM-SIMD128 + MV-17: ... ok
+test_09_arm64_riscv64_qemu_and_wasm_autovec_v128 (test_wasm_mv02.TestWasmMV02Adversarial.test_09_arm64_riscv64_qemu_and_wasm_autovec_v128)
+Verify ARM64 & RISC-V 64-bit native execution under QEMU and WASM SIMD128 loop auto-vectorization (WASM-MV-18). ... ok
+test_10_standalone_arm64_riscv_codegen_cfold_math_and_wasm_autovec_v2 (test_wasm_mv02.TestWasmMV02Adversarial.test_10_standalone_arm64_riscv_codegen_cfold_math_and_wasm_autovec_v2)
+MV-19 / ARCH-AUDIT-02 / CFOLD-MATH-01 / WASM-SIMD128-AUTOVEC-V2: ... ok
+test_11_bit_intrinsics_quad_isa_wasm_reduction_and_prove_section (test_wasm_mv02.TestWasmMV02Adversarial.test_11_bit_intrinsics_quad_isa_wasm_reduction_and_prove_section)
+MV-20 / BITOPS-INTRINSICS-01 / QUAD-ISA-LOCK-01 / WASM-SIMD128-REDUC / WASM-PROVE-SECTION: ... ok
+test_12_harden_zero_clz_ctz_bswap64_quad_isa_and_autovec_alias_guard (test_wasm_mv02.TestWasmMV02Adversarial.test_12_harden_zero_clz_ctz_bswap64_quad_isa_and_autovec_alias_guard)
+MV-21 / BITOPS-HARDEN-01 / ZCC-PROVE-12: ... ok
+test_13_ffs_parity_quad_isa_v128_accum_and_compound_assign (test_wasm_mv02.TestWasmMV02Adversarial.test_13_ffs_parity_quad_isa_v128_accum_and_compound_assign)
+MV-22 / BITOPS-FFS-PARITY-01 / ARCH-CMP-SH-01 / WASM-V128-ACCUM / ZCC-PROVE-13: ... ok
+test_14_clrsb_quad_isa_simd128_splat_and_logic_ops (test_wasm_mv02.TestWasmMV02Adversarial.test_14_clrsb_quad_isa_simd128_splat_and_logic_ops)
+MV-23 / BITOPS-CLRSB-01 / ARCH-LOGIC-01 / WASM-SIMD128-SPLAT-01 / ZCC-PROVE-14: ... ok
+test_15_rotate_quad_isa_divmod_and_wasm_simd128_shift_div (test_wasm_mv02.TestWasmMV02Adversarial.test_15_rotate_quad_isa_divmod_and_wasm_simd128_shift_div)
+MV-24 / BITOPS-ROTATE-01 / ARCH-DIVMOD-COMPOUND-01 / WASM-SIMD128-SHIFT-DIV / ZCC-PROVE-15: ... ok
+test_16_bitreverse_quad_isa_and_const_folding (test_wasm_mv02.TestWasmMV02Adversarial.test_16_bitreverse_quad_isa_and_const_folding)
+MV-25 / BITOPS-BITREVERSE-01 / ZCC-PROVE-16: ... ok
+test_17_wasm_simd128_branchless_minmax_abs_autovec (test_wasm_mv02.TestWasmMV02Adversarial.test_17_wasm_simd128_branchless_minmax_abs_autovec)
+MV-26 / WASM-SIMD128-MINMAX-ABS-01 / ZCC-PROVE-17: ... ok
+test_18_strength_reduction_lea_and_bswap_involution_peephole (test_wasm_mv02.TestWasmMV02Adversarial.test_18_strength_reduction_lea_and_bswap_involution_peephole)
+MV-27 / PEEPHOLE-LEA359-BSWAP-01 / ZCC-PROVE-18: ... ok
+test_19_checked_overflow_intrinsics_quad_isa (test_wasm_mv02.TestWasmMV02Adversarial.test_19_checked_overflow_intrinsics_quad_isa)
+MV-28 / BITOPS-OVERFLOW-01 / ZCC-PROVE-19: ... ok
+test_20_mul_overflow_and_saturating_arith_quad_isa (test_wasm_mv02.TestWasmMV02Adversarial.test_20_mul_overflow_and_saturating_arith_quad_isa)
+MV-29 / BITOPS-MULOVF-SAT-01 / ZCC-PROVE-20: ... ok
+test_21_wasm_simd128_unary_neg_not_abs_sqrt_f32_minmax (test_wasm_mv02.TestWasmMV02Adversarial.test_21_wasm_simd128_unary_neg_not_abs_sqrt_f32_minmax)
+MV-30 / WASM-SIMD128-UNARY-F32-01 / ZCC-PROVE-21: ... ok
+test_22_savg_uavg_usad32_quad_isa (test_wasm_mv02.TestWasmMV02Adversarial.test_22_savg_uavg_usad32_quad_isa)
+MV-31 / BITOPS-AVG-ABSDIFF-01 / ZCC-PROVE-22: ... ok
+test_23_ssad32_smin_smax_umin_umax_quad_isa (test_wasm_mv02.TestWasmMV02Adversarial.test_23_ssad32_smin_smax_umin_umax_quad_isa)
+MV-32 / BITOPS-SSAD-MINMAX32-01 / ZCC-PROVE-23: ... ok
+
+----------------------------------------------------------------------
+Ran 23 tests in 20.387s
+
+OK
