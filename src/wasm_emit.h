@@ -238,6 +238,7 @@ typedef enum {
     WASM_SIMD_V128_OR           = 0x50,
     WASM_SIMD_V128_XOR          = 0x51,
     WASM_SIMD_I32X4_ABS         = 0xA0,
+    WASM_SIMD_I32X4_NEG         = 0xA1,
     WASM_SIMD_I32X4_SHL         = 0xAB,
     WASM_SIMD_I32X4_SHR_S       = 0xAC,
     WASM_SIMD_I32X4_SHR_U       = 0xAD,
@@ -249,10 +250,15 @@ typedef enum {
     WASM_SIMD_I32X4_MAX_S       = 0xB8,
     WASM_SIMD_I32X4_MAX_U       = 0xB9,
     WASM_SIMD_I32X4_DOT_I16X8_S = 0xBA,
+    WASM_SIMD_F32X4_ABS         = 0xE0,
+    WASM_SIMD_F32X4_NEG         = 0xE1,
+    WASM_SIMD_F32X4_SQRT        = 0xE3,
     WASM_SIMD_F32X4_ADD         = 0xE4,
     WASM_SIMD_F32X4_SUB         = 0xE5,
     WASM_SIMD_F32X4_MUL         = 0xE6,
-    WASM_SIMD_F32X4_DIV         = 0xE7
+    WASM_SIMD_F32X4_DIV         = 0xE7,
+    WASM_SIMD_F32X4_MIN         = 0xE8,
+    WASM_SIMD_F32X4_MAX         = 0xE9
 } WASMSimdOpcode;
 
 /* Dynamic Byte Buffer for Section Construction */

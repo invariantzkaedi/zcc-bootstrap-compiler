@@ -579,14 +579,23 @@ void init_compiler(Compiler *cc) {
         {
           const char *rot32[] = {"__builtin_rotateleft32", "__builtin_rotateright32"};
           const char *rot64[] = {"__builtin_rotateleft64", "__builtin_rotateright64"};
-          const char *ovf32[] = {"__builtin_sadd_overflow_p", "__builtin_ssub_overflow_p", "__builtin_uadd_overflow_p", "__builtin_usub_overflow_p"};
-          for (bi = 0; bi < 4; bi++) {
+          const char *ovf32[] = {"__builtin_sadd_overflow_p", "__builtin_ssub_overflow_p", "__builtin_smul_overflow_p", "__builtin_uadd_overflow_p", "__builtin_usub_overflow_p", "__builtin_umul_overflow_p"};
+          const char *sat32[] = {"__builtin_sadd_sat", "__builtin_ssub_sat", "__builtin_uadd_sat", "__builtin_usub_sat"};
+          for (bi = 0; bi < 6; bi++) {
             ft = type_func(cc, cc->ty_int);
+            ft->num_params = 2;
+            ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
+            ft->params[0] = (bi >= 3) ? cc->ty_uint : cc->ty_int;
+            ft->params[1] = (bi >= 3) ? cc->ty_uint : cc->ty_int;
+            sym = scope_add(cc, ovf32[bi], ft); sym->is_global = 1;
+          }
+          for (bi = 0; bi < 4; bi++) {
+            ft = type_func(cc, (bi >= 2) ? cc->ty_uint : cc->ty_int);
             ft->num_params = 2;
             ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
             ft->params[0] = (bi >= 2) ? cc->ty_uint : cc->ty_int;
             ft->params[1] = (bi >= 2) ? cc->ty_uint : cc->ty_int;
-            sym = scope_add(cc, ovf32[bi], ft); sym->is_global = 1;
+            sym = scope_add(cc, sat32[bi], ft); sym->is_global = 1;
           }
           for (bi = 0; bi < 2; bi++) {
             ft = type_func(cc, cc->ty_uint);
@@ -3479,6 +3488,29 @@ int zcc_eval_const_bit_builtin2(const char *fname, long long arg0_bits, long lon
     unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
     *out_bits = (a < b) ? 1 : 0; return 1;
   }
+  if (strcmp(fname, "__builtin_smul_overflow_p") == 0) {
+    long long a = (int)arg0_bits, b = (int)arg1_bits, p = a * b;
+    *out_bits = (p < -2147483648LL || p > 2147483647LL) ? 1 : 0; return 1;
+  }
+  if (strcmp(fname, "__builtin_umul_overflow_p") == 0) {
+    unsigned long long a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
+    *out_bits = ((a * b) > 0xFFFFFFFFULL) ? 1 : 0; return 1;
+  }
+  if (strcmp(fname, "__builtin_sadd_sat") == 0 || strcmp(fname, "__builtin_ssub_sat") == 0) {
+    long long a = (int)arg0_bits, b = (int)arg1_bits;
+    long long r = (fname[11] == 'a') ? (a + b) : (a - b);
+    if (r > 2147483647LL) r = 2147483647LL;
+    else if (r < -2147483648LL) r = -2147483648LL;
+    *out_bits = (long long)(int)r; return 1;
+  }
+  if (strcmp(fname, "__builtin_uadd_sat") == 0) {
+    unsigned long long a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits, r = a + b;
+    *out_bits = (long long)(unsigned int)((r > 0xFFFFFFFFULL) ? 0xFFFFFFFFU : r); return 1;
+  }
+  if (strcmp(fname, "__builtin_usub_sat") == 0) {
+    unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
+    *out_bits = (long long)(unsigned int)((a < b) ? 0U : (a - b)); return 1;
+  }
   if (strcmp(fname, "__builtin_rotateleft32") == 0) {
     unsigned int v = (unsigned int)arg0_bits;
     unsigned int s = (unsigned int)arg1_bits & 31U;
@@ -3781,6 +3813,38 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
     } else if (is_rv64) {
       if (is_u) fprintf(cc->out, is_sub ? "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    sltu a0, t0, t1\n" : "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    add t2, t0, t1\n    srli a0, t2, 32\n");
       else fprintf(cc->out, is_sub ? "    sext.w t0, a0\n    sext.w t1, a1\n    subw t2, t0, t1\n    xor t3, t0, t1\n    xor t4, t0, t2\n    and t3, t3, t4\n    srli a0, t3, 63\n" : "    sext.w t0, a0\n    sext.w t1, a1\n    addw t2, t0, t1\n    xor t3, t0, t1\n    not t3, t3\n    xor t4, t0, t2\n    and t3, t3, t4\n    srli a0, t3, 63\n");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_smul_overflow_p") == 0 || strcmp(fn, "__builtin_umul_overflow_p") == 0) {
+    int is_u = (fn[10] == 'u');
+    if (!backend_ops) {
+      if (is_u) fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    imulq %%rcx, %%rax\n    shrq $32, %%rax\n    testq %%rax, %%rax\n    setne %%al\n    movzbl %%al, %%eax\n", r32, s32);
+      else fprintf(cc->out, "    movslq %%%s, %%rax\n    movslq %%%s, %%rcx\n    imulq %%rcx, %%rax\n    movslq %%eax, %%rdx\n    cmpq %%rdx, %%rax\n    setne %%al\n    movzbl %%al, %%eax\n", r32, s32);
+    } else if (is_a64) {
+      if (is_u) fprintf(cc->out, "    umull x2, w0, w1\n    lsr x2, x2, #32\n    cmp x2, #0\n    cset w0, ne\n");
+      else fprintf(cc->out, "    smull x2, w0, w1\n    sxtw x3, w2\n    cmp x2, x3\n    cset w0, ne\n");
+    } else if (is_rv64) {
+      if (is_u) fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    mul t2, t0, t1\n    srli t2, t2, 32\n    snez a0, t2\n");
+      else fprintf(cc->out, "    sext.w t0, a0\n    sext.w t1, a1\n    mul t2, t0, t1\n    sext.w t3, t2\n    sub t2, t2, t3\n    snez a0, t2\n");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_sadd_sat") == 0 || strcmp(fn, "__builtin_ssub_sat") == 0 ||
+      strcmp(fn, "__builtin_uadd_sat") == 0 || strcmp(fn, "__builtin_usub_sat") == 0) {
+    int is_u = (fn[10] == 'u'), is_sub = (fn[12] == 'u');
+    if (!backend_ops) {
+      if (!is_u) fprintf(cc->out, "    movslq %%%s, %%rax\n    movslq %%%s, %%rcx\n    %s %%rcx, %%rax\n    movq %%rax, %%rcx\n    sarq $63, %%rcx\n    movq $2147483647, %%rdx\n    xorq %%rdx, %%rcx\n    movslq %%eax, %%rdx\n    cmpq %%rdx, %%rax\n    setne %%dl\n    movzbl %%dl, %%edx\n    negq %%rdx\n    xorq %%rax, %%rcx\n    andq %%rdx, %%rcx\n    xorq %%rcx, %%rax\n    movslq %%eax, %%rax\n", r32, s32, is_sub ? "subq" : "addq");
+      else if (!is_sub) fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    addq %%rcx, %%rax\n    movq %%rax, %%rdx\n    shrq $32, %%rdx\n    negq %%rdx\n    orq %%rdx, %%rax\n    movl %%eax, %%eax\n", r32, s32);
+      else fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    subq %%rcx, %%rax\n    movq %%rax, %%rdx\n    shrq $63, %%rdx\n    subq $1, %%rdx\n    andq %%rdx, %%rax\n    movl %%eax, %%eax\n", r32, s32);
+    } else if (is_a64) {
+      if (!is_u) fprintf(cc->out, "    asr w2, w0, #31\n    eor w2, w2, #0x7fffffff\n    %s w0, w0, w1\n    csel w0, w2, w0, vs\n    sxtw x0, w0\n", is_sub ? "subs" : "adds");
+      else if (!is_sub) fprintf(cc->out, "    adds w0, w0, w1\n    csinv w0, w0, wzr, cc\n");
+      else fprintf(cc->out, "    subs w0, w0, w1\n    csel w0, w0, wzr, cs\n");
+    } else if (is_rv64) {
+      if (!is_u) fprintf(cc->out, "    sext.w t0, a0\n    sext.w t1, a1\n    %s t4, t0, t1\n    srai t2, t4, 63\n    li t3, 2147483647\n    xor t2, t2, t3\n    sext.w a0, t4\n    sub t4, t4, a0\n    snez t4, t4\n    neg t4, t4\n    xor t2, t2, a0\n    and t2, t2, t4\n    xor a0, a0, t2\n    sext.w a0, a0\n", is_sub ? "sub" : "add");
+      else if (!is_sub) fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    add a0, t0, t1\n    srli t2, a0, 32\n    neg t2, t2\n    or a0, a0, t2\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
+      else fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    sub a0, t0, t1\n    srai t2, a0, 63\n    not t2, t2\n    and a0, a0, t2\n");
     } else return 0;
     return 1;
   }

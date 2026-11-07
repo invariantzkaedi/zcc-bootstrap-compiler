@@ -1573,10 +1573,10 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         and 'is_u ? "setb" : "seto"' in part5_text
         and "cset w0, %s" in part5_text
         and 'strcmp(bfn, "sadd_overflow_p") == 0' in part6_wasm_text
-        and "ZCC-PROVE-11..19" in wasm_emit_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
     )
     if not has_mv28_guards:
-        return False, {"error": "Missing ZCC-PROVE-19 checked overflow intrinsics Quad-ISA guards or ZCC-PROVE-11..19 metadata"}
+        return False, {"error": "Missing ZCC-PROVE-19 checked overflow intrinsics Quad-ISA guards or ZCC-PROVE-11.. metadata"}
 
     s_mv28 = z3.Solver()
     oa = z3.BitVec("oa32", 32)
@@ -1592,6 +1592,114 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     s_mv28.add(z3.Or(rv_sadd_ovf != wasm_sadd_ovf, wasm_uadd_ovf != x86_uadd_ovf))
     if s_mv28.check() == z3.sat:
         return False, {"error": "Z3 found counterexample in ZCC-PROVE-19 Quad-ISA signed/unsigned overflow equivalence"}
+
+    # 20. ZCC-PROVE-20 (MV29): Multiply overflow (__builtin_smul/umul_overflow_p) and 32-bit saturating arithmetic (__builtin_sadd/ssub/uadd/usub_sat) across Quad-ISA
+    has_mv29_guards = (
+        "__builtin_smul_overflow_p" in part5_text
+        and "__builtin_umul_overflow_p" in part5_text
+        and "__builtin_sadd_sat" in part5_text
+        and "__builtin_uadd_sat" in part5_text
+        and "smull x2, w0, w1" in part5_text
+        and "umull x2, w0, w1" in part5_text
+        and "csel w0, w2, w0, vs" in part5_text
+        and "csinv w0, w0, wzr, cc" in part5_text
+        and 'strcmp(bfn, "sadd_sat") == 0' in part6_wasm_text
+        and 'strcmp(bfn, "smul_overflow_p") == 0' in part6_wasm_text
+    )
+    if not has_mv29_guards:
+        return False, {"error": "Missing ZCC-PROVE-20 multiply overflow or saturating arithmetic Quad-ISA guards"}
+
+    s_mv29 = z3.Solver()
+    sa = z3.BitVec("sa32", 32)
+    sb = z3.BitVec("sb32", 32)
+    sa64 = z3.SignExt(32, sa)
+    sb64 = z3.SignExt(32, sb)
+    ua64 = z3.ZeroExt(32, sa)
+    ub64 = z3.ZeroExt(32, sb)
+    # 20a: Signed & unsigned multiply overflow equivalence
+    sprod64 = sa64 * sb64
+    smul_ovf_wrap = z3.SignExt(32, z3.Extract(31, 0, sprod64)) != sprod64
+    smul_ovf_bounds = z3.Or(sprod64 < z3.BitVecVal(-2147483648, 64), sprod64 > z3.BitVecVal(2147483647, 64))
+    uprod64 = ua64 * ub64
+    umul_ovf_shr = z3.LShR(uprod64, 32) != z3.BitVecVal(0, 64)
+    umul_ovf_bounds = z3.UGT(uprod64, z3.BitVecVal(0xFFFFFFFF, 64))
+    # 20b: Signed saturating add (64-bit sign-shift formula vs ARM64 (a>>s31)^0x7FFFFFFF vs mathematical clamp)
+    ssum64 = sa64 + sb64
+    sadd_ovf = z3.SignExt(32, z3.Extract(31, 0, ssum64)) != ssum64
+    sadd_sat_64 = z3.If(
+        sadd_ovf,
+        z3.Extract(31, 0, ssum64 >> 63) ^ z3.BitVecVal(0x7FFFFFFF, 32),
+        z3.Extract(31, 0, ssum64),
+    )
+    sadd_sat_arm64 = z3.If(
+        sadd_ovf,
+        (sa >> 31) ^ z3.BitVecVal(0x7FFFFFFF, 32),
+        sa + sb,
+    )
+    sadd_sat_spec = z3.If(
+        ssum64 > z3.BitVecVal(2147483647, 64),
+        z3.BitVecVal(0x7FFFFFFF, 32),
+        z3.If(ssum64 < z3.BitVecVal(-2147483648, 64), z3.BitVecVal(-2147483648, 32), z3.Extract(31, 0, ssum64)),
+    )
+    # 20c: Signed saturating sub
+    sdiff64 = sa64 - sb64
+    ssub_ovf = z3.SignExt(32, z3.Extract(31, 0, sdiff64)) != sdiff64
+    ssub_sat_64 = z3.If(
+        ssub_ovf,
+        z3.Extract(31, 0, sdiff64 >> 63) ^ z3.BitVecVal(0x7FFFFFFF, 32),
+        z3.Extract(31, 0, sdiff64),
+    )
+    ssub_sat_arm64 = z3.If(
+        ssub_ovf,
+        (sa >> 31) ^ z3.BitVecVal(0x7FFFFFFF, 32),
+        sa - sb,
+    )
+    ssub_sat_spec = z3.If(
+        sdiff64 > z3.BitVecVal(2147483647, 64),
+        z3.BitVecVal(0x7FFFFFFF, 32),
+        z3.If(sdiff64 < z3.BitVecVal(-2147483648, 64), z3.BitVecVal(-2147483648, 32), z3.Extract(31, 0, sdiff64)),
+    )
+    # 20d: Unsigned saturating add & sub
+    usum64 = ua64 + ub64
+    uadd_sat_x86 = z3.Extract(31, 0, usum64 | (-z3.LShR(usum64, 32)))
+    uadd_sat_spec = z3.If(z3.UGT(usum64, z3.BitVecVal(0xFFFFFFFF, 64)), z3.BitVecVal(0xFFFFFFFF, 32), sa + sb)
+    udiff64 = ua64 - ub64
+    usub_sat_x86 = z3.Extract(31, 0, udiff64 & (z3.LShR(udiff64, 63) - z3.BitVecVal(1, 64)))
+    usub_sat_spec = z3.If(z3.ULT(sa, sb), z3.BitVecVal(0, 32), sa - sb)
+    s_mv29.add(
+        z3.Or(
+            smul_ovf_wrap != smul_ovf_bounds,
+            umul_ovf_shr != umul_ovf_bounds,
+            sadd_sat_64 != sadd_sat_spec,
+            sadd_sat_arm64 != sadd_sat_spec,
+            ssub_sat_64 != ssub_sat_spec,
+            ssub_sat_arm64 != ssub_sat_spec,
+            uadd_sat_x86 != uadd_sat_spec,
+            usub_sat_x86 != usub_sat_spec,
+        )
+    )
+    if s_mv29.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-20 multiply overflow or saturating arithmetic equivalence"}
+
+    # 21. ZCC-PROVE-21 (MV30): WASM SIMD128 unary (i32x4.neg, v128.not, f32x4.neg, f32x4.abs, f32x4.sqrt) & f32x4.min/max auto-vectorization
+    has_mv30_guards = (
+        "WASM_SIMD_I32X4_NEG" in part6_wasm_text
+        and "WASM_SIMD_F32X4_NEG" in part6_wasm_text
+        and "WASM_SIMD_V128_NOT" in part6_wasm_text
+        and "WASM_SIMD_F32X4_ABS" in part6_wasm_text
+        and "WASM_SIMD_F32X4_SQRT" in part6_wasm_text
+        and "WASM_SIMD_F32X4_MIN" in part6_wasm_text
+        and "WASM_SIMD_F32X4_MAX" in part6_wasm_text
+        and "ZCC-PROVE-11..21" in wasm_emit_text
+    )
+    if not has_mv30_guards:
+        return False, {"error": "Missing ZCC-PROVE-21 WASM SIMD128 unary/f32 min-max guards or ZCC-PROVE-11..21 metadata"}
+
+    s_mv30 = z3.Solver()
+    ux32 = z3.BitVec("ux32", 32)
+    s_mv30.add(z3.Or(-ux32 != (~ux32) + z3.BitVecVal(1, 32), ~(~ux32) != ux32, -(-ux32) != ux32))
+    if s_mv30.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-21 unary SIMD128 algebraic involution"}
 
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
@@ -1634,6 +1742,10 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "zcc_prove_18_lea359_and_bswap_involution_equivalence": "UNSAT (PROVEN_SOUND)",
         "zcc_prove_19_checked_overflow_quad_isa_active": has_mv28_guards,
         "zcc_prove_19_checked_overflow_quad_isa_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_20_mul_overflow_and_saturating_arith_quad_isa_active": has_mv29_guards,
+        "zcc_prove_20_mul_overflow_and_saturating_arith_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_21_wasm_simd128_unary_and_f32_minmax_active": has_mv30_guards,
+        "zcc_prove_21_wasm_simd128_unary_involution": "UNSAT (PROVEN_SOUND)",
     }
 
 

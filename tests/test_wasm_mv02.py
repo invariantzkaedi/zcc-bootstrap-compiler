@@ -1670,10 +1670,224 @@ int main(void) {
             r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv28_c), "-o", str(wasm_out)], capture_output=True, text=True)
             self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
             wb = wasm_out.read_bytes()
-            self.assertIn(b"ZCC-PROVE-11..19", wb, "Missing ZCC-PROVE-11..19 in .zcc.prove custom section")
+            self.assertIn(b"ZCC-PROVE-11..", wb, "Missing ZCC-PROVE-11.. in .zcc.prove custom section")
             if shutil.which("wasm-validate"):
                 self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
             self.assertEqual(run_wasm_node(wasm_out), 95)
+
+    def test_20_mul_overflow_and_saturating_arith_quad_isa(self) -> None:
+        """
+        MV-29 / BITOPS-MULOVF-SAT-01 / ZCC-PROVE-20:
+        1. Compile-time constant folding and Quad-ISA runtime lowering for:
+           - __builtin_smul_overflow_p(int a, int b)
+           - __builtin_umul_overflow_p(unsigned int a, unsigned int b)
+           - __builtin_sadd_sat(int a, int b)
+           - __builtin_ssub_sat(int a, int b)
+           - __builtin_uadd_sat(unsigned int a, unsigned int b)
+           - __builtin_usub_sat(unsigned int a, unsigned int b)
+        2. Quad-ISA Bit-Exact Differential Execution Lock across x86-64, ARM64, RISC-V 64, and WASM32 (exit 113).
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            mv29_c = pathlib.Path(tmp) / "quad_mv29.c"
+            mv29_c.write_text(
+                r"""
+int g_smul_ok  = __builtin_smul_overflow_p(46340, 46340);
+int g_smul_ovf = __builtin_smul_overflow_p(46341, 46341);
+int g_umul_ok  = __builtin_umul_overflow_p(65535U, 65537U);
+int g_umul_ovf = __builtin_umul_overflow_p(65536U, 65536U);
+int g_sadd_pos = __builtin_sadd_sat(2000000000, 500000000);
+int g_sadd_neg = __builtin_sadd_sat(-2000000000, -500000000);
+int g_ssub_pos = __builtin_ssub_sat(2000000000, -500000000);
+int g_ssub_neg = __builtin_ssub_sat(-2000000000, 500000000);
+unsigned int g_uadd_sat = __builtin_uadd_sat(4000000000U, 500000000U);
+unsigned int g_usub_sat = __builtin_usub_sat(100U, 250U);
+
+int rt_smul(int a, int b) { return __builtin_smul_overflow_p(a, b); }
+int rt_umul(unsigned int a, unsigned int b) { return __builtin_umul_overflow_p(a, b); }
+int rt_sadd_sat(int a, int b) { return __builtin_sadd_sat(a, b); }
+int rt_ssub_sat(int a, int b) { return __builtin_ssub_sat(a, b); }
+unsigned int rt_uadd_sat(unsigned int a, unsigned int b) { return __builtin_uadd_sat(a, b); }
+unsigned int rt_usub_sat(unsigned int a, unsigned int b) { return __builtin_usub_sat(a, b); }
+
+int main(void) {
+    if (g_smul_ok != 0 || g_smul_ovf != 1 || g_umul_ok != 0 || g_umul_ovf != 1) return 1;
+    if (g_sadd_pos != 2147483647 || g_sadd_neg != (-2147483647 - 1)) return 2;
+    if (g_ssub_pos != 2147483647 || g_ssub_neg != (-2147483647 - 1)) return 3;
+    if (g_uadd_sat != 4294967295U || g_usub_sat != 0U) return 4;
+
+    if (rt_smul(46340, 46340) != 0 || rt_smul(46341, 46341) != 1) return 5;
+    if (rt_smul(-2147483647 - 1, -1) != 1 || rt_smul(-100000, 30000) != 1) return 6;
+    if (rt_umul(65535U, 65537U) != 0 || rt_umul(65536U, 65536U) != 1) return 7;
+    if (rt_sadd_sat(2000000000, 500000000) != 2147483647) return 8;
+    if (rt_sadd_sat(-2000000000, -500000000) != (-2147483647 - 1)) return 9;
+    if (rt_sadd_sat(40, 15) != 55) return 10;
+    if (rt_ssub_sat(2000000000, -500000000) != 2147483647) return 11;
+    if (rt_ssub_sat(-2000000000, 500000000) != (-2147483647 - 1)) return 12;
+    if (rt_ssub_sat(50, 22) != 28) return 13;
+    if (rt_uadd_sat(4000000000U, 500000000U) != 4294967295U) return 14;
+    if (rt_uadd_sat(12U, 8U) != 20U) return 15;
+    if (rt_usub_sat(100U, 250U) != 0U) return 16;
+    if (rt_usub_sat(30U, 20U) != 10U) return 17;
+    return rt_sadd_sat(40, 15) + rt_ssub_sat(50, 22) + (int)rt_uadd_sat(12U, 8U) + (int)rt_usub_sat(30U, 20U); /* 55 + 28 + 20 + 10 = 113 */
+}
+""",
+                encoding="utf-8",
+            )
+            x86_s = pathlib.Path(tmp) / "mv29_x86.s"
+            x86_bin = pathlib.Path(tmp) / "mv29_x86"
+            r_x86_s = subprocess.run([str(ZCC_BIN), "-S", str(mv29_c), "-o", str(x86_s)], capture_output=True, text=True)
+            self.assertEqual(r_x86_s.returncode, 0, r_x86_s.stderr)
+            x86_txt = x86_s.read_text(encoding="utf-8")
+            self.assertIn("imulq %rcx, %rax", x86_txt, "Missing 64-bit imulq %rcx, %rax on x86-64 mul_overflow_p")
+            self.assertIn("movq $2147483647, %rdx", x86_txt, "Missing 2147483647 saturation mask on x86-64 sadd_sat/ssub_sat")
+            r_x86_b = subprocess.run([str(ZCC_BIN), str(mv29_c), "-o", str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86_b.returncode, 0, r_x86_b.stderr)
+            self.assertEqual(subprocess.run([str(x86_bin)], capture_output=True).returncode, 113)
+
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                arm_s = pathlib.Path(tmp) / "mv29_arm64.s"
+                arm_o = pathlib.Path(tmp) / "mv29_arm64.o"
+                arm_bin = pathlib.Path(tmp) / "mv29_arm64"
+                r_arm_s = subprocess.run([str(ZCC_BIN), "--target=arm64", "-S", str(mv29_c), "-o", str(arm_s)], capture_output=True, text=True)
+                self.assertEqual(r_arm_s.returncode, 0, r_arm_s.stderr)
+                arm_txt = arm_s.read_text(encoding="utf-8")
+                self.assertIn("smull x2, w0, w1", arm_txt, "Missing smull x2, w0, w1 on ARM64 smul_overflow_p")
+                self.assertIn("umull x2, w0, w1", arm_txt, "Missing umull x2, w0, w1 on ARM64 umul_overflow_p")
+                self.assertIn("csel w0, w2, w0, vs", arm_txt, "Missing csel w0, w2, w0, vs on ARM64 sadd_sat/ssub_sat")
+                self.assertIn("csinv w0, w0, wzr, cc", arm_txt, "Missing csinv w0, w0, wzr, cc on ARM64 uadd_sat")
+                arm_s.write_text(arm_txt + "\n.text\n.globl _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n", encoding="utf-8")
+                self.assertEqual(subprocess.run(["aarch64-linux-gnu-as", str(arm_s), "-o", str(arm_o)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["aarch64-linux-gnu-ld", str(arm_o), "-o", str(arm_bin)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["qemu-aarch64-static", str(arm_bin)], capture_output=True).returncode, 113)
+
+            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
+                rv_s = pathlib.Path(tmp) / "mv29_rv64.s"
+                rv_bin = pathlib.Path(tmp) / "mv29_rv64"
+                r_rv_s = subprocess.run([str(ZCC_BIN), "--target=riscv64", "-S", str(mv29_c), "-o", str(rv_s)], capture_output=True, text=True)
+                self.assertEqual(r_rv_s.returncode, 0, r_rv_s.stderr)
+                self.assertEqual(subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_bin)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True).returncode, 113)
+
+            wasm_out = pathlib.Path(tmp) / "mv29.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv29_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            if shutil.which("wasm-validate"):
+                self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
+            self.assertEqual(run_wasm_node(wasm_out), 113)
+
+    def test_21_wasm_simd128_unary_neg_not_abs_sqrt_f32_minmax(self) -> None:
+        """
+        MV-30 / WASM-SIMD128-UNARY-F32-01 / ZCC-PROVE-21:
+        1. Auto-vectorizes unary and float min/max loops in part6_wasm.c into 128-bit SIMD opcodes:
+           - i32x4.neg  (0xFD 0xA1 0x01) for int   dst[i] = -a[i]
+           - v128.not   (0xFD 0x4D)      for int   dst[i] = ~a[i]
+           - f32x4.neg  (0xFD 0xE1 0x01) for float dst[i] = -a[i]
+           - f32x4.abs  (0xFD 0xE0 0x01) for float dst[i] = fabsf(a[i])
+           - f32x4.sqrt (0xFD 0xE3 0x01) for float dst[i] = sqrtf(a[i])
+           - f32x4.min  (0xFD 0xE8 0x01) for float dst[i] = (a[i] < b[i]) ? a[i] : b[i]
+           - f32x4.max  (0xFD 0xE9 0x01) for float dst[i] = (a[i] > b[i]) ? a[i] : b[i]
+        2. Verifies .zcc.prove custom section contains ZCC-PROVE-11..21, wasm-validate passes, and 6-element (4 SIMD + 2 scalar tail) execution returns 142.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            mv30_c = pathlib.Path(tmp) / "quad_mv30.c"
+            mv30_c.write_text(
+                r"""
+float fabsf(float x);
+float sqrtf(float x);
+
+void vec_i32_neg(int *dst, const int *a, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = -a[i];
+    }
+}
+
+void vec_i32_not(int *dst, const int *a, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = ~a[i];
+    }
+}
+
+void vec_f32_neg(float *dst, const float *a, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = -a[i];
+    }
+}
+
+void vec_f32_abs(float *dst, const float *a, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = fabsf(a[i]);
+    }
+}
+
+void vec_f32_sqrt(float *dst, const float *a, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = sqrtf(a[i]);
+    }
+}
+
+void vec_f32_min(float *dst, const float *a, const float *b, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = (a[i] < b[i]) ? a[i] : b[i];
+    }
+}
+
+void vec_f32_max(float *dst, const float *a, const float *b, int n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = (a[i] > b[i]) ? a[i] : b[i];
+    }
+}
+
+int main(void) {
+    int ia[6] = {1, -2, 3, -4, 5, -6};
+    int ineg[6];
+    int inot[6];
+    vec_i32_neg(ineg, ia, 6);
+    vec_i32_not(inot, ia, 6);
+    /* sum(ineg) = -1 + 2 - 3 + 4 - 5 + 6 = 3 */
+    /* sum(inot) = -2 + 1 - 4 + 3 - 6 + 5 = -3 */
+    if (ineg[0] + ineg[1] + ineg[2] + ineg[3] + ineg[4] + ineg[5] != 3) return 1;
+    if (inot[0] + inot[1] + inot[2] + inot[3] + inot[4] + inot[5] != -3) return 2;
+
+    float fa[6] = {-4.0f, 9.0f, -16.0f, 25.0f, -36.0f, 49.0f};
+    float sq_in[6] = {4.0f, 9.0f, 16.0f, 25.0f, 36.0f, 49.0f};
+    float fb[6] = {-2.0f, 5.0f, -20.0f, 30.0f, -10.0f, 40.0f};
+    float fneg[6];
+    float fabs_out[6];
+    float fsqrt_out[6];
+    float fmin_out[6];
+    float fmax_out[6];
+    vec_f32_neg(fneg, fa, 6);
+    vec_f32_abs(fabs_out, fa, 6);
+    vec_f32_sqrt(fsqrt_out, sq_in, 6);
+    vec_f32_min(fmin_out, fa, fb, 6);
+    vec_f32_max(fmax_out, fa, fb, 6);
+
+    int s_neg  = (int)(fneg[0] + fneg[1] + fneg[2] + fneg[3] + fneg[4] + fneg[5]);             /* 4-9+16-25+36-49 = -27 */
+    int s_abs  = (int)(fabs_out[0] + fabs_out[1] + fabs_out[2] + fabs_out[3] + fabs_out[4] + fabs_out[5]); /* 4+9+16+25+36+49 = 139 */
+    int s_sqrt = (int)(fsqrt_out[0] + fsqrt_out[1] + fsqrt_out[2] + fsqrt_out[3] + fsqrt_out[4] + fsqrt_out[5]); /* 2+3+4+5+6+7 = 27 */
+    int s_min  = (int)(fmin_out[0] + fmin_out[1] + fmin_out[2] + fmin_out[3] + fmin_out[4] + fmin_out[5]); /* -4+5-20+25-36+40 = 10 */
+    int s_max  = (int)(fmax_out[0] + fmax_out[1] + fmax_out[2] + fmax_out[3] + fmax_out[4] + fmax_out[5]); /* -2+9-16+30-10+49 = 60 */
+    if (s_neg != -27 || s_abs != 139 || s_sqrt != 27 || s_min != 10 || s_max != 60) return 3;
+    return s_abs + s_sqrt + s_min + s_max + s_neg - 67; /* 209 - 67 = 142 */
+}
+""",
+                encoding="utf-8",
+            )
+            wasm_out = pathlib.Path(tmp) / "mv30.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv30_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            wb = wasm_out.read_bytes()
+            self.assertIn(b"ZCC-PROVE-11..21", wb, "Missing ZCC-PROVE-11..21 in .zcc.prove custom section")
+            self.assertIn(b"\xfd\xa1\x01", wb, "Expected i32x4.neg (0xfd 0xa1 0x01) in vec_i32_neg")
+            self.assertIn(b"\xfd\x4d", wb, "Expected v128.not (0xfd 0x4d) in vec_i32_not")
+            self.assertIn(b"\xfd\xe1\x01", wb, "Expected f32x4.neg (0xfd 0xe1 0x01) in vec_f32_neg")
+            self.assertIn(b"\xfd\xe0\x01", wb, "Expected f32x4.abs (0xfd 0xe0 0x01) in vec_f32_abs")
+            self.assertIn(b"\xfd\xe3\x01", wb, "Expected f32x4.sqrt (0xfd 0xe3 0x01) in vec_f32_sqrt")
+            self.assertIn(b"\xfd\xe8\x01", wb, "Expected f32x4.min (0xfd 0xe8 0x01) in vec_f32_min")
+            self.assertIn(b"\xfd\xe9\x01", wb, "Expected f32x4.max (0xfd 0xe9 0x01) in vec_f32_max")
+            if shutil.which("wasm-validate"):
+                self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
+            self.assertEqual(run_wasm_node(wasm_out), 142)
 
 
 if __name__ == "__main__":

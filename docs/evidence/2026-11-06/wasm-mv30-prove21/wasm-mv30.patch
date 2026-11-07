@@ -1,0 +1,891 @@
+diff --git a/BOOTSTRAP_BASELINES.tsv b/BOOTSTRAP_BASELINES.tsv
+index 42358bae7..10b19e7af 100644
+--- a/BOOTSTRAP_BASELINES.tsv
++++ b/BOOTSTRAP_BASELINES.tsv
+@@ -157,4 +157,5 @@ REWRITE	37d34e76	[history-rewrite]	-	git filter-repo	Linux 6.6.123.2-microsoft-s
+ 2026-11-04T09:20:00Z	HEAD	bf66665c625e353d824f630bb3912f27	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(bitops,quad-isa,wasm,part4,prove): WASM-MV-23 / BITOPS-CLRSB-01 / ARCH-LOGIC-01 / WASM-SIMD128-SPLAT / ZCC-PROVE-14 baseline lock
+ 2026-11-04T11:44:00Z	HEAD	1362610d55320c883b6dae67c732713d	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(bitops,quad-isa,wasm,part4,codegen,prove): WASM-MV-24 / BITOPS-ROTATE-01 / ARCH-DIVMOD-COMPOUND-01 / WASM-SIMD128-SHIFT-DIV / ZCC-PROVE-15 baseline lock
+ 2026-11-06T23:02:00Z	HEAD	2c5e9ef07b8c49413ba45e07df729d57	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(bitops,quad-isa,wasm,part5,codegen,prove): WASM-MV-25..28 / BITOPS-BITREVERSE-01 / WASM-SIMD128-MINMAX-ABS-01 / PEEPHOLE-LEA359-BSWAP-01 / BITOPS-OVERFLOW-01 / ZCC-PROVE-16..19 baseline lock
++2026-11-06T23:35:00Z	HEAD	db587335c0237454fc9ed7a09ff40ced	?	gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0	Linux 6.18.33.2-microsoft-standard-WSL2 x86_64	feat(bitops,quad-isa,wasm,part5,prove): WASM-MV-29..30 / BITOPS-MULOVF-SAT-01 / WASM-SIMD128-UNARY-F32-01 / ZCC-PROVE-20..21 baseline lock
+ 
+diff --git a/part3.c b/part3.c
+index 841ba2107..bfe35400a 100644
+--- a/part3.c
++++ b/part3.c
+@@ -2459,7 +2459,9 @@ Node *parse_postfix(Compiler *cc) {
+                     if (strcmp(call->func_name, "__builtin_bswap16") == 0) {
+                         call->type = cc->ty_ushort;
+                     } else if (strcmp(call->func_name, "__builtin_bswap32") == 0 ||
+-                               strcmp(call->func_name, "__builtin_bitreverse32") == 0) {
++                               strcmp(call->func_name, "__builtin_bitreverse32") == 0 ||
++                               strcmp(call->func_name, "__builtin_uadd_sat") == 0 ||
++                               strcmp(call->func_name, "__builtin_usub_sat") == 0) {
+                         call->type = cc->ty_uint;
+                     } else if (strcmp(call->func_name, "__builtin_bswap64") == 0 ||
+                                strcmp(call->func_name, "__builtin_bitreverse64") == 0) {
+diff --git a/part5.c b/part5.c
+index ab88a5730..e5239c80e 100644
+--- a/part5.c
++++ b/part5.c
+@@ -579,14 +579,23 @@ void init_compiler(Compiler *cc) {
+         {
+           const char *rot32[] = {"__builtin_rotateleft32", "__builtin_rotateright32"};
+           const char *rot64[] = {"__builtin_rotateleft64", "__builtin_rotateright64"};
+-          const char *ovf32[] = {"__builtin_sadd_overflow_p", "__builtin_ssub_overflow_p", "__builtin_uadd_overflow_p", "__builtin_usub_overflow_p"};
+-          for (bi = 0; bi < 4; bi++) {
++          const char *ovf32[] = {"__builtin_sadd_overflow_p", "__builtin_ssub_overflow_p", "__builtin_smul_overflow_p", "__builtin_uadd_overflow_p", "__builtin_usub_overflow_p", "__builtin_umul_overflow_p"};
++          const char *sat32[] = {"__builtin_sadd_sat", "__builtin_ssub_sat", "__builtin_uadd_sat", "__builtin_usub_sat"};
++          for (bi = 0; bi < 6; bi++) {
+             ft = type_func(cc, cc->ty_int);
+             ft->num_params = 2;
+             ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
++            ft->params[0] = (bi >= 3) ? cc->ty_uint : cc->ty_int;
++            ft->params[1] = (bi >= 3) ? cc->ty_uint : cc->ty_int;
++            sym = scope_add(cc, ovf32[bi], ft); sym->is_global = 1;
++          }
++          for (bi = 0; bi < 4; bi++) {
++            ft = type_func(cc, (bi >= 2) ? cc->ty_uint : cc->ty_int);
++            ft->num_params = 2;
++            ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
+             ft->params[0] = (bi >= 2) ? cc->ty_uint : cc->ty_int;
+             ft->params[1] = (bi >= 2) ? cc->ty_uint : cc->ty_int;
+-            sym = scope_add(cc, ovf32[bi], ft); sym->is_global = 1;
++            sym = scope_add(cc, sat32[bi], ft); sym->is_global = 1;
+           }
+           for (bi = 0; bi < 2; bi++) {
+             ft = type_func(cc, cc->ty_uint);
+@@ -3479,6 +3488,29 @@ int zcc_eval_const_bit_builtin2(const char *fname, long long arg0_bits, long lon
+     unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
+     *out_bits = (a < b) ? 1 : 0; return 1;
+   }
++  if (strcmp(fname, "__builtin_smul_overflow_p") == 0) {
++    long long a = (int)arg0_bits, b = (int)arg1_bits, p = a * b;
++    *out_bits = (p < -2147483648LL || p > 2147483647LL) ? 1 : 0; return 1;
++  }
++  if (strcmp(fname, "__builtin_umul_overflow_p") == 0) {
++    unsigned long long a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
++    *out_bits = ((a * b) > 0xFFFFFFFFULL) ? 1 : 0; return 1;
++  }
++  if (strcmp(fname, "__builtin_sadd_sat") == 0 || strcmp(fname, "__builtin_ssub_sat") == 0) {
++    long long a = (int)arg0_bits, b = (int)arg1_bits;
++    long long r = (fname[11] == 'a') ? (a + b) : (a - b);
++    if (r > 2147483647LL) r = 2147483647LL;
++    else if (r < -2147483648LL) r = -2147483648LL;
++    *out_bits = (long long)(int)r; return 1;
++  }
++  if (strcmp(fname, "__builtin_uadd_sat") == 0) {
++    unsigned long long a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits, r = a + b;
++    *out_bits = (long long)(unsigned int)((r > 0xFFFFFFFFULL) ? 0xFFFFFFFFU : r); return 1;
++  }
++  if (strcmp(fname, "__builtin_usub_sat") == 0) {
++    unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
++    *out_bits = (long long)(unsigned int)((a < b) ? 0U : (a - b)); return 1;
++  }
+   if (strcmp(fname, "__builtin_rotateleft32") == 0) {
+     unsigned int v = (unsigned int)arg0_bits;
+     unsigned int s = (unsigned int)arg1_bits & 31U;
+@@ -3784,6 +3816,38 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
+     } else return 0;
+     return 1;
+   }
++  if (strcmp(fn, "__builtin_smul_overflow_p") == 0 || strcmp(fn, "__builtin_umul_overflow_p") == 0) {
++    int is_u = (fn[10] == 'u');
++    if (!backend_ops) {
++      if (is_u) fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    imulq %%rcx, %%rax\n    shrq $32, %%rax\n    testq %%rax, %%rax\n    setne %%al\n    movzbl %%al, %%eax\n", r32, s32);
++      else fprintf(cc->out, "    movslq %%%s, %%rax\n    movslq %%%s, %%rcx\n    imulq %%rcx, %%rax\n    movslq %%eax, %%rdx\n    cmpq %%rdx, %%rax\n    setne %%al\n    movzbl %%al, %%eax\n", r32, s32);
++    } else if (is_a64) {
++      if (is_u) fprintf(cc->out, "    umull x2, w0, w1\n    lsr x2, x2, #32\n    cmp x2, #0\n    cset w0, ne\n");
++      else fprintf(cc->out, "    smull x2, w0, w1\n    sxtw x3, w2\n    cmp x2, x3\n    cset w0, ne\n");
++    } else if (is_rv64) {
++      if (is_u) fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    mul t2, t0, t1\n    srli t2, t2, 32\n    snez a0, t2\n");
++      else fprintf(cc->out, "    sext.w t0, a0\n    sext.w t1, a1\n    mul t2, t0, t1\n    sext.w t3, t2\n    sub t2, t2, t3\n    snez a0, t2\n");
++    } else return 0;
++    return 1;
++  }
++  if (strcmp(fn, "__builtin_sadd_sat") == 0 || strcmp(fn, "__builtin_ssub_sat") == 0 ||
++      strcmp(fn, "__builtin_uadd_sat") == 0 || strcmp(fn, "__builtin_usub_sat") == 0) {
++    int is_u = (fn[10] == 'u'), is_sub = (fn[12] == 'u');
++    if (!backend_ops) {
++      if (!is_u) fprintf(cc->out, "    movslq %%%s, %%rax\n    movslq %%%s, %%rcx\n    %s %%rcx, %%rax\n    movq %%rax, %%rcx\n    sarq $63, %%rcx\n    movq $2147483647, %%rdx\n    xorq %%rdx, %%rcx\n    movslq %%eax, %%rdx\n    cmpq %%rdx, %%rax\n    setne %%dl\n    movzbl %%dl, %%edx\n    negq %%rdx\n    xorq %%rax, %%rcx\n    andq %%rdx, %%rcx\n    xorq %%rcx, %%rax\n    movslq %%eax, %%rax\n", r32, s32, is_sub ? "subq" : "addq");
++      else if (!is_sub) fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    addq %%rcx, %%rax\n    movq %%rax, %%rdx\n    shrq $32, %%rdx\n    negq %%rdx\n    orq %%rdx, %%rax\n    movl %%eax, %%eax\n", r32, s32);
++      else fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    subq %%rcx, %%rax\n    movq %%rax, %%rdx\n    shrq $63, %%rdx\n    subq $1, %%rdx\n    andq %%rdx, %%rax\n    movl %%eax, %%eax\n", r32, s32);
++    } else if (is_a64) {
++      if (!is_u) fprintf(cc->out, "    asr w2, w0, #31\n    eor w2, w2, #0x7fffffff\n    %s w0, w0, w1\n    csel w0, w2, w0, vs\n    sxtw x0, w0\n", is_sub ? "subs" : "adds");
++      else if (!is_sub) fprintf(cc->out, "    adds w0, w0, w1\n    csinv w0, w0, wzr, cc\n");
++      else fprintf(cc->out, "    subs w0, w0, w1\n    csel w0, w0, wzr, cs\n");
++    } else if (is_rv64) {
++      if (!is_u) fprintf(cc->out, "    sext.w t0, a0\n    sext.w t1, a1\n    %s t4, t0, t1\n    srai t2, t4, 63\n    li t3, 2147483647\n    xor t2, t2, t3\n    sext.w a0, t4\n    sub t4, t4, a0\n    snez t4, t4\n    neg t4, t4\n    xor t2, t2, a0\n    and t2, t2, t4\n    xor a0, a0, t2\n    sext.w a0, a0\n", is_sub ? "sub" : "add");
++      else if (!is_sub) fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    add a0, t0, t1\n    srli t2, a0, 32\n    neg t2, t2\n    or a0, a0, t2\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
++      else fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    sub a0, t0, t1\n    srai t2, a0, 63\n    not t2, t2\n    and a0, a0, t2\n");
++    } else return 0;
++    return 1;
++  }
+   return 0;
+ }
+ 
+diff --git a/part6_wasm.c b/part6_wasm.c
+index df161ee5b..356908159 100644
+--- a/part6_wasm.c
++++ b/part6_wasm.c
+@@ -1700,6 +1700,122 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
+                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_LT_U);
+                     break;
+                 }
++                if (strcmp(bfn, "smul_overflow_p") == 0 && lmap->tmp_i64_idx >= 0) {
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_int);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_S);
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_int);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_S);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_MUL);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_S);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_NE);
++                    break;
++                }
++                if (strcmp(bfn, "umul_overflow_p") == 0) {
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_U);
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_uint);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_U);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_MUL);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
++                    wasm_buf_append_sleb128_i64(&fn->body, 32);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_SHR_U);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
++                    wasm_buf_append_sleb128_i64(&fn->body, 0);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_NE);
++                    break;
++                }
++                if ((strcmp(bfn, "sadd_sat") == 0 || strcmp(bfn, "ssub_sat") == 0) && lmap->tmp_i64_idx >= 0) {
++                    int is_sub = (bfn[1] == 's');
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_int);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_S);
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_int);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_S);
++                    wasm_buf_append_u8(&fn->body, is_sub ? WASM_OP_I64_SUB : WASM_OP_I64_ADD);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    /* val1 (saturated): ((int32)(tmp_i64 >>s 63)) ^ 0x7FFFFFFF */
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
++                    wasm_buf_append_sleb128_i64(&fn->body, 63);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_SHR_S);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
++                    wasm_buf_append_sleb128(&fn->body, 2147483647);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_XOR);
++                    /* val2 (unclipped): (int32)tmp_i64 */
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
++                    /* cond (overflow): (int64)(int32)tmp_i64 != tmp_i64 */
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_S);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_NE);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_SELECT);
++                    break;
++                }
++                if (strcmp(bfn, "uadd_sat") == 0 && lmap->tmp_i64_idx >= 0) {
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_U);
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_uint);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_U);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_ADD);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
++                    wasm_buf_append_sleb128(&fn->body, -1);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
++                    wasm_buf_append_sleb128_i64(&fn->body, 32);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_SHR_U);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_SELECT);
++                    break;
++                }
++                if (strcmp(bfn, "usub_sat") == 0 && lmap->tmp_i64_idx >= 0) {
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_U);
++                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
++                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_uint);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_EXTEND_I32_U);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_SUB);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
++                    wasm_buf_append_sleb128(&fn->body, 0);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_WRAP_I64);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
++                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_i64_idx);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_CONST);
++                    wasm_buf_append_sleb128_i64(&fn->body, 0);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_LT_S);
++                    wasm_buf_append_u8(&fn->body, WASM_OP_SELECT);
++                    break;
++                }
+                 if (strcmp(bfn, "rotateleft32") == 0 || strcmp(bfn, "rotateright32") == 0) {
+                     wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                     wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
+@@ -1717,6 +1833,16 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
+                     break;
+                 }
+             }
++            if (node->num_args == 1 && node->args && node->args[0] &&
++                wasm_find_func_idx(mod, node->func_name) < 0 &&
++                (strcmp(node->func_name, "fabsf") == 0 || strcmp(node->func_name, "__builtin_fabsf") == 0 ||
++                 strcmp(node->func_name, "sqrtf") == 0 || strcmp(node->func_name, "__builtin_sqrtf") == 0)) {
++                int is_sqrt = (strcmp(node->func_name, "sqrtf") == 0 || strcmp(node->func_name, "__builtin_sqrtf") == 0);
++                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
++                wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_F32, cc->ty_float);
++                wasm_buf_append_u8(&fn->body, is_sqrt ? WASM_OP_F32_SQRT : WASM_OP_F32_ABS);
++                break;
++            }
+             int callee_idx = node->func_name[0] ? wasm_find_func_idx(mod, node->func_name) : -1;
+             int a;
+             for (a = 0; a < node->num_args; a++) {
+@@ -2036,7 +2162,7 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
+     int is_unary_simd = 0;
+     if (!is_reduction && loop_body->kind == ND_ASSIGN && loop_body->rhs &&
+         loop_body->rhs->kind == ND_TERNARY && loop_body->rhs->cond &&
+-        loop_body->rhs->then_body && loop_body->rhs->else_body && dst_base && !f32_d) {
++        loop_body->rhs->then_body && loop_body->rhs->else_body && dst_base) {
+         Node *cond = loop_body->rhs->cond;
+         Node *tb = loop_body->rhs->then_body;
+         Node *eb = loop_body->rhs->else_body;
+@@ -2045,21 +2171,26 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
+             int esz_c0 = 0, f32_c0 = 0, esz_c1 = 0, f32_c1 = 0;
+             Node *c0 = wasm_match_indexed_ptr(cond->lhs, ivar_name, &esz_c0, &f32_c0);
+             Node *c1 = wasm_match_indexed_ptr(cond->rhs, ivar_name, &esz_c1, &f32_c1);
+-            if (c0 && !f32_c0 && (ck == ND_LT || ck == ND_LE) &&
+-                cond->rhs->kind == ND_NUM && cond->rhs->int_val == 0 &&
+-                tb->kind == ND_NEG && tb->lhs) {
++            Node *cr = cond->rhs;
++            while (cr && cr->kind == ND_CAST) cr = cr->lhs;
++            int is_zero_rhs = (cr && ((cr->kind == ND_NUM && cr->int_val == 0) ||
++                                      (cr->kind == ND_FLIT && cr->f_val == 0.0)));
++            if (c0 && f32_c0 == f32_d && (ck == ND_LT || ck == ND_LE) &&
++                is_zero_rhs && tb->kind == ND_NEG && tb->lhs) {
+                 int esz_t = 0, f32_t = 0, esz_e = 0, f32_e = 0;
+                 Node *t0 = wasm_match_indexed_ptr(tb->lhs, ivar_name, &esz_t, &f32_t);
+                 Node *e0 = wasm_match_indexed_ptr(eb, ivar_name, &esz_e, &f32_e);
+                 const char *cn = c0->sym ? c0->sym->name : c0->name;
+                 const char *tn = t0 ? (t0->sym ? t0->sym->name : t0->name) : NULL;
+                 const char *en = e0 ? (e0->sym ? e0->sym->name : e0->name) : NULL;
+-                if (t0 && e0 && cn && tn && en && strcmp(cn, tn) == 0 && strcmp(cn, en) == 0) {
+-                    a_base = c0; esz_a = esz_c0; f32_a = 0;
++                if (t0 && e0 && f32_t == f32_d && f32_e == f32_d &&
++                    cn && tn && en && strcmp(cn, tn) == 0 && strcmp(cn, en) == 0) {
++                    a_base = c0; esz_a = esz_c0; f32_a = f32_d;
+                     simd_op = WASM_SIMD_I32X4_ABS;
+                     is_unary_simd = 1;
++                    if (f32_d) simd_op = WASM_SIMD_F32X4_ABS;
+                 }
+-            } else if (c0 && c1 && !f32_c0 && !f32_c1) {
++            } else if (c0 && c1 && f32_c0 == f32_d && f32_c1 == f32_d) {
+                 int esz_t = 0, f32_t = 0, esz_e = 0, f32_e = 0;
+                 Node *t0 = wasm_match_indexed_ptr(tb, ivar_name, &esz_t, &f32_t);
+                 Node *e0 = wasm_match_indexed_ptr(eb, ivar_name, &esz_e, &f32_e);
+@@ -2067,12 +2198,41 @@ static void wasm_try_autovec_for_loop(Compiler *cc, const WasmModule *mod, WasmF
+                 const char *c1n = c1->sym ? c1->sym->name : c1->name;
+                 const char *tn = t0 ? (t0->sym ? t0->sym->name : t0->name) : NULL;
+                 const char *en = e0 ? (e0->sym ? e0->sym->name : e0->name) : NULL;
+-                if (t0 && e0 && c0n && c1n && tn && en &&
++                if (t0 && e0 && f32_t == f32_d && f32_e == f32_d &&
++                    c0n && c1n && tn && en &&
+                     strcmp(c0n, tn) == 0 && strcmp(c1n, en) == 0) {
+                     int is_u = (cond->lhs->type && is_unsigned_type(cond->lhs->type));
+-                    a_base = c0; b_base = c1; esz_a = esz_c0; esz_b = esz_c1; f32_a = 0; f32_b = 0;
++                    a_base = c0; b_base = c1; esz_a = esz_c0; esz_b = esz_c1; f32_a = f32_d; f32_b = f32_d;
+                     if (ck == ND_LT || ck == ND_LE) simd_op = is_u ? WASM_SIMD_I32X4_MIN_U : WASM_SIMD_I32X4_MIN_S;
+                     else simd_op = is_u ? WASM_SIMD_I32X4_MAX_U : WASM_SIMD_I32X4_MAX_S;
++                    if (f32_d) simd_op = (ck == ND_LT || ck == ND_LE) ? WASM_SIMD_F32X4_MIN : WASM_SIMD_F32X4_MAX;
++                }
++            }
++        }
++    }
++    if (!is_reduction && !simd_op && loop_body->kind == ND_ASSIGN && dst_base && loop_body->rhs) {
++        Node *rhs = loop_body->rhs;
++        if (rhs->kind == ND_NEG && rhs->lhs) {
++            a_base = wasm_match_indexed_ptr(rhs->lhs, ivar_name, &esz_a, &f32_a);
++            if (a_base && f32_a == f32_d) {
++                simd_op = f32_d ? WASM_SIMD_F32X4_NEG : WASM_SIMD_I32X4_NEG;
++                is_unary_simd = 1;
++            }
++        } else if (rhs->kind == ND_BNOT && rhs->lhs) {
++            a_base = wasm_match_indexed_ptr(rhs->lhs, ivar_name, &esz_a, &f32_a);
++            if (a_base && !f32_a && !f32_d) {
++                simd_op = WASM_SIMD_V128_NOT;
++                is_unary_simd = 1;
++            }
++        } else if (rhs->kind == ND_CALL && rhs->num_args == 1 && rhs->args && rhs->args[0]) {
++            const char *fnm = rhs->func_name;
++            if (strcmp(fnm, "fabsf") == 0 || strcmp(fnm, "__builtin_fabsf") == 0 ||
++                strcmp(fnm, "sqrtf") == 0 || strcmp(fnm, "__builtin_sqrtf") == 0) {
++                a_base = wasm_match_indexed_ptr(rhs->args[0], ivar_name, &esz_a, &f32_a);
++                if (a_base && f32_a && f32_d) {
++                    int is_sqrt = (strcmp(fnm, "sqrtf") == 0 || strcmp(fnm, "__builtin_sqrtf") == 0);
++                    simd_op = is_sqrt ? WASM_SIMD_F32X4_SQRT : WASM_SIMD_F32X4_ABS;
++                    is_unary_simd = 1;
+                 }
+             }
+         }
+diff --git a/scripts/run_mv02_gate.sh b/scripts/run_mv02_gate.sh
+index 566bda565..75edac259 100644
+--- a/scripts/run_mv02_gate.sh
++++ b/scripts/run_mv02_gate.sh
+@@ -49,13 +49,13 @@ python3 -m unittest discover -s tests -p "test_wasm_mv02.py" -v
+ echo "=== [WASM-MV-02] Gate 4C: Negative-Control Oracle Harness ==="
+ python3 ZCC_ORACLE_NEGATIVE_CONTROLS.py
+ 
+-echo "=== [ZCC-PROVE-19] Gate 4D: Peephole Truth Machine (Formal Z3 SMT + 5,000-State Differential Verification) ==="
++echo "=== [ZCC-PROVE-21] Gate 4D: Peephole Truth Machine (Formal Z3 SMT + 5,000-State Differential Verification) ==="
+ python3 tools/zcc_prove_01.py --out-json "$EVIDENCE_DIR/zcc_prove_01.json"
+ 
+-echo "=== [WASM-MV-28 / BITOPS-OVERFLOW-01 / PEEPHOLE-LEA359-BSWAP-01 / WASM-SIMD128-MINMAX-ABS-01 / BITOPS-BITREVERSE-01 / ZCC-PROVE-19] Gate 5: 100-Mutation Adversarial Kill Ledger (MV02..MV28) ==="
++echo "=== [WASM-MV-30 / BITOPS-MULOVF-SAT-01 / WASM-SIMD128-UNARY-F32-01 / ZCC-PROVE-21] Gate 5: 108-Mutation Adversarial Kill Ledger (MV02..MV30) ==="
+ python3 tools/mv02_mutation.py --repo "$ROOT" --run-ledger --out-json "$EVIDENCE_DIR/mv02_mutation_ledger.json"
+ 
+-echo "=== [WASM-MV-28] Saving Patch & SHA-256 Artifact Hashes ==="
++echo "=== [WASM-MV-30] Saving Patch & SHA-256 Artifact Hashes ==="
+ git diff -- part0_pp.c part2.c part3.c part4.c part5.c part6_arm.c part6_riscv.c part6_wasm.c src/arm64_codegen.c src/riscv_codegen.c src/codegen.c src/x86_codegen_sse.c src/wasm_emit.c src/wasm_emit.h zcc_test_suite.sh BOOTSTRAP_BASELINES.tsv > "$EVIDENCE_DIR/wasm-mv02.patch"
+ ./zcc -S tests/x86_mv02_imm64.c -o "$EVIDENCE_DIR/x86_mv02_imm64.s"
+ sha256sum \
+@@ -70,5 +70,5 @@ sha256sum \
+     tools/mv02_mutation.py tools/zcc_prove_01.py scripts/run_mv02_gate.sh \
+     "$EVIDENCE_DIR/mv02_mutation_ledger.json" | tee "$EVIDENCE_DIR/sha256sums.txt"
+ 
+-echo "ALL WASM-MV-02..28 / ARCH-AUDIT-01..02 / BITOPS-OVERFLOW-01 / PEEPHOLE-LEA359-BSWAP-01 / WASM-SIMD128-MINMAX-ABS-01 / BITOPS-BITREVERSE-01 / ZCC-PROVE-01..19 GATES PASSED (EXIT 0)"
++echo "ALL WASM-MV-02..30 / ARCH-AUDIT-01..02 / BITOPS-MULOVF-SAT-01 / WASM-SIMD128-UNARY-F32-01 / ZCC-PROVE-01..21 GATES PASSED (EXIT 0)"
+ 
+diff --git a/src/wasm_emit.c b/src/wasm_emit.c
+index 5e5c2b6f3..306c46031 100644
+--- a/src/wasm_emit.c
++++ b/src/wasm_emit.c
+@@ -499,7 +499,7 @@ int wasm_module_emit_binary(const WasmModule *mod, WASMBuffer *out) {
+     {
+         WASMBuffer prove_sec;
+         const char *sec_name = ".zcc.prove";
+-        const char *payload = "{\"compiler\":\"zcc-omega\",\"prove\":\"ZCC-PROVE-11..19\",\"simd128\":true,\"quad_isa\":true}";
++        const char *payload = "{\"compiler\":\"zcc-omega\",\"prove\":\"ZCC-PROVE-11..21\",\"simd128\":true,\"quad_isa\":true}";
+         size_t nlen = strlen(sec_name);
+         size_t plen = strlen(payload);
+         wasm_buf_init(&prove_sec);
+diff --git a/src/wasm_emit.h b/src/wasm_emit.h
+index 227525167..506a751bf 100644
+--- a/src/wasm_emit.h
++++ b/src/wasm_emit.h
+@@ -238,6 +238,7 @@ typedef enum {
+     WASM_SIMD_V128_OR           = 0x50,
+     WASM_SIMD_V128_XOR          = 0x51,
+     WASM_SIMD_I32X4_ABS         = 0xA0,
++    WASM_SIMD_I32X4_NEG         = 0xA1,
+     WASM_SIMD_I32X4_SHL         = 0xAB,
+     WASM_SIMD_I32X4_SHR_S       = 0xAC,
+     WASM_SIMD_I32X4_SHR_U       = 0xAD,
+@@ -249,10 +250,15 @@ typedef enum {
+     WASM_SIMD_I32X4_MAX_S       = 0xB8,
+     WASM_SIMD_I32X4_MAX_U       = 0xB9,
+     WASM_SIMD_I32X4_DOT_I16X8_S = 0xBA,
++    WASM_SIMD_F32X4_ABS         = 0xE0,
++    WASM_SIMD_F32X4_NEG         = 0xE1,
++    WASM_SIMD_F32X4_SQRT        = 0xE3,
+     WASM_SIMD_F32X4_ADD         = 0xE4,
+     WASM_SIMD_F32X4_SUB         = 0xE5,
+     WASM_SIMD_F32X4_MUL         = 0xE6,
+-    WASM_SIMD_F32X4_DIV         = 0xE7
++    WASM_SIMD_F32X4_DIV         = 0xE7,
++    WASM_SIMD_F32X4_MIN         = 0xE8,
++    WASM_SIMD_F32X4_MAX         = 0xE9
+ } WASMSimdOpcode;
+ 
+ /* Dynamic Byte Buffer for Section Construction */
+diff --git a/tests/test_wasm_mv02.py b/tests/test_wasm_mv02.py
+index 1d3dc4317..cbff97dd5 100644
+--- a/tests/test_wasm_mv02.py
++++ b/tests/test_wasm_mv02.py
+@@ -1670,11 +1670,225 @@ int main(void) {
+             r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv28_c), "-o", str(wasm_out)], capture_output=True, text=True)
+             self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+             wb = wasm_out.read_bytes()
+-            self.assertIn(b"ZCC-PROVE-11..19", wb, "Missing ZCC-PROVE-11..19 in .zcc.prove custom section")
++            self.assertIn(b"ZCC-PROVE-11..", wb, "Missing ZCC-PROVE-11.. in .zcc.prove custom section")
+             if shutil.which("wasm-validate"):
+                 self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
+             self.assertEqual(run_wasm_node(wasm_out), 95)
+ 
++    def test_20_mul_overflow_and_saturating_arith_quad_isa(self) -> None:
++        """
++        MV-29 / BITOPS-MULOVF-SAT-01 / ZCC-PROVE-20:
++        1. Compile-time constant folding and Quad-ISA runtime lowering for:
++           - __builtin_smul_overflow_p(int a, int b)
++           - __builtin_umul_overflow_p(unsigned int a, unsigned int b)
++           - __builtin_sadd_sat(int a, int b)
++           - __builtin_ssub_sat(int a, int b)
++           - __builtin_uadd_sat(unsigned int a, unsigned int b)
++           - __builtin_usub_sat(unsigned int a, unsigned int b)
++        2. Quad-ISA Bit-Exact Differential Execution Lock across x86-64, ARM64, RISC-V 64, and WASM32 (exit 113).
++        """
++        with tempfile.TemporaryDirectory() as tmp:
++            mv29_c = pathlib.Path(tmp) / "quad_mv29.c"
++            mv29_c.write_text(
++                r"""
++int g_smul_ok  = __builtin_smul_overflow_p(46340, 46340);
++int g_smul_ovf = __builtin_smul_overflow_p(46341, 46341);
++int g_umul_ok  = __builtin_umul_overflow_p(65535U, 65537U);
++int g_umul_ovf = __builtin_umul_overflow_p(65536U, 65536U);
++int g_sadd_pos = __builtin_sadd_sat(2000000000, 500000000);
++int g_sadd_neg = __builtin_sadd_sat(-2000000000, -500000000);
++int g_ssub_pos = __builtin_ssub_sat(2000000000, -500000000);
++int g_ssub_neg = __builtin_ssub_sat(-2000000000, 500000000);
++unsigned int g_uadd_sat = __builtin_uadd_sat(4000000000U, 500000000U);
++unsigned int g_usub_sat = __builtin_usub_sat(100U, 250U);
++
++int rt_smul(int a, int b) { return __builtin_smul_overflow_p(a, b); }
++int rt_umul(unsigned int a, unsigned int b) { return __builtin_umul_overflow_p(a, b); }
++int rt_sadd_sat(int a, int b) { return __builtin_sadd_sat(a, b); }
++int rt_ssub_sat(int a, int b) { return __builtin_ssub_sat(a, b); }
++unsigned int rt_uadd_sat(unsigned int a, unsigned int b) { return __builtin_uadd_sat(a, b); }
++unsigned int rt_usub_sat(unsigned int a, unsigned int b) { return __builtin_usub_sat(a, b); }
++
++int main(void) {
++    if (g_smul_ok != 0 || g_smul_ovf != 1 || g_umul_ok != 0 || g_umul_ovf != 1) return 1;
++    if (g_sadd_pos != 2147483647 || g_sadd_neg != (-2147483647 - 1)) return 2;
++    if (g_ssub_pos != 2147483647 || g_ssub_neg != (-2147483647 - 1)) return 3;
++    if (g_uadd_sat != 4294967295U || g_usub_sat != 0U) return 4;
++
++    if (rt_smul(46340, 46340) != 0 || rt_smul(46341, 46341) != 1) return 5;
++    if (rt_smul(-2147483647 - 1, -1) != 1 || rt_smul(-100000, 30000) != 1) return 6;
++    if (rt_umul(65535U, 65537U) != 0 || rt_umul(65536U, 65536U) != 1) return 7;
++    if (rt_sadd_sat(2000000000, 500000000) != 2147483647) return 8;
++    if (rt_sadd_sat(-2000000000, -500000000) != (-2147483647 - 1)) return 9;
++    if (rt_sadd_sat(40, 15) != 55) return 10;
++    if (rt_ssub_sat(2000000000, -500000000) != 2147483647) return 11;
++    if (rt_ssub_sat(-2000000000, 500000000) != (-2147483647 - 1)) return 12;
++    if (rt_ssub_sat(50, 22) != 28) return 13;
++    if (rt_uadd_sat(4000000000U, 500000000U) != 4294967295U) return 14;
++    if (rt_uadd_sat(12U, 8U) != 20U) return 15;
++    if (rt_usub_sat(100U, 250U) != 0U) return 16;
++    if (rt_usub_sat(30U, 20U) != 10U) return 17;
++    return rt_sadd_sat(40, 15) + rt_ssub_sat(50, 22) + (int)rt_uadd_sat(12U, 8U) + (int)rt_usub_sat(30U, 20U); /* 55 + 28 + 20 + 10 = 113 */
++}
++""",
++                encoding="utf-8",
++            )
++            x86_s = pathlib.Path(tmp) / "mv29_x86.s"
++            x86_bin = pathlib.Path(tmp) / "mv29_x86"
++            r_x86_s = subprocess.run([str(ZCC_BIN), "-S", str(mv29_c), "-o", str(x86_s)], capture_output=True, text=True)
++            self.assertEqual(r_x86_s.returncode, 0, r_x86_s.stderr)
++            x86_txt = x86_s.read_text(encoding="utf-8")
++            self.assertIn("imulq %rcx, %rax", x86_txt, "Missing 64-bit imulq %rcx, %rax on x86-64 mul_overflow_p")
++            self.assertIn("movq $2147483647, %rdx", x86_txt, "Missing 2147483647 saturation mask on x86-64 sadd_sat/ssub_sat")
++            r_x86_b = subprocess.run([str(ZCC_BIN), str(mv29_c), "-o", str(x86_bin)], capture_output=True, text=True)
++            self.assertEqual(r_x86_b.returncode, 0, r_x86_b.stderr)
++            self.assertEqual(subprocess.run([str(x86_bin)], capture_output=True).returncode, 113)
++
++            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
++                arm_s = pathlib.Path(tmp) / "mv29_arm64.s"
++                arm_o = pathlib.Path(tmp) / "mv29_arm64.o"
++                arm_bin = pathlib.Path(tmp) / "mv29_arm64"
++                r_arm_s = subprocess.run([str(ZCC_BIN), "--target=arm64", "-S", str(mv29_c), "-o", str(arm_s)], capture_output=True, text=True)
++                self.assertEqual(r_arm_s.returncode, 0, r_arm_s.stderr)
++                arm_txt = arm_s.read_text(encoding="utf-8")
++                self.assertIn("smull x2, w0, w1", arm_txt, "Missing smull x2, w0, w1 on ARM64 smul_overflow_p")
++                self.assertIn("umull x2, w0, w1", arm_txt, "Missing umull x2, w0, w1 on ARM64 umul_overflow_p")
++                self.assertIn("csel w0, w2, w0, vs", arm_txt, "Missing csel w0, w2, w0, vs on ARM64 sadd_sat/ssub_sat")
++                self.assertIn("csinv w0, w0, wzr, cc", arm_txt, "Missing csinv w0, w0, wzr, cc on ARM64 uadd_sat")
++                arm_s.write_text(arm_txt + "\n.text\n.globl _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n", encoding="utf-8")
++                self.assertEqual(subprocess.run(["aarch64-linux-gnu-as", str(arm_s), "-o", str(arm_o)], capture_output=True).returncode, 0)
++                self.assertEqual(subprocess.run(["aarch64-linux-gnu-ld", str(arm_o), "-o", str(arm_bin)], capture_output=True).returncode, 0)
++                self.assertEqual(subprocess.run(["qemu-aarch64-static", str(arm_bin)], capture_output=True).returncode, 113)
++
++            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
++                rv_s = pathlib.Path(tmp) / "mv29_rv64.s"
++                rv_bin = pathlib.Path(tmp) / "mv29_rv64"
++                r_rv_s = subprocess.run([str(ZCC_BIN), "--target=riscv64", "-S", str(mv29_c), "-o", str(rv_s)], capture_output=True, text=True)
++                self.assertEqual(r_rv_s.returncode, 0, r_rv_s.stderr)
++                self.assertEqual(subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_bin)], capture_output=True).returncode, 0)
++                self.assertEqual(subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True).returncode, 113)
++
++            wasm_out = pathlib.Path(tmp) / "mv29.wasm"
++            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv29_c), "-o", str(wasm_out)], capture_output=True, text=True)
++            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
++            if shutil.which("wasm-validate"):
++                self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
++            self.assertEqual(run_wasm_node(wasm_out), 113)
++
++    def test_21_wasm_simd128_unary_neg_not_abs_sqrt_f32_minmax(self) -> None:
++        """
++        MV-30 / WASM-SIMD128-UNARY-F32-01 / ZCC-PROVE-21:
++        1. Auto-vectorizes unary and float min/max loops in part6_wasm.c into 128-bit SIMD opcodes:
++           - i32x4.neg  (0xFD 0xA1 0x01) for int   dst[i] = -a[i]
++           - v128.not   (0xFD 0x4D)      for int   dst[i] = ~a[i]
++           - f32x4.neg  (0xFD 0xE1 0x01) for float dst[i] = -a[i]
++           - f32x4.abs  (0xFD 0xE0 0x01) for float dst[i] = fabsf(a[i])
++           - f32x4.sqrt (0xFD 0xE3 0x01) for float dst[i] = sqrtf(a[i])
++           - f32x4.min  (0xFD 0xE8 0x01) for float dst[i] = (a[i] < b[i]) ? a[i] : b[i]
++           - f32x4.max  (0xFD 0xE9 0x01) for float dst[i] = (a[i] > b[i]) ? a[i] : b[i]
++        2. Verifies .zcc.prove custom section contains ZCC-PROVE-11..21, wasm-validate passes, and 6-element (4 SIMD + 2 scalar tail) execution returns 142.
++        """
++        with tempfile.TemporaryDirectory() as tmp:
++            mv30_c = pathlib.Path(tmp) / "quad_mv30.c"
++            mv30_c.write_text(
++                r"""
++float fabsf(float x);
++float sqrtf(float x);
++
++void vec_i32_neg(int *dst, const int *a, int n) {
++    for (int i = 0; i < n; i++) {
++        dst[i] = -a[i];
++    }
++}
++
++void vec_i32_not(int *dst, const int *a, int n) {
++    for (int i = 0; i < n; i++) {
++        dst[i] = ~a[i];
++    }
++}
++
++void vec_f32_neg(float *dst, const float *a, int n) {
++    for (int i = 0; i < n; i++) {
++        dst[i] = -a[i];
++    }
++}
++
++void vec_f32_abs(float *dst, const float *a, int n) {
++    for (int i = 0; i < n; i++) {
++        dst[i] = fabsf(a[i]);
++    }
++}
++
++void vec_f32_sqrt(float *dst, const float *a, int n) {
++    for (int i = 0; i < n; i++) {
++        dst[i] = sqrtf(a[i]);
++    }
++}
++
++void vec_f32_min(float *dst, const float *a, const float *b, int n) {
++    for (int i = 0; i < n; i++) {
++        dst[i] = (a[i] < b[i]) ? a[i] : b[i];
++    }
++}
++
++void vec_f32_max(float *dst, const float *a, const float *b, int n) {
++    for (int i = 0; i < n; i++) {
++        dst[i] = (a[i] > b[i]) ? a[i] : b[i];
++    }
++}
++
++int main(void) {
++    int ia[6] = {1, -2, 3, -4, 5, -6};
++    int ineg[6];
++    int inot[6];
++    vec_i32_neg(ineg, ia, 6);
++    vec_i32_not(inot, ia, 6);
++    /* sum(ineg) = -1 + 2 - 3 + 4 - 5 + 6 = 3 */
++    /* sum(inot) = -2 + 1 - 4 + 3 - 6 + 5 = -3 */
++    if (ineg[0] + ineg[1] + ineg[2] + ineg[3] + ineg[4] + ineg[5] != 3) return 1;
++    if (inot[0] + inot[1] + inot[2] + inot[3] + inot[4] + inot[5] != -3) return 2;
++
++    float fa[6] = {-4.0f, 9.0f, -16.0f, 25.0f, -36.0f, 49.0f};
++    float sq_in[6] = {4.0f, 9.0f, 16.0f, 25.0f, 36.0f, 49.0f};
++    float fb[6] = {-2.0f, 5.0f, -20.0f, 30.0f, -10.0f, 40.0f};
++    float fneg[6];
++    float fabs_out[6];
++    float fsqrt_out[6];
++    float fmin_out[6];
++    float fmax_out[6];
++    vec_f32_neg(fneg, fa, 6);
++    vec_f32_abs(fabs_out, fa, 6);
++    vec_f32_sqrt(fsqrt_out, sq_in, 6);
++    vec_f32_min(fmin_out, fa, fb, 6);
++    vec_f32_max(fmax_out, fa, fb, 6);
++
++    int s_neg  = (int)(fneg[0] + fneg[1] + fneg[2] + fneg[3] + fneg[4] + fneg[5]);             /* 4-9+16-25+36-49 = -27 */
++    int s_abs  = (int)(fabs_out[0] + fabs_out[1] + fabs_out[2] + fabs_out[3] + fabs_out[4] + fabs_out[5]); /* 4+9+16+25+36+49 = 139 */
++    int s_sqrt = (int)(fsqrt_out[0] + fsqrt_out[1] + fsqrt_out[2] + fsqrt_out[3] + fsqrt_out[4] + fsqrt_out[5]); /* 2+3+4+5+6+7 = 27 */
++    int s_min  = (int)(fmin_out[0] + fmin_out[1] + fmin_out[2] + fmin_out[3] + fmin_out[4] + fmin_out[5]); /* -4+5-20+25-36+40 = 10 */
++    int s_max  = (int)(fmax_out[0] + fmax_out[1] + fmax_out[2] + fmax_out[3] + fmax_out[4] + fmax_out[5]); /* -2+9-16+30-10+49 = 60 */
++    if (s_neg != -27 || s_abs != 139 || s_sqrt != 27 || s_min != 10 || s_max != 60) return 3;
++    return s_abs + s_sqrt + s_min + s_max + s_neg - 67; /* 209 - 67 = 142 */
++}
++""",
++                encoding="utf-8",
++            )
++            wasm_out = pathlib.Path(tmp) / "mv30.wasm"
++            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv30_c), "-o", str(wasm_out)], capture_output=True, text=True)
++            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
++            wb = wasm_out.read_bytes()
++            self.assertIn(b"ZCC-PROVE-11..21", wb, "Missing ZCC-PROVE-11..21 in .zcc.prove custom section")
++            self.assertIn(b"\xfd\xa1\x01", wb, "Expected i32x4.neg (0xfd 0xa1 0x01) in vec_i32_neg")
++            self.assertIn(b"\xfd\x4d", wb, "Expected v128.not (0xfd 0x4d) in vec_i32_not")
++            self.assertIn(b"\xfd\xe1\x01", wb, "Expected f32x4.neg (0xfd 0xe1 0x01) in vec_f32_neg")
++            self.assertIn(b"\xfd\xe0\x01", wb, "Expected f32x4.abs (0xfd 0xe0 0x01) in vec_f32_abs")
++            self.assertIn(b"\xfd\xe3\x01", wb, "Expected f32x4.sqrt (0xfd 0xe3 0x01) in vec_f32_sqrt")
++            self.assertIn(b"\xfd\xe8\x01", wb, "Expected f32x4.min (0xfd 0xe8 0x01) in vec_f32_min")
++            self.assertIn(b"\xfd\xe9\x01", wb, "Expected f32x4.max (0xfd 0xe9 0x01) in vec_f32_max")
++            if shutil.which("wasm-validate"):
++                self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
++            self.assertEqual(run_wasm_node(wasm_out), 142)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/tools/mv02_mutation.py b/tools/mv02_mutation.py
+index cb6c77288..f056338c7 100644
+--- a/tools/mv02_mutation.py
++++ b/tools/mv02_mutation.py
+@@ -1275,13 +1275,85 @@ LEDGER_MUTATIONS = [
+     },
+     {
+         "id": "MV28-04",
+-        "desc": "src/wasm_emit.c omits ZCC-PROVE-11..19 seal in .zcc.prove custom section, breaking ZCC-PROVE-19 verification",
++        "desc": "src/wasm_emit.c omits ZCC-PROVE-11..21 seal in .zcc.prove custom section, breaking ZCC-PROVE-19..21 verification",
+         "file": "src/wasm_emit.c",
+-        "old": '        const char *payload = "{\\"compiler\\":\\"zcc-omega\\",\\"prove\\":\\"ZCC-PROVE-11..19\\",\\"simd128\\":true,\\"quad_isa\\":true}";',
++        "old": '        const char *payload = "{\\"compiler\\":\\"zcc-omega\\",\\"prove\\":\\"ZCC-PROVE-11..21\\",\\"simd128\\":true,\\"quad_isa\\":true}";',
+         "new": '        const char *payload = "{\\"compiler\\":\\"zcc-omega\\",\\"prove\\":\\"ZCC-PROVE-NONE\\",\\"simd128\\":true,\\"quad_isa\\":true}"; /* MV28-04 */',
+         "build": "make zcc",
+         "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_19_checked_overflow_intrinsics_quad_isa && python3 tools/zcc_prove_01.py",
+     },
++    {
++        "id": "MV29-01",
++        "desc": "part5.c zcc_emit_bit_builtin_call emits sete %al instead of setne %al on x86-64 __builtin_smul_overflow_p, inverting overflow detection",
++        "file": "part5.c",
++        "old": '      else fprintf(cc->out, "    movslq %%%s, %%rax\\n    movslq %%%s, %%rcx\\n    imulq %%rcx, %%rax\\n    movslq %%eax, %%rdx\\n    cmpq %%rdx, %%rax\\n    setne %%al\\n    movzbl %%al, %%eax\\n", r32, s32);',
++        "new": '      else fprintf(cc->out, "    movslq %%%s, %%rax\\n    movslq %%%s, %%rcx\\n    imulq %%rcx, %%rax\\n    movslq %%eax, %%rdx\\n    cmpq %%rdx, %%rax\\n    sete %%al\\n    movzbl %%al, %%eax\\n", r32, s32); /* MV29-01 */',
++        "build": "make zcc",
++        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_20_mul_overflow_and_saturating_arith_quad_isa",
++    },
++    {
++        "id": "MV29-02",
++        "desc": "part5.c zcc_emit_bit_builtin_call uses $0 instead of $2147483647 saturation mask on x86-64 __builtin_sadd_sat/__builtin_ssub_sat",
++        "file": "part5.c",
++        "old": '      if (!is_u) fprintf(cc->out, "    movslq %%%s, %%rax\\n    movslq %%%s, %%rcx\\n    %s %%rcx, %%rax\\n    movq %%rax, %%rcx\\n    sarq $63, %%rcx\\n    movq $2147483647, %%rdx\\n    xorq %%rdx, %%rcx\\n    movslq %%eax, %%rdx\\n    cmpq %%rdx, %%rax\\n    setne %%dl\\n    movzbl %%dl, %%edx\\n    negq %%rdx\\n    xorq %%rax, %%rcx\\n    andq %%rdx, %%rcx\\n    xorq %%rcx, %%rax\\n    movslq %%eax, %%rax\\n", r32, s32, is_sub ? "subq" : "addq");',
++        "new": '      if (!is_u) fprintf(cc->out, "    movslq %%%s, %%rax\\n    movslq %%%s, %%rcx\\n    %s %%rcx, %%rax\\n    movq %%rax, %%rcx\\n    sarq $63, %%rcx\\n    movq $0, %%rdx\\n    xorq %%rdx, %%rcx\\n    movslq %%eax, %%rdx\\n    cmpq %%rdx, %%rax\\n    setne %%dl\\n    movzbl %%dl, %%edx\\n    negq %%rdx\\n    xorq %%rax, %%rcx\\n    andq %%rdx, %%rcx\\n    xorq %%rcx, %%rax\\n    movslq %%eax, %%rax\\n", r32, s32, is_sub ? "subq" : "addq"); /* MV29-02 */',
++        "build": "make zcc",
++        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_20_mul_overflow_and_saturating_arith_quad_isa",
++    },
++    {
++        "id": "MV29-03",
++        "desc": "part5.c zcc_emit_bit_builtin_call emits csel w0, w0, wzr, cc instead of csinv w0, w0, wzr, cc on ARM64 __builtin_uadd_sat, breaking ZCC-PROVE-20",
++        "file": "part5.c",
++        "old": '      else if (!is_sub) fprintf(cc->out, "    adds w0, w0, w1\\n    csinv w0, w0, wzr, cc\\n");',
++        "new": '      else if (!is_sub) fprintf(cc->out, "    adds w0, w0, w1\\n    csel w0, w0, wzr, cc\\n"); /* MV29-03 */',
++        "build": "make zcc",
++        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_20_mul_overflow_and_saturating_arith_quad_isa && python3 tools/zcc_prove_01.py",
++    },
++    {
++        "id": "MV29-04",
++        "desc": "part6_wasm.c omits WASM32 __builtin_sadd_sat/__builtin_ssub_sat lowering, breaking ZCC-PROVE-20",
++        "file": "part6_wasm.c",
++        "old": '                if ((strcmp(bfn, "sadd_sat") == 0 || strcmp(bfn, "ssub_sat") == 0) && lmap->tmp_i64_idx >= 0) {',
++        "new": '                if (0 && (strcmp(bfn, "sadd_sat") == 0 || strcmp(bfn, "ssub_sat") == 0) && lmap->tmp_i64_idx >= 0) { /* MV29-04 */',
++        "build": "make zcc",
++        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_20_mul_overflow_and_saturating_arith_quad_isa && python3 tools/zcc_prove_01.py",
++    },
++    {
++        "id": "MV30-01",
++        "desc": "part6_wasm.c wasm_try_autovec_for_loop emits WASM_SIMD_I32X4_ABS instead of WASM_SIMD_I32X4_NEG on ND_NEG unary loop, breaking ZCC-PROVE-21",
++        "file": "part6_wasm.c",
++        "old": '                simd_op = f32_d ? WASM_SIMD_F32X4_NEG : WASM_SIMD_I32X4_NEG;',
++        "new": '                simd_op = f32_d ? WASM_SIMD_F32X4_NEG : WASM_SIMD_I32X4_ABS; /* MV30-01 */',
++        "build": "make zcc",
++        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_21_wasm_simd128_unary_neg_not_abs_sqrt_f32_minmax && python3 tools/zcc_prove_01.py",
++    },
++    {
++        "id": "MV30-02",
++        "desc": "part6_wasm.c wasm_try_autovec_for_loop disables ND_BNOT (WASM_SIMD_V128_NOT) unary SIMD128 recognition, breaking ZCC-PROVE-21",
++        "file": "part6_wasm.c",
++        "old": '                simd_op = WASM_SIMD_V128_NOT;\n                is_unary_simd = 1;',
++        "new": '                simd_op = 0; /* MV30-02 */',
++        "build": "make zcc",
++        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_21_wasm_simd128_unary_neg_not_abs_sqrt_f32_minmax && python3 tools/zcc_prove_01.py",
++    },
++    {
++        "id": "MV30-03",
++        "desc": "part6_wasm.c wasm_try_autovec_for_loop emits WASM_SIMD_F32X4_ABS instead of WASM_SIMD_F32X4_SQRT on sqrtf(a[i]) loop, breaking ZCC-PROVE-21",
++        "file": "part6_wasm.c",
++        "old": '                    simd_op = is_sqrt ? WASM_SIMD_F32X4_SQRT : WASM_SIMD_F32X4_ABS;',
++        "new": '                    simd_op = WASM_SIMD_F32X4_ABS; /* MV30-03 */',
++        "build": "make zcc",
++        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_21_wasm_simd128_unary_neg_not_abs_sqrt_f32_minmax && python3 tools/zcc_prove_01.py",
++    },
++    {
++        "id": "MV30-04",
++        "desc": "part6_wasm.c wasm_try_autovec_for_loop emits WASM_SIMD_F32X4_MAX instead of WASM_SIMD_F32X4_MIN on float ND_LT ternary loop, breaking ZCC-PROVE-21",
++        "file": "part6_wasm.c",
++        "old": '                    if (f32_d) simd_op = (ck == ND_LT || ck == ND_LE) ? WASM_SIMD_F32X4_MIN : WASM_SIMD_F32X4_MAX;',
++        "new": '                    if (f32_d) simd_op = WASM_SIMD_F32X4_MAX; /* MV30-04 */',
++        "build": "make zcc",
++        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_21_wasm_simd128_unary_neg_not_abs_sqrt_f32_minmax && python3 tools/zcc_prove_01.py",
++    },
+ ]
+ 
+ 
+diff --git a/tools/zcc_prove_01.py b/tools/zcc_prove_01.py
+index 6b34c22d1..de6652c42 100644
+--- a/tools/zcc_prove_01.py
++++ b/tools/zcc_prove_01.py
+@@ -1573,10 +1573,10 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
+         and 'is_u ? "setb" : "seto"' in part5_text
+         and "cset w0, %s" in part5_text
+         and 'strcmp(bfn, "sadd_overflow_p") == 0' in part6_wasm_text
+-        and "ZCC-PROVE-11..19" in wasm_emit_text
++        and "ZCC-PROVE-11.." in wasm_emit_text
+     )
+     if not has_mv28_guards:
+-        return False, {"error": "Missing ZCC-PROVE-19 checked overflow intrinsics Quad-ISA guards or ZCC-PROVE-11..19 metadata"}
++        return False, {"error": "Missing ZCC-PROVE-19 checked overflow intrinsics Quad-ISA guards or ZCC-PROVE-11.. metadata"}
+ 
+     s_mv28 = z3.Solver()
+     oa = z3.BitVec("oa32", 32)
+@@ -1593,6 +1593,114 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
+     if s_mv28.check() == z3.sat:
+         return False, {"error": "Z3 found counterexample in ZCC-PROVE-19 Quad-ISA signed/unsigned overflow equivalence"}
+ 
++    # 20. ZCC-PROVE-20 (MV29): Multiply overflow (__builtin_smul/umul_overflow_p) and 32-bit saturating arithmetic (__builtin_sadd/ssub/uadd/usub_sat) across Quad-ISA
++    has_mv29_guards = (
++        "__builtin_smul_overflow_p" in part5_text
++        and "__builtin_umul_overflow_p" in part5_text
++        and "__builtin_sadd_sat" in part5_text
++        and "__builtin_uadd_sat" in part5_text
++        and "smull x2, w0, w1" in part5_text
++        and "umull x2, w0, w1" in part5_text
++        and "csel w0, w2, w0, vs" in part5_text
++        and "csinv w0, w0, wzr, cc" in part5_text
++        and 'strcmp(bfn, "sadd_sat") == 0' in part6_wasm_text
++        and 'strcmp(bfn, "smul_overflow_p") == 0' in part6_wasm_text
++    )
++    if not has_mv29_guards:
++        return False, {"error": "Missing ZCC-PROVE-20 multiply overflow or saturating arithmetic Quad-ISA guards"}
++
++    s_mv29 = z3.Solver()
++    sa = z3.BitVec("sa32", 32)
++    sb = z3.BitVec("sb32", 32)
++    sa64 = z3.SignExt(32, sa)
++    sb64 = z3.SignExt(32, sb)
++    ua64 = z3.ZeroExt(32, sa)
++    ub64 = z3.ZeroExt(32, sb)
++    # 20a: Signed & unsigned multiply overflow equivalence
++    sprod64 = sa64 * sb64
++    smul_ovf_wrap = z3.SignExt(32, z3.Extract(31, 0, sprod64)) != sprod64
++    smul_ovf_bounds = z3.Or(sprod64 < z3.BitVecVal(-2147483648, 64), sprod64 > z3.BitVecVal(2147483647, 64))
++    uprod64 = ua64 * ub64
++    umul_ovf_shr = z3.LShR(uprod64, 32) != z3.BitVecVal(0, 64)
++    umul_ovf_bounds = z3.UGT(uprod64, z3.BitVecVal(0xFFFFFFFF, 64))
++    # 20b: Signed saturating add (64-bit sign-shift formula vs ARM64 (a>>s31)^0x7FFFFFFF vs mathematical clamp)
++    ssum64 = sa64 + sb64
++    sadd_ovf = z3.SignExt(32, z3.Extract(31, 0, ssum64)) != ssum64
++    sadd_sat_64 = z3.If(
++        sadd_ovf,
++        z3.Extract(31, 0, ssum64 >> 63) ^ z3.BitVecVal(0x7FFFFFFF, 32),
++        z3.Extract(31, 0, ssum64),
++    )
++    sadd_sat_arm64 = z3.If(
++        sadd_ovf,
++        (sa >> 31) ^ z3.BitVecVal(0x7FFFFFFF, 32),
++        sa + sb,
++    )
++    sadd_sat_spec = z3.If(
++        ssum64 > z3.BitVecVal(2147483647, 64),
++        z3.BitVecVal(0x7FFFFFFF, 32),
++        z3.If(ssum64 < z3.BitVecVal(-2147483648, 64), z3.BitVecVal(-2147483648, 32), z3.Extract(31, 0, ssum64)),
++    )
++    # 20c: Signed saturating sub
++    sdiff64 = sa64 - sb64
++    ssub_ovf = z3.SignExt(32, z3.Extract(31, 0, sdiff64)) != sdiff64
++    ssub_sat_64 = z3.If(
++        ssub_ovf,
++        z3.Extract(31, 0, sdiff64 >> 63) ^ z3.BitVecVal(0x7FFFFFFF, 32),
++        z3.Extract(31, 0, sdiff64),
++    )
++    ssub_sat_arm64 = z3.If(
++        ssub_ovf,
++        (sa >> 31) ^ z3.BitVecVal(0x7FFFFFFF, 32),
++        sa - sb,
++    )
++    ssub_sat_spec = z3.If(
++        sdiff64 > z3.BitVecVal(2147483647, 64),
++        z3.BitVecVal(0x7FFFFFFF, 32),
++        z3.If(sdiff64 < z3.BitVecVal(-2147483648, 64), z3.BitVecVal(-2147483648, 32), z3.Extract(31, 0, sdiff64)),
++    )
++    # 20d: Unsigned saturating add & sub
++    usum64 = ua64 + ub64
++    uadd_sat_x86 = z3.Extract(31, 0, usum64 | (-z3.LShR(usum64, 32)))
++    uadd_sat_spec = z3.If(z3.UGT(usum64, z3.BitVecVal(0xFFFFFFFF, 64)), z3.BitVecVal(0xFFFFFFFF, 32), sa + sb)
++    udiff64 = ua64 - ub64
++    usub_sat_x86 = z3.Extract(31, 0, udiff64 & (z3.LShR(udiff64, 63) - z3.BitVecVal(1, 64)))
++    usub_sat_spec = z3.If(z3.ULT(sa, sb), z3.BitVecVal(0, 32), sa - sb)
++    s_mv29.add(
++        z3.Or(
++            smul_ovf_wrap != smul_ovf_bounds,
++            umul_ovf_shr != umul_ovf_bounds,
++            sadd_sat_64 != sadd_sat_spec,
++            sadd_sat_arm64 != sadd_sat_spec,
++            ssub_sat_64 != ssub_sat_spec,
++            ssub_sat_arm64 != ssub_sat_spec,
++            uadd_sat_x86 != uadd_sat_spec,
++            usub_sat_x86 != usub_sat_spec,
++        )
++    )
++    if s_mv29.check() == z3.sat:
++        return False, {"error": "Z3 found counterexample in ZCC-PROVE-20 multiply overflow or saturating arithmetic equivalence"}
++
++    # 21. ZCC-PROVE-21 (MV30): WASM SIMD128 unary (i32x4.neg, v128.not, f32x4.neg, f32x4.abs, f32x4.sqrt) & f32x4.min/max auto-vectorization
++    has_mv30_guards = (
++        "WASM_SIMD_I32X4_NEG" in part6_wasm_text
++        and "WASM_SIMD_F32X4_NEG" in part6_wasm_text
++        and "WASM_SIMD_V128_NOT" in part6_wasm_text
++        and "WASM_SIMD_F32X4_ABS" in part6_wasm_text
++        and "WASM_SIMD_F32X4_SQRT" in part6_wasm_text
++        and "WASM_SIMD_F32X4_MIN" in part6_wasm_text
++        and "WASM_SIMD_F32X4_MAX" in part6_wasm_text
++        and "ZCC-PROVE-11..21" in wasm_emit_text
++    )
++    if not has_mv30_guards:
++        return False, {"error": "Missing ZCC-PROVE-21 WASM SIMD128 unary/f32 min-max guards or ZCC-PROVE-11..21 metadata"}
++
++    s_mv30 = z3.Solver()
++    ux32 = z3.BitVec("ux32", 32)
++    s_mv30.add(z3.Or(-ux32 != (~ux32) + z3.BitVecVal(1, 32), ~(~ux32) != ux32, -(-ux32) != ux32))
++    if s_mv30.check() == z3.sat:
++        return False, {"error": "Z3 found counterexample in ZCC-PROVE-21 unary SIMD128 algebraic involution"}
++
+     return True, {
+         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
+         "pass7_dead_write_rmw_negative_control": "SAT_CAUGHT (addq disp(%rbp), %rax clobbers live %rdx->%rax)",
+@@ -1634,6 +1742,10 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
+         "zcc_prove_18_lea359_and_bswap_involution_equivalence": "UNSAT (PROVEN_SOUND)",
+         "zcc_prove_19_checked_overflow_quad_isa_active": has_mv28_guards,
+         "zcc_prove_19_checked_overflow_quad_isa_equivalence": "UNSAT (PROVEN_SOUND)",
++        "zcc_prove_20_mul_overflow_and_saturating_arith_quad_isa_active": has_mv29_guards,
++        "zcc_prove_20_mul_overflow_and_saturating_arith_equivalence": "UNSAT (PROVEN_SOUND)",
++        "zcc_prove_21_wasm_simd128_unary_and_f32_minmax_active": has_mv30_guards,
++        "zcc_prove_21_wasm_simd128_unary_involution": "UNSAT (PROVEN_SOUND)",
+     }
+ 
+ 
