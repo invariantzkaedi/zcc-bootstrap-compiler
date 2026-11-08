@@ -1663,6 +1663,7 @@ int zcc_main(int argc, char **argv) {
   int qasm_canonical_mode = 0;
   int qasm_validate_mode = 0;
   int qasm_sim_mode = 0;
+  int qasm_stabilizer_mode = 0;
   int qasm_opt_mode = 0;
   int qasm_sim_c_mode = 0;
   int qasm_clifford_t_mode = 0;
@@ -1714,6 +1715,8 @@ int zcc_main(int argc, char **argv) {
       qasm_validate_mode = 1;
     } else if (strcmp(argv[i], "--target=qasm-sim") == 0 || strcmp(argv[i], "--qasm-sim") == 0) {
       qasm_sim_mode = 1;
+    } else if (strcmp(argv[i], "--target=qasm-stabilizer") == 0 || strcmp(argv[i], "--qasm-stabilizer") == 0) {
+      qasm_stabilizer_mode = 1;
     } else if (strcmp(argv[i], "--target=qasm-opt") == 0 || strcmp(argv[i], "--qasm-opt") == 0 || strcmp(argv[i], "-Oq") == 0) {
       qasm_opt_mode = 1;
     } else if (strcmp(argv[i], "--target=qasm-clifford-t") == 0 || strcmp(argv[i], "--qasm-clifford-t") == 0) {
@@ -2036,7 +2039,7 @@ int zcc_main(int argc, char **argv) {
       strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
     } else {
       int len = strlen(argv[i]);
-      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".cpp") == 0) || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".html") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".css") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".svg") == 0) || (len > 7 && strcmp(argv[i] + len - 7, ".circom") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".qasm") == 0) || (qasm_canonical_mode && argv[i][0] != '-') || (qasm_validate_mode && argv[i][0] != '-') || (qasm_sim_mode && argv[i][0] != '-') || (qasm_opt_mode && argv[i][0] != '-') || (qasm_clifford_t_mode && argv[i][0] != '-') || (qasm_sim_c_mode && argv[i][0] != '-'))) {
+      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".cpp") == 0) || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".html") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".css") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".svg") == 0) || (len > 7 && strcmp(argv[i] + len - 7, ".circom") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".qasm") == 0) || (qasm_canonical_mode && argv[i][0] != '-') || (qasm_validate_mode && argv[i][0] != '-') || (qasm_sim_mode && argv[i][0] != '-') || (qasm_stabilizer_mode && argv[i][0] != '-') || (qasm_opt_mode && argv[i][0] != '-') || (qasm_clifford_t_mode && argv[i][0] != '-') || (qasm_sim_c_mode && argv[i][0] != '-'))) {
         input_file = argv[i];
       } else {
         if (extra_link_args[0]) strncat(extra_link_args, " ", 4095 - (int)strlen(extra_link_args));
@@ -2265,7 +2268,7 @@ int zcc_main(int argc, char **argv) {
       source_len = new_len;
   }
 
-  if (qasm_canonical_mode || qasm_validate_mode || qasm_sim_mode || qasm_opt_mode || qasm_clifford_t_mode || qasm_sim_c_mode || (input_file && strlen(input_file) >= 5 && strcmp(input_file + strlen(input_file) - 5, ".qasm") == 0)) {
+  if (qasm_canonical_mode || qasm_validate_mode || qasm_sim_mode || qasm_stabilizer_mode || qasm_opt_mode || qasm_clifford_t_mode || qasm_sim_c_mode || (input_file && strlen(input_file) >= 5 && strcmp(input_file + strlen(input_file) - 5, ".qasm") == 0)) {
     char err_buf[512] = {0};
     ZCCQasmCircuit *circ = zcc_qasm_parse_string(source, input_file, err_buf, sizeof(err_buf));
     if (!circ) {
@@ -2372,7 +2375,57 @@ int zcc_main(int argc, char **argv) {
       free(source);
       return 0;
     }
-    if (qasm_sim_mode) {
+    if (qasm_sim_mode || qasm_stabilizer_mode) {
+      /* Auto-dispatch: a pure Clifford circuit too large for the dense       */
+      /* 2^N statevector reroutes to the bit-packed stabilizer tableau.       */
+      int use_stabilizer = qasm_stabilizer_mode;
+      if (qasm_sim_mode && !use_stabilizer && circ->total_qubits > ZCC_QASM_MAX_SIM_QUBITS &&
+          zcc_qasm_circuit_is_clifford(circ)) {
+        fprintf(stderr, "note: %d qubits exceeds the %d-qubit statevector limit; auto-dispatching pure Clifford circuit to the stabilizer tableau engine\n",
+                circ->total_qubits, ZCC_QASM_MAX_SIM_QUBITS);
+        use_stabilizer = 1;
+      }
+      if (use_stabilizer) {
+        if (!zcc_qasm_circuit_is_clifford(circ)) {
+          fprintf(stderr, "error: circuit contains non-Clifford gates: stabilizer engine requires {H, S, SDG, X, Y, Z, CX, CY, CZ, SWAP, ID, BARRIER, RESET, MEASURE}\n");
+          zcc_qasm_circuit_free(circ);
+          free(source);
+          return 1;
+        }
+        ZCCQasmStabilizer *stab = zcc_qasm_stab_create((size_t)circ->total_qubits, (size_t)circ->total_clbits, qasm_sim_seed);
+        if (!stab) {
+          fprintf(stderr, "error: stabilizer allocation failed (total qubits: %d exceeds maximum %d)\n", circ->total_qubits, ZCC_QASM_MAX_STAB_QUBITS);
+          zcc_qasm_circuit_free(circ);
+          free(source);
+          return 1;
+        }
+        if (!zcc_qasm_stab_apply_circuit(stab, circ)) {
+          fprintf(stderr, "error: %s\n", stab->last_error[0] ? stab->last_error : "circuit execution error");
+          zcc_qasm_stab_free(stab);
+          zcc_qasm_circuit_free(circ);
+          free(source);
+          return 1;
+        }
+        char *stab_dump = zcc_qasm_stab_dump_state(stab);
+        if (stab_dump) {
+          if (explicit_output_file) {
+            FILE *fp = fopen(output_file, "w");
+            if (fp) {
+              fputs(stab_dump, fp);
+              fclose(fp);
+            } else {
+              fprintf(stderr, "error: failed to open output file '%s'\n", output_file);
+            }
+          } else {
+            fputs(stab_dump, stdout);
+          }
+          free(stab_dump);
+        }
+        zcc_qasm_stab_free(stab);
+        zcc_qasm_circuit_free(circ);
+        free(source);
+        return 0;
+      }
       ZCCQasmSimulator *sim = zcc_qasm_sim_create((size_t)circ->total_qubits, (size_t)circ->total_clbits, qasm_sim_seed);
       if (!sim) {
         fprintf(stderr, "error: simulator allocation failed (total qubits: %d exceeds maximum %d)\n", circ->total_qubits, ZCC_QASM_MAX_SIM_QUBITS);
@@ -3073,7 +3126,7 @@ link_phase:
     if (compile_only) {
       written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", prefix_map, output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
-      written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/zk/zk_stark_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c -lm 2>&1", prefix_map, output_file, asm_file);
+      written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/zk/zk_stark_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_stabilizer.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c -lm 2>&1", prefix_map, output_file, asm_file);
     } else {
       written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s %s -lm -lpthread -ldl 2>&1", prefix_map, output_file, asm_file, extra_link_args);
     }

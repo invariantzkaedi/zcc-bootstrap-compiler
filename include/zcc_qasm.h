@@ -236,6 +236,47 @@ int zcc_qasm_sim_run_file(const char *filename, uint64_t seed, ZCCQasmSimulator 
 char *zcc_qasm_sim_dump_state(const ZCCQasmSimulator *sim, double threshold);
 
 /* ================================================================ */
+/* BIT-PACKED STABILIZER TABLEAU SIMULATOR (AARONSON-GOTTESMAN CHP) */
+/* ================================================================ */
+
+#define ZCC_QASM_MAX_STAB_QUBITS 4096
+
+typedef struct {
+    size_t num_qubits;
+    size_t words_per_row;       /* (num_qubits + 63) / 64 */
+    uint64_t *x_bits;           /* (2N+1) rows x words_per_row X-bit words */
+    uint64_t *z_bits;           /* (2N+1) rows x words_per_row Z-bit words */
+    uint8_t *r_bits;            /* Per-row sign bit (0: +1, 1: -1) */
+    uint64_t rng_state;
+    unsigned int *classical_bits;
+    size_t num_classical_bits;
+    char last_error[256];
+} ZCCQasmStabilizer;
+
+ZCCQasmStabilizer *zcc_qasm_stab_create(size_t num_qubits, size_t num_clbits, uint64_t seed);
+void zcc_qasm_stab_free(ZCCQasmStabilizer *st);
+void zcc_qasm_stab_reset_state(ZCCQasmStabilizer *st);
+
+/* 1 iff every op is in the stabilizer gate set {H, S, SDG, X, Y, Z, CX, CY,
+   CZ, SWAP, ID, BARRIER, RESET, MEASURE}, expanding custom gate bodies. */
+int zcc_qasm_circuit_is_clifford(const ZCCQasmCircuit *circ);
+
+int zcc_qasm_stab_apply_circuit(ZCCQasmStabilizer *st, const ZCCQasmCircuit *circ);
+int zcc_qasm_stab_run_file(const char *filename, uint64_t seed, ZCCQasmStabilizer **out_st, char *err_buf, size_t err_buf_size);
+
+/* Projective Z measurement with collapse; *out_deterministic reports
+   whether the outcome was forced (1) or coin-flipped (0). */
+int zcc_qasm_stab_measure(ZCCQasmStabilizer *st, size_t qubit, int *out_deterministic);
+
+/* Non-destructive Z expectation: +1, -1, or 0 when the outcome is random. */
+int zcc_qasm_stab_peek_z(const ZCCQasmStabilizer *st, size_t qubit);
+
+/* Exact single-qubit entanglement entropy S(rho_q) in {0.0, 1.0}. */
+double zcc_qasm_stab_entropy_1q(const ZCCQasmStabilizer *st, size_t qubit);
+
+char *zcc_qasm_stab_dump_state(const ZCCQasmStabilizer *st);
+
+/* ================================================================ */
 /* QUANTUM CIRCUIT OPTIMIZER & ALGEBRAIC REWRITE API                */
 /* ================================================================ */
 
