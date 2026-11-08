@@ -364,13 +364,31 @@ static long long parse_const_expr_primary(Compiler *cc) {
         return val;
     }
     if (cc->tk == TK_IDENT) {
+        char bname[64];
         Symbol *sym = scope_find(cc, cc->tk_text);
         if (sym && sym->is_enum_const) {
             long long val = sym->enum_val;
             next_token(cc);
             return val;
         }
+        strncpy(bname, cc->tk_text, 63); bname[63] = '\0';
         next_token(cc);
+        if (cc->tk == TK_LPAREN) {
+            long long a0 = 0, a1 = 0, out_v = 0;
+            extern int zcc_eval_const_bit_builtin(const char*, long long, long long*), zcc_eval_const_bit_builtin2(const char*, long long, long long, long long*);
+            next_token(cc);
+            if (cc->tk != TK_RPAREN) {
+                a0 = parse_const_expr(cc);
+                if (cc->tk == TK_COMMA) {
+                    next_token(cc);
+                    a1 = parse_const_expr(cc);
+                    expect(cc, TK_RPAREN);
+                    return zcc_eval_const_bit_builtin2(bname, a0, a1, &out_v) ? out_v : 0;
+                }
+            }
+            expect(cc, TK_RPAREN);
+            return zcc_eval_const_bit_builtin(bname, a0, &out_v) ? out_v : 0;
+        }
         return 0;
     }
     next_token(cc);
@@ -1375,6 +1393,10 @@ static long long eval_const_expr_raw(Node *n) {
     }
     if (n->kind == ND_DEREF)
         return eval_const_expr(n->lhs); /* *(base+offset) folded through null-ptr */
+    if (n->kind == ND_CALL && strncmp(n->func_name, "__builtin_", 10) == 0) {
+        long long out_b = 0; extern int zcc_eval_const_bit_builtin(const char*, long long, long long*), zcc_eval_const_bit_builtin2(const char*, long long, long long, long long*);
+        if ((n->num_args == 1 && zcc_eval_const_bit_builtin(n->func_name, eval_const_expr(n->args[0]), &out_b)) || (n->num_args == 2 && zcc_eval_const_bit_builtin2(n->func_name, eval_const_expr(n->args[0]), eval_const_expr(n->args[1]), &out_b))) return out_b;
+    }
     return 0; /* Fallback for unsupported complex compile-time bounds */
 }
 
@@ -2462,8 +2484,12 @@ Node *parse_postfix(Compiler *cc) {
                                strcmp(call->func_name, "__builtin_bitreverse32") == 0 ||
                                strcmp(call->func_name, "__builtin_uadd_sat") == 0 ||
                                strcmp(call->func_name, "__builtin_usub_sat") == 0 ||
+                               strcmp(call->func_name, "__builtin_umul_sat") == 0 ||
                                strcmp(call->func_name, "__builtin_uavg_floor") == 0 ||
                                strcmp(call->func_name, "__builtin_uavg_ceil") == 0 ||
+                               strcmp(call->func_name, "__builtin_uhadd") == 0 ||
+                               strcmp(call->func_name, "__builtin_urhadd") == 0 ||
+                               strcmp(call->func_name, "__builtin_ushl_sat") == 0 ||
                                strcmp(call->func_name, "__builtin_usad32") == 0 ||
                                strcmp(call->func_name, "__builtin_ssad32") == 0 ||
                                strcmp(call->func_name, "__builtin_umin32") == 0 ||

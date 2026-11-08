@@ -529,11 +529,14 @@ class TestZCCQasmSimulator(unittest.TestCase):
         self.assertAlmostEqual(state["11"].real, inv_sqrt2, places=6)
 
     def test_25_oversized_simulation_error_handling(self):
+        # Pure-Clifford oversized circuits now auto-dispatch to the stabilizer
+        # tableau engine (see TestZCCQasmStabilizer.test_03); a *non-Clifford*
+        # oversized circuit has no viable engine and must still fail cleanly.
         src = """
         OPENQASM 2.0;
         include "qelib1.inc";
         qreg q[32];
-        h q[0];
+        t q[0];
         """
         out, err, code = run_zcc_sim(src)
         self.assertNotEqual(code, 0)
@@ -583,6 +586,144 @@ class TestZCCQasmSimulator(unittest.TestCase):
         self.assertAlmostEqual(state["01"].real, exp_01, places=6)
         self.assertAlmostEqual(state["10"].imag, exp_10.imag, places=6)
         self.assertAlmostEqual(state["11"].imag, exp_11.imag, places=6)
+
+
+def run_zcc_stab(qasm_source, seed=None, target="qasm-stabilizer"):
+    """Executes QASM in the ZCC stabilizer tableau engine; returns (stdout, stderr, exit_code)."""
+    with tempfile.NamedTemporaryFile(suffix=".qasm", mode="w", delete=False) as f:
+        f.write(qasm_source)
+        f.flush()
+        temp_path = f.name
+    try:
+        cmd = [ZCC_BIN, f"--target={target}"]
+        if seed is not None:
+            cmd.append(f"--seed={seed}")
+        cmd.append(temp_path)
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        return proc.stdout, proc.stderr, proc.returncode
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+class TestZCCQasmStabilizer(unittest.TestCase):
+    """CLI tests for the bit-packed Aaronson-Gottesman stabilizer tableau engine."""
+
+    def test_01_ghz3_stabilizer_generators(self):
+        src = """
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[3];
+        h q[0];
+        cx q[0], q[1];
+        cx q[1], q[2];
+        """
+        out, err, code = run_zcc_stab(src)
+        self.assertEqual(code, 0, f"Error: {err}")
+        self.assertIn("3 qubits, 3 generators", out)
+        # GHZ-3 stabilizer group: <+XXX, +ZZI, +IZZ>
+        self.assertIn("+XXX", out)
+        self.assertIn("+ZZI", out)
+        self.assertIn("+IZZ", out)
+
+    def test_02_non_clifford_rejected(self):
+        src = """
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[1];
+        h q[0];
+        t q[0];
+        """
+        out, err, code = run_zcc_stab(src)
+        self.assertNotEqual(code, 0)
+        self.assertIn("non-Clifford", err)
+
+    def test_03_auto_dispatch_beyond_statevector_limit(self):
+        # 29 qubits > ZCC_QASM_MAX_SIM_QUBITS (28): pure Clifford GHZ must
+        # transparently reroute from --target=qasm-sim to the tableau engine.
+        lines = ["OPENQASM 2.0;", 'include "qelib1.inc";', "qreg q[29];", "h q[0];"]
+        for q in range(28):
+            lines.append(f"cx q[{q}], q[{q + 1}];")
+        src = "\n".join(lines) + "\n"
+        out, err, code = run_zcc_stab(src, target="qasm-sim")
+        self.assertEqual(code, 0, f"Error: {err}")
+        self.assertIn("auto-dispatching", err)
+        self.assertIn("29 qubits, 29 generators", out)
+        self.assertIn("+" + "X" * 29, out)
+
+    def test_04_non_clifford_oversize_still_fails(self):
+        # Beyond the dense limit AND non-Clifford: no engine can run it.
+        lines = ["OPENQASM 2.0;", 'include "qelib1.inc";', "qreg q[29];", "t q[0];"]
+        src = "\n".join(lines) + "\n"
+        out, err, code = run_zcc_stab(src, target="qasm-sim")
+        self.assertNotEqual(code, 0)
+
+    def test_05_seeded_measurement_determinism(self):
+        src = """
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[4];
+        creg c[4];
+        h q[0];
+        cx q[0], q[1];
+        cx q[1], q[2];
+        cx q[2], q[3];
+        measure q[0] -> c[0];
+        measure q[1] -> c[1];
+        measure q[2] -> c[2];
+        measure q[3] -> c[3];
+        """
+        out_a, _, code_a = run_zcc_stab(src, seed=9001)
+        out_b, _, code_b = run_zcc_stab(src, seed=9001)
+        self.assertEqual(code_a, 0)
+        self.assertEqual(code_b, 0)
+        self.assertEqual(out_a, out_b)
+
+        c_lines = [l for l in out_a.splitlines() if l.startswith("C: ")]
+        self.assertEqual(len(c_lines), 1)
+        bits = c_lines[0][3:].strip()
+        self.assertEqual(len(bits), 4)
+        # GHZ collapse: all classical bits agree
+        self.assertEqual(len(set(bits)), 1)
+
+        # A different seed somewhere in 1..32 must flip the outcome
+        seen = {bits}
+        for s in range(1, 33):
+            out_s, _, _ = run_zcc_stab(src, seed=s)
+            for l in out_s.splitlines():
+                if l.startswith("C: "):
+                    seen.add(l[3:].strip())
+            if len(seen) > 1:
+                break
+        self.assertGreater(len(seen), 1)
+
+    def test_06_teleportation_feed_forward(self):
+        src = """
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[3];
+        creg c0[1];
+        creg c1[1];
+        creg c2[1];
+        x q[0];
+        h q[1];
+        cx q[1], q[2];
+        cx q[0], q[1];
+        h q[0];
+        measure q[0] -> c0[0];
+        measure q[1] -> c1[0];
+        if (c1 == 1) x q[2];
+        if (c0 == 1) z q[2];
+        measure q[2] -> c2[0];
+        """
+        for seed in range(1, 9):
+            out, err, code = run_zcc_stab(src, seed=seed)
+            self.assertEqual(code, 0, f"Error: {err}")
+            # Register dump order is c2 c1 c0 (MSB-first across registers):
+            # teleported |1> always lands in c2.
+            c_lines = [l for l in out.splitlines() if l.startswith("C: ")]
+            self.assertEqual(len(c_lines), 1)
+            self.assertEqual(c_lines[0][3:].strip()[0], "1")
 
 
 if __name__ == "__main__":

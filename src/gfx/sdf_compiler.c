@@ -478,6 +478,16 @@ char *zcc_evolve_svg_buffer(const char *src, int src_len, int *out_len, ZccSvgEv
     int i = 0;
 
     while (i < p1_len) {
+        /* Pass CDATA blocks <![CDATA[ ... ]]> through verbatim so embedded JS/CSS is never mutated */
+        if (i + 9 < p1_len && strncmp(p1 + i, "<![CDATA[", 9) == 0) {
+            int end_cd = i + 9;
+            while (end_cd + 3 <= p1_len && strncmp(p1 + end_cd, "]]>", 3) != 0) end_cd++;
+            int copy_end = (end_cd + 3 <= p1_len) ? (end_cd + 3) : p1_len;
+            sbuf_append(&out, p1 + i, copy_end - i);
+            i = copy_end;
+            continue;
+        }
+
         /* Elide XML comments <!-- ... --> */
         if (i + 4 < p1_len && strncmp(p1 + i, "<!--", 4) == 0) {
             int end_c = i + 4;
@@ -1282,7 +1292,7 @@ static char *svg_generate_c_ast_graph(const char *input_path, const char *c_src,
 
     SvgStrBuf sb;
     sbuf_init(&sb, 16384);
-    char tmp[512];
+    char tmp[1024];
     char clean_name[64];
     const char *base = input_path ? input_path : "source.c";
     for (const char *p = base; *p; p++) {
@@ -1388,7 +1398,7 @@ static char *svg_generate_c_cfg_graph(const char *input_path, const char *c_src,
 
     SvgStrBuf sb;
     sbuf_init(&sb, 16384);
-    char tmp[512];
+    char tmp[1024];
     char clean_name[64];
     const char *base = input_path ? input_path : "source.c";
     for (const char *p = base; *p; p++) {
@@ -1483,7 +1493,7 @@ static char *svg_generate_c_ir_graph(const char *input_path, const char *c_src, 
 
     SvgStrBuf sb;
     sbuf_init(&sb, 16384);
-    char tmp[512];
+    char tmp[1024];
     char clean_name[64];
     const char *base = input_path ? input_path : "source.c";
     for (const char *p = base; *p; p++) {
@@ -1532,6 +1542,8 @@ static char *svg_generate_c_ir_graph(const char *input_path, const char *c_src, 
         int width_x = 120 + ((r * 53 + c_len) % 240);
         if (start_x + width_x > 920) width_x = 920 - start_x;
         const char *bar_color = (r < 7) ? "#00f5d4" : ((r < 10) ? "#a855f7" : "#f59e0b");
+        char esc_ssa[128];
+        svg_xml_escape_label(ssa_mnemonics[r], esc_ssa, sizeof(esc_ssa));
 
         snprintf(tmp, sizeof(tmp),
                  "<rect x=\"24\" y=\"%d\" width=\"380\" height=\"28\" rx=\"4\" fill=\"#0f172a\" stroke=\"#312e81\" stroke-width=\"1\"/>\n"
@@ -1540,7 +1552,7 @@ static char *svg_generate_c_ir_graph(const char *input_path, const char *c_src, 
                  "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"16\" rx=\"3\" fill=\"%s\" opacity=\"0.85\"/>\n"
                  "<circle cx=\"%d\" cy=\"%d\" r=\"4\" fill=\"#ffffff\"/>\n"
                  "<circle cx=\"%d\" cy=\"%d\" r=\"4\" fill=\"%s\"/>\n",
-                 y, y + 18, r, ssa_mnemonics[r],
+                 y, y + 18, r, esc_ssa,
                  y + 18, bar_color, phys_regs[r],
                  start_x, y + 6, width_x, bar_color,
                  start_x, y + 14,
@@ -1673,6 +1685,38 @@ static void svg_extract_path_segments_to_sdf(const char *d, int d_len, SvgSdfPri
                 prims[*prim_cnt].p3 = y;
                 prims[*prim_cnt].p4 = 1.5;
                 (*prim_cnt)++;
+            }
+            cur_x = x; cur_y = y;
+        } else if (u == 'A') {
+            double v[7];
+            int ok = 1;
+            for (int k = 0; k < 7; k++) {
+                if (!svg_parse_num(d, d_len, &i, &v[k])) { ok = 0; break; }
+            }
+            if (!ok) break;
+            double rx = fabs(v[0]), ry = fabs(v[1]);
+            double x = is_rel ? cur_x + v[5] : v[5];
+            double y = is_rel ? cur_y + v[6] : v[6];
+            if (*prim_cnt < max_prims) {
+                double dx = x - cur_x, dy = y - cur_y;
+                double chord = sqrt(dx * dx + dy * dy);
+                if (rx > 0.5 && fabs(rx - ry) < 1e-2 && fabs(chord - 2.0 * rx) < 0.25 && dx > 0.0) {
+                    prims[*prim_cnt].type = 1;
+                    prims[*prim_cnt].p0 = 0.5 * (cur_x + x);
+                    prims[*prim_cnt].p1 = 0.5 * (cur_y + y);
+                    prims[*prim_cnt].p2 = rx;
+                    prims[*prim_cnt].p3 = 0.0;
+                    prims[*prim_cnt].p4 = 0.0;
+                    (*prim_cnt)++;
+                } else if (chord > 1e-4 && !(rx > 0.5 && fabs(rx - ry) < 1e-2 && fabs(chord - 2.0 * rx) < 0.25 && dx < 0.0)) {
+                    prims[*prim_cnt].type = 4;
+                    prims[*prim_cnt].p0 = cur_x;
+                    prims[*prim_cnt].p1 = cur_y;
+                    prims[*prim_cnt].p2 = x;
+                    prims[*prim_cnt].p3 = y;
+                    prims[*prim_cnt].p4 = 1.5;
+                    (*prim_cnt)++;
+                }
             }
             cur_x = x; cur_y = y;
         } else {

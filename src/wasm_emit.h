@@ -237,6 +237,8 @@ typedef enum {
     WASM_SIMD_V128_AND          = 0x4E,
     WASM_SIMD_V128_OR           = 0x50,
     WASM_SIMD_V128_XOR          = 0x51,
+    WASM_SIMD_I8X16_AVGR_U      = 0x7B,
+    WASM_SIMD_I16X8_AVGR_U      = 0x9B,
     WASM_SIMD_I32X4_ABS         = 0xA0,
     WASM_SIMD_I32X4_NEG         = 0xA1,
     WASM_SIMD_I32X4_SHL         = 0xAB,

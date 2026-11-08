@@ -542,10 +542,10 @@ void init_compiler(Compiler *cc) {
 
       /* Bit-manipulation intrinsics */
       {
-        const char *b32[] = {"__builtin_clz", "__builtin_ctz", "__builtin_popcount", "__builtin_ffs", "__builtin_parity", "__builtin_clrsb"};
+        const char *b32[] = {"__builtin_clz", "__builtin_ctz", "__builtin_popcount", "__builtin_ffs", "__builtin_parity", "__builtin_clrsb", "__builtin_qpauli_weight"};
         const char *b64[] = {"__builtin_clzl", "__builtin_clzll", "__builtin_ctzl", "__builtin_ctzll", "__builtin_popcountl", "__builtin_popcountll", "__builtin_ffsl", "__builtin_ffsll", "__builtin_parityl", "__builtin_parityll", "__builtin_clrsbl", "__builtin_clrsbll"};
         int bi;
-        for (bi = 0; bi < 6; bi++) {
+        for (bi = 0; bi < 7; bi++) {
           ft = type_func(cc, cc->ty_int);
           ft->num_params = 1;
           ft->params = (Type **)cc_alloc(cc, sizeof(Type *));
@@ -579,9 +579,9 @@ void init_compiler(Compiler *cc) {
         {
           const char *rot32[] = {"__builtin_rotateleft32", "__builtin_rotateright32"};
           const char *rot64[] = {"__builtin_rotateleft64", "__builtin_rotateright64"};
-          const char *ovf32[] = {"__builtin_sadd_overflow_p", "__builtin_ssub_overflow_p", "__builtin_smul_overflow_p", "__builtin_uadd_overflow_p", "__builtin_usub_overflow_p", "__builtin_umul_overflow_p"};
-          const char *sat32[] = {"__builtin_sadd_sat", "__builtin_ssub_sat", "__builtin_savg_floor", "__builtin_savg_ceil", "__builtin_smin32", "__builtin_smax32", "__builtin_ssad32", "__builtin_uadd_sat", "__builtin_usub_sat", "__builtin_uavg_floor", "__builtin_uavg_ceil", "__builtin_usad32", "__builtin_umin32", "__builtin_umax32"};
-          for (bi = 0; bi < 6; bi++) {
+          const char *ovf32[] = {"__builtin_sadd_overflow_p", "__builtin_ssub_overflow_p", "__builtin_smul_overflow_p", "__builtin_uadd_overflow_p", "__builtin_usub_overflow_p", "__builtin_umul_overflow_p", "__builtin_qpauli_commute"};
+          const char *sat32[] = {"__builtin_sadd_sat", "__builtin_ssub_sat", "__builtin_smul_sat", "__builtin_savg_floor", "__builtin_savg_ceil", "__builtin_shadd", "__builtin_srhadd", "__builtin_sshl_sat", "__builtin_srshr", "__builtin_qdmulh", "__builtin_qrdmulh", "__builtin_smin32", "__builtin_smax32", "__builtin_ssad32", "__builtin_uadd_sat", "__builtin_usub_sat", "__builtin_umul_sat", "__builtin_uavg_floor", "__builtin_uavg_ceil", "__builtin_uhadd", "__builtin_urhadd", "__builtin_ushl_sat", "__builtin_urshr", "__builtin_usad32", "__builtin_umin32", "__builtin_umax32"};
+          for (bi = 0; bi < 7; bi++) {
             ft = type_func(cc, cc->ty_int);
             ft->num_params = 2;
             ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
@@ -589,12 +589,12 @@ void init_compiler(Compiler *cc) {
             ft->params[1] = (bi >= 3) ? cc->ty_uint : cc->ty_int;
             sym = scope_add(cc, ovf32[bi], ft); sym->is_global = 1;
           }
-          for (bi = 0; bi < 14; bi++) {
-            ft = type_func(cc, (bi >= 6) ? cc->ty_uint : cc->ty_int);
+          for (bi = 0; bi < 26; bi++) {
+            ft = type_func(cc, (bi >= 13) ? cc->ty_uint : cc->ty_int);
             ft->num_params = 2;
             ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
-            ft->params[0] = (bi >= 7) ? cc->ty_uint : cc->ty_int;
-            ft->params[1] = (bi >= 7) ? cc->ty_uint : cc->ty_int;
+            ft->params[0] = (bi >= 14) ? cc->ty_uint : cc->ty_int;
+            ft->params[1] = (bi >= 14) ? cc->ty_uint : cc->ty_int;
             sym = scope_add(cc, sat32[bi], ft); sym->is_global = 1;
           }
           for (bi = 0; bi < 2; bi++) {
@@ -986,9 +986,12 @@ static void peephole_optimize(char *filename) {
       }
     }
 
-    /* 3e. Redundant Double CLTQs: cltq; cltq -> cltq */
-    if (strcmp(l1, "    cltq\n") == 0 && i + 1 < nlines &&
-        strcmp(line_ptrs[i + 1], "    cltq\n") == 0) {
+    /* 3e. Redundant CLTQs after cltq or movslq/movsbq/movswq ..., %rax */
+    if (i + 1 < nlines && strcmp(line_ptrs[i + 1], "    cltq\n") == 0 &&
+        (strcmp(l1, "    cltq\n") == 0 ||
+         ((strncmp(l1, "    movslq ", 11) == 0 || strncmp(l1, "    movsbq ", 11) == 0 ||
+           strncmp(l1, "    movswq ", 11) == 0) &&
+          strlen(l1) > 14 && strcmp(l1 + strlen(l1) - 7, ", %rax\n") == 0))) {
       line_ptrs[i + 1][0] = 0;
       eliminated += 1;
       i += 2;
@@ -1140,6 +1143,35 @@ static void peephole_optimize(char *filename) {
         int sc = (line_ptrs[i + 1][10] == '3') ? 2 : ((line_ptrs[i + 1][10] == '5') ? 4 : 8);
         sprintf(line_ptrs[i], "    movq %%rax, %%r11\n"); sprintf(line_ptrs[i + 1], "    leaq (%%rax,%%rax,%d), %%rax\n", sc);
         line_ptrs[i + 2][0] = 0; line_ptrs[i + 3][0] = 0; line_ptrs[i + 4][0] = 0; eliminated += 3; i += 5; continue;
+      }
+      if (i + 1 < nlines && strcmp(line_ptrs[i + 1], "    movl %eax, %eax\n") == 0 &&
+          strlen(l1) >= 14 && strcmp(l1 + strlen(l1) - 7, ", %eax\n") == 0 &&
+          (strncmp(l1, "    movl ", 9) == 0 || strncmp(l1, "    movzbl ", 11) == 0 ||
+           strncmp(l1, "    movzwl ", 11) == 0 || strcmp(l1, "    xorl %eax, %eax\n") == 0)) {
+        line_ptrs[i + 1][0] = 0; eliminated++; i += 2; continue;
+      }
+      if (strcmp(l1, "    pushq %rax\n") == 0 && i + 3 < nlines &&
+          strcmp(line_ptrs[i + 2], "    movq %rax, %rdi\n") == 0 &&
+          strcmp(line_ptrs[i + 3], "    popq %rsi\n") == 0) {
+        char *l2 = line_ptrs[i + 1];
+        int l2n = (int)strlen(l2);
+        int is_rax = (l2n > 14 && strcmp(l2 + l2n - 7, ", %rax\n") == 0 &&
+                      (((strstr(l2, "(%rbp), %rax\n") || strstr(l2, "(%rip), %rax\n")) &&
+                        (strncmp(l2, "    movq ", 9) == 0 || strncmp(l2, "    leaq ", 9) == 0)) ||
+                       (strstr(l2, "(%rbp), %rax\n") && strncmp(l2, "    movslq ", 11) == 0) ||
+                       (l2n > 16 && strncmp(l2, "    movq $", 10) == 0)));
+        int is_eax = (l2n > 14 && strstr(l2, "(%rbp), %eax\n") && strncmp(l2, "    movl ", 9) == 0);
+        if (is_rax || is_eax) {
+          int k = i + 4;
+          while (k < nlines && (strcmp(line_ptrs[k], "    popq %rdx\n") == 0 || strcmp(line_ptrs[k], "    popq %rcx\n") == 0 ||
+                                strcmp(line_ptrs[k], "    popq %r8\n") == 0 || strcmp(line_ptrs[k], "    popq %r9\n") == 0)) k++;
+          sprintf(line_ptrs[i], "    movq %%rax, %%rsi\n");
+          if (k < nlines && (strcmp(line_ptrs[k], "    xorl %eax, %eax\n") == 0 || strcmp(line_ptrs[k], "    popq %rax\n") == 0)) {
+            memcpy(l2 + l2n - 7, is_rax ? ", %rdi\n" : ", %edi\n", 7);
+            line_ptrs[i + 2][0] = 0; line_ptrs[i + 3][0] = 0; eliminated += 2; i += 4; continue;
+          }
+          line_ptrs[i + 3][0] = 0; eliminated += 1; i += 4; continue;
+        }
       }
     }
 
@@ -1800,6 +1832,7 @@ int zcc_main(int argc, char **argv) {
   int qasm_canonical_mode = 0;
   int qasm_validate_mode = 0;
   int qasm_sim_mode = 0;
+  int qasm_stabilizer_mode = 0;
   int qasm_opt_mode = 0;
   int qasm_sim_c_mode = 0;
   int qasm_clifford_t_mode = 0;
@@ -1853,6 +1886,8 @@ int zcc_main(int argc, char **argv) {
       qasm_validate_mode = 1;
     } else if (strcmp(argv[i], "--target=qasm-sim") == 0 || strcmp(argv[i], "--qasm-sim") == 0) {
       qasm_sim_mode = 1;
+    } else if (strcmp(argv[i], "--target=qasm-stabilizer") == 0 || strcmp(argv[i], "--qasm-stabilizer") == 0) {
+      qasm_stabilizer_mode = 1;
     } else if (strcmp(argv[i], "--target=qasm-opt") == 0 || strcmp(argv[i], "--qasm-opt") == 0 || strcmp(argv[i], "-Oq") == 0) {
       qasm_opt_mode = 1;
     } else if (strcmp(argv[i], "--target=qasm-clifford-t") == 0 || strcmp(argv[i], "--qasm-clifford-t") == 0) {
@@ -2204,7 +2239,7 @@ int zcc_main(int argc, char **argv) {
       strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
     } else {
       int len = strlen(argv[i]);
-      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || strcmp(argv[i] + len - 2, ".i") == 0 || (len > 3 && (strcmp(argv[i] + len - 3, ".ii") == 0 || strcmp(argv[i] + len - 3, ".cc") == 0)) || (len > 4 && (strcmp(argv[i] + len - 4, ".cpp") == 0 || strcmp(argv[i] + len - 4, ".cxx") == 0)) || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".html") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".css") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".svg") == 0) || (len > 7 && strcmp(argv[i] + len - 7, ".circom") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".qasm") == 0) || (qasm_canonical_mode && argv[i][0] != '-') || (qasm_validate_mode && argv[i][0] != '-') || (qasm_sim_mode && argv[i][0] != '-') || (qasm_opt_mode && argv[i][0] != '-') || (qasm_clifford_t_mode && argv[i][0] != '-') || (qasm_sim_c_mode && argv[i][0] != '-') || (svg_cli_mode && argv[i][0] != '-'))) {
+      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || strcmp(argv[i] + len - 2, ".i") == 0 || (len > 3 && (strcmp(argv[i] + len - 3, ".ii") == 0 || strcmp(argv[i] + len - 3, ".cc") == 0)) || (len > 4 && (strcmp(argv[i] + len - 4, ".cpp") == 0 || strcmp(argv[i] + len - 4, ".cxx") == 0)) || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".html") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".css") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".svg") == 0) || (len > 7 && strcmp(argv[i] + len - 7, ".circom") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".qasm") == 0) || (qasm_canonical_mode && argv[i][0] != '-') || (qasm_validate_mode && argv[i][0] != '-') || (qasm_sim_mode && argv[i][0] != '-') || (qasm_stabilizer_mode && argv[i][0] != '-') || (qasm_opt_mode && argv[i][0] != '-') || (qasm_clifford_t_mode && argv[i][0] != '-') || (qasm_sim_c_mode && argv[i][0] != '-') || (svg_cli_mode && argv[i][0] != '-'))) {
         input_file = argv[i];
       } else if (argv[i][0] != '-' && !(len > 2 && (strcmp(argv[i] + len - 2, ".s") == 0 || strcmp(argv[i] + len - 2, ".S") == 0 || strcmp(argv[i] + len - 2, ".o") == 0 || strcmp(argv[i] + len - 2, ".a") == 0 || (len > 3 && strcmp(argv[i] + len - 3, ".so") == 0)))) {
         fprintf(stderr, "zcc: unrecognized input file extension: '%s'\n", argv[i]);
@@ -2440,7 +2475,7 @@ int zcc_main(int argc, char **argv) {
       source_len = new_len;
   }
 
-  if (qasm_canonical_mode || qasm_validate_mode || qasm_sim_mode || qasm_opt_mode || qasm_clifford_t_mode || qasm_sim_c_mode || (input_file && strlen(input_file) >= 5 && strcmp(input_file + strlen(input_file) - 5, ".qasm") == 0)) {
+  if (qasm_canonical_mode || qasm_validate_mode || qasm_sim_mode || qasm_stabilizer_mode || qasm_opt_mode || qasm_clifford_t_mode || qasm_sim_c_mode || (input_file && strlen(input_file) >= 5 && strcmp(input_file + strlen(input_file) - 5, ".qasm") == 0)) {
     char err_buf[512] = {0};
     ZCCQasmCircuit *circ = zcc_qasm_parse_string(source, input_file, err_buf, sizeof(err_buf));
     if (!circ) {
@@ -2547,7 +2582,57 @@ int zcc_main(int argc, char **argv) {
       free(source);
       return 0;
     }
-    if (qasm_sim_mode) {
+    if (qasm_sim_mode || qasm_stabilizer_mode) {
+      /* Auto-dispatch: a pure Clifford circuit too large for the dense       */
+      /* 2^N statevector reroutes to the bit-packed stabilizer tableau.       */
+      int use_stabilizer = qasm_stabilizer_mode;
+      if (qasm_sim_mode && !use_stabilizer && circ->total_qubits > ZCC_QASM_MAX_SIM_QUBITS &&
+          zcc_qasm_circuit_is_clifford(circ)) {
+        fprintf(stderr, "note: %d qubits exceeds the %d-qubit statevector limit; auto-dispatching pure Clifford circuit to the stabilizer tableau engine\n",
+                circ->total_qubits, ZCC_QASM_MAX_SIM_QUBITS);
+        use_stabilizer = 1;
+      }
+      if (use_stabilizer) {
+        if (!zcc_qasm_circuit_is_clifford(circ)) {
+          fprintf(stderr, "error: circuit contains non-Clifford gates: stabilizer engine requires {H, S, SDG, X, Y, Z, CX, CY, CZ, SWAP, ID, BARRIER, RESET, MEASURE}\n");
+          zcc_qasm_circuit_free(circ);
+          free(source);
+          return 1;
+        }
+        ZCCQasmStabilizer *stab = zcc_qasm_stab_create((size_t)circ->total_qubits, (size_t)circ->total_clbits, qasm_sim_seed);
+        if (!stab) {
+          fprintf(stderr, "error: stabilizer allocation failed (total qubits: %d exceeds maximum %d)\n", circ->total_qubits, ZCC_QASM_MAX_STAB_QUBITS);
+          zcc_qasm_circuit_free(circ);
+          free(source);
+          return 1;
+        }
+        if (!zcc_qasm_stab_apply_circuit(stab, circ)) {
+          fprintf(stderr, "error: %s\n", stab->last_error[0] ? stab->last_error : "circuit execution error");
+          zcc_qasm_stab_free(stab);
+          zcc_qasm_circuit_free(circ);
+          free(source);
+          return 1;
+        }
+        char *stab_dump = zcc_qasm_stab_dump_state(stab);
+        if (stab_dump) {
+          if (explicit_output_file) {
+            FILE *fp = fopen(output_file, "w");
+            if (fp) {
+              fputs(stab_dump, fp);
+              fclose(fp);
+            } else {
+              fprintf(stderr, "error: failed to open output file '%s'\n", output_file);
+            }
+          } else {
+            fputs(stab_dump, stdout);
+          }
+          free(stab_dump);
+        }
+        zcc_qasm_stab_free(stab);
+        zcc_qasm_circuit_free(circ);
+        free(source);
+        return 0;
+      }
       ZCCQasmSimulator *sim = zcc_qasm_sim_create((size_t)circ->total_qubits, (size_t)circ->total_clbits, qasm_sim_seed);
       if (!sim) {
         fprintf(stderr, "error: simulator allocation failed (total qubits: %d exceeds maximum %d)\n", circ->total_qubits, ZCC_QASM_MAX_SIM_QUBITS);
@@ -3263,7 +3348,7 @@ link_phase:
     if (compile_only) {
       written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -c -o %s %s 2>&1", prefix_map, output_file, asm_file);
     } else if (strcmp(input_file, "zcc.c") == 0 || (strlen(input_file) >= 6 && strcmp(input_file + strlen(input_file) - 6, "/zcc.c") == 0)) {
-      written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/zk/zk_stark_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c -lm 2>&1", prefix_map, output_file, asm_file);
+      written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/zk/zk_stark_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_stabilizer.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c -lm 2>&1", prefix_map, output_file, asm_file);
     } else {
       written = snprintf(cmd, sizeof(cmd), "gcc %s -O0 -no-pie -fno-asynchronous-unwind-tables -Wa,--noexecstack -fno-unwind-tables -Iinclude -I. -o %s %s %s -lm -lpthread -ldl 2>&1", prefix_map, output_file, asm_file, extra_link_args);
     }
@@ -3467,6 +3552,11 @@ int zcc_eval_const_bit_builtin(const char *fname, long long arg0_bits, long long
     for (b = 0; b < 64; b++) { r = (r << 1) | (u & 1ULL); u >>= 1; }
     *out_bits = (long long)r; return 1;
   }
+  if (strcmp(fname, "__builtin_qpauli_weight") == 0) {
+    unsigned int m = ((unsigned int)arg0_bits | ((unsigned int)arg0_bits >> 16)) & 0xFFFFU;
+    int n = 0; while (m) { n += (int)(m & 1U); m >>= 1; }
+    *out_bits = n; return 1;
+  }
   return 0;
 }
 
@@ -3496,15 +3586,15 @@ int zcc_eval_const_bit_builtin2(const char *fname, long long arg0_bits, long lon
     unsigned long long a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
     *out_bits = ((a * b) > 0xFFFFFFFFULL) ? 1 : 0; return 1;
   }
-  if (strcmp(fname, "__builtin_sadd_sat") == 0 || strcmp(fname, "__builtin_ssub_sat") == 0) {
+  if (strcmp(fname, "__builtin_sadd_sat") == 0 || strcmp(fname, "__builtin_ssub_sat") == 0 || strcmp(fname, "__builtin_smul_sat") == 0) {
     long long a = (int)arg0_bits, b = (int)arg1_bits;
-    long long r = (fname[11] == 'a') ? (a + b) : (a - b);
+    long long r = (fname[11] == 'm') ? (a * b) : ((fname[11] == 'a') ? (a + b) : (a - b));
     if (r > 2147483647LL) r = 2147483647LL;
     else if (r < -2147483648LL) r = -2147483648LL;
     *out_bits = (long long)(int)r; return 1;
   }
-  if (strcmp(fname, "__builtin_uadd_sat") == 0) {
-    unsigned long long a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits, r = a + b;
+  if (strcmp(fname, "__builtin_uadd_sat") == 0 || strcmp(fname, "__builtin_umul_sat") == 0) {
+    unsigned long long a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits, r = (fname[11] == 'm') ? (a * b) : (a + b);
     *out_bits = (long long)(unsigned int)((r > 0xFFFFFFFFULL) ? 0xFFFFFFFFU : r); return 1;
   }
   if (strcmp(fname, "__builtin_usub_sat") == 0) {
@@ -3531,6 +3621,45 @@ int zcc_eval_const_bit_builtin2(const char *fname, long long arg0_bits, long lon
   if (strcmp(fname, "__builtin_umin32") == 0 || strcmp(fname, "__builtin_umax32") == 0) {
     unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
     *out_bits = (long long)(unsigned int)((fname[12] == 'i') ? ((a < b) ? a : b) : ((a > b) ? a : b)); return 1;
+  }
+  if (strcmp(fname, "__builtin_shadd") == 0 || strcmp(fname, "__builtin_srhadd") == 0) {
+    int a = (int)arg0_bits, b = (int)arg1_bits;
+    *out_bits = (long long)((fname[11] == 'r') ? ((a | b) - ((a ^ b) >> 1)) : ((a & b) + ((a ^ b) >> 1))); return 1;
+  }
+  if (strcmp(fname, "__builtin_uhadd") == 0 || strcmp(fname, "__builtin_urhadd") == 0) {
+    unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits;
+    *out_bits = (long long)(unsigned int)((fname[11] == 'r') ? ((a | b) - ((a ^ b) >> 1)) : ((a & b) + ((a ^ b) >> 1))); return 1;
+  }
+  if (strcmp(fname, "__builtin_sshl_sat") == 0) {
+    long long r = ((long long)(int)arg0_bits) << ((unsigned int)arg1_bits & 31U);
+    if (r > 2147483647LL) r = 2147483647LL;
+    else if (r < -2147483648LL) r = -2147483648LL;
+    *out_bits = (long long)(int)r; return 1;
+  }
+  if (strcmp(fname, "__builtin_ushl_sat") == 0) {
+    unsigned long long r = ((unsigned long long)(unsigned int)arg0_bits) << ((unsigned int)arg1_bits & 31U);
+    *out_bits = (long long)(unsigned int)((r > 0xFFFFFFFFULL) ? 0xFFFFFFFFU : r); return 1;
+  }
+  if (strcmp(fname, "__builtin_srshr") == 0) {
+    unsigned int s = (unsigned int)arg1_bits & 31U;
+    long long bias = (long long)((1U << s) >> 1);
+    *out_bits = (long long)(int)(((long long)(int)arg0_bits + bias) >> s); return 1;
+  }
+  if (strcmp(fname, "__builtin_urshr") == 0) {
+    unsigned int s = (unsigned int)arg1_bits & 31U;
+    unsigned long long bias = (unsigned long long)((1U << s) >> 1);
+    *out_bits = (long long)(unsigned int)(((unsigned long long)(unsigned int)arg0_bits + bias) >> s); return 1;
+  }
+  if (strcmp(fname, "__builtin_qdmulh") == 0 || strcmp(fname, "__builtin_qrdmulh") == 0) {
+    long long r = ((long long)(int)arg0_bits * (long long)(int)arg1_bits + ((fname[11] == 'r') ? (1LL << 30) : 0LL)) >> 31;
+    if (r > 2147483647LL) r = 2147483647LL;
+    else if (r < -2147483648LL) r = -2147483648LL;
+    *out_bits = (long long)(int)r; return 1;
+  }
+  if (strcmp(fname, "__builtin_qpauli_commute") == 0) {
+    unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits, m = ((a & (b >> 16)) ^ ((a >> 16) & b)) & 0xFFFFU;
+    int n = 0; while (m) { n ^= (int)(m & 1U); m >>= 1; }
+    *out_bits = n; return 1;
   }
   if (strcmp(fname, "__builtin_rotateleft32") == 0) {
     unsigned int v = (unsigned int)arg0_bits;
@@ -3917,6 +4046,92 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
       fprintf(cc->out, "%s    %s t2, %s, %s\n    neg t2, t2\n    xor t3, t0, t1\n    and t3, t3, t2\n    xor a0, t1, t3\n",
               is_u ? "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n" : "    sext.w t0, a0\n    sext.w t1, a1\n",
               is_u ? "sltu" : "slt", is_max ? "t1" : "t0", is_max ? "t0" : "t1");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_smul_sat") == 0 || strcmp(fn, "__builtin_umul_sat") == 0) {
+    int is_u = (fn[10] == 'u');
+    if (!backend_ops) {
+      if (!is_u) fprintf(cc->out, "    movslq %%%s, %%rax\n    movslq %%%s, %%rcx\n    imulq %%rcx, %%rax\n    movq %%rax, %%rcx\n    sarq $63, %%rcx\n    movq $2147483647, %%rdx\n    xorq %%rdx, %%rcx\n    movslq %%eax, %%rdx\n    cmpq %%rdx, %%rax\n    setne %%dl\n    movzbl %%dl, %%edx\n    negq %%rdx\n    xorq %%rax, %%rcx\n    andq %%rdx, %%rcx\n    xorq %%rcx, %%rax\n    movslq %%eax, %%rax\n", r32, s32);
+      else fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    imulq %%rcx, %%rax\n    movq %%rax, %%rdx\n    shrq $32, %%rdx\n    testq %%rdx, %%rdx\n    setne %%dl\n    movzbl %%dl, %%edx\n    negq %%rdx\n    orq %%rdx, %%rax\n    movl %%eax, %%eax\n", r32, s32);
+    } else if (is_a64) {
+      if (!is_u) fprintf(cc->out, "    smull x0, w0, w1\n    asr x2, x0, #63\n    eor w2, w2, #0x7fffffff\n    sxtw x3, w0\n    cmp x0, x3\n    csel w0, w2, w0, ne\n    sxtw x0, w0\n");
+      else fprintf(cc->out, "    umull x0, w0, w1\n    lsr x2, x0, #32\n    cmp x2, #0\n    csinv w0, w0, wzr, eq\n");
+    } else if (is_rv64) {
+      if (!is_u) fprintf(cc->out, "    sext.w t0, a0\n    sext.w t1, a1\n    mul t4, t0, t1\n    srai t2, t4, 63\n    li t3, 2147483647\n    xor t2, t2, t3\n    sext.w a0, t4\n    sub t4, t4, a0\n    snez t4, t4\n    neg t4, t4\n    xor t2, t2, a0\n    and t2, t2, t4\n    xor a0, a0, t2\n    sext.w a0, a0\n");
+      else fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    mul a0, t0, t1\n    srli t2, a0, 32\n    snez t2, t2\n    neg t2, t2\n    or a0, a0, t2\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_shadd") == 0 || strcmp(fn, "__builtin_srhadd") == 0 ||
+      strcmp(fn, "__builtin_uhadd") == 0 || strcmp(fn, "__builtin_urhadd") == 0) {
+    int is_u = (fn[10] == 'u'), is_rnd = (fn[11] == 'r');
+    if (!backend_ops) {
+      fprintf(cc->out, "    %s %%%s, %%%s\n    %s %%%s, %%%s\n    addq %%rcx, %%rax\n%s    %s $1, %%rax\n    %s\n",
+              is_u ? "movl" : "movslq", r32, is_u ? "eax" : "rax", is_u ? "movl" : "movslq", s32, is_u ? "ecx" : "rcx",
+              is_rnd ? "    addq $1, %rax\n" : "", is_u ? "shrq" : "sarq", is_u ? "movl %eax, %eax" : "movslq %eax, %rax");
+    } else if (is_a64) {
+      fprintf(cc->out, "    eor w2, w0, w1\n    %s w2, w2, #1\n    %s w0, w0, w1\n    %s w0, w0, w2\n%s",
+              is_u ? "lsr" : "asr", is_rnd ? "orr" : "and", is_rnd ? "sub" : "add", is_u ? "" : "    sxtw x0, w0\n");
+    } else if (is_rv64) {
+      if (!is_u) fprintf(cc->out, "    sext.w t0, a0\n    sext.w t1, a1\n    xor t2, t0, t1\n    srai t2, t2, 1\n    %s a0, t0, t1\n    %s a0, a0, t2\n    sext.w a0, a0\n", is_rnd ? "or" : "and", is_rnd ? "sub" : "add");
+      else fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    xor t2, t0, t1\n    srli t2, t2, 1\n    %s a0, t0, t1\n    %s a0, a0, t2\n    slli a0, a0, 32\n    srli a0, a0, 32\n", is_rnd ? "or" : "and", is_rnd ? "sub" : "add");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_sshl_sat") == 0 || strcmp(fn, "__builtin_ushl_sat") == 0) {
+    int is_u = (fn[10] == 'u');
+    if (!backend_ops) {
+      if (!is_u) fprintf(cc->out, "    movslq %%%s, %%rax\n    movl %%%s, %%ecx\n    andl $31, %%ecx\n    shlq %%cl, %%rax\n    movq %%rax, %%rcx\n    sarq $63, %%rcx\n    movq $2147483647, %%rdx\n    xorq %%rdx, %%rcx\n    movslq %%eax, %%rdx\n    cmpq %%rdx, %%rax\n    setne %%dl\n    movzbl %%dl, %%edx\n    negq %%rdx\n    xorq %%rax, %%rcx\n    andq %%rdx, %%rcx\n    xorq %%rcx, %%rax\n    movslq %%eax, %%rax\n", r32, s32);
+      else fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    andl $31, %%ecx\n    shlq %%cl, %%rax\n    movq %%rax, %%rdx\n    shrq $32, %%rdx\n    testq %%rdx, %%rdx\n    setne %%dl\n    movzbl %%dl, %%edx\n    negq %%rdx\n    orq %%rdx, %%rax\n    movl %%eax, %%eax\n", r32, s32);
+    } else if (is_a64) {
+      if (!is_u) fprintf(cc->out, "    sxtw x0, w0\n    and x1, x1, #31\n    lsl x0, x0, x1\n    asr x2, x0, #63\n    eor w2, w2, #0x7fffffff\n    sxtw x3, w0\n    cmp x0, x3\n    csel w0, w2, w0, ne\n    sxtw x0, w0\n");
+      else fprintf(cc->out, "    uxtw x0, w0\n    and x1, x1, #31\n    lsl x0, x0, x1\n    lsr x2, x0, #32\n    cmp x2, #0\n    csinv w0, w0, wzr, eq\n");
+    } else if (is_rv64) {
+      if (!is_u) fprintf(cc->out, "    sext.w t0, a0\n    andi t1, a1, 31\n    sll t4, t0, t1\n    srai t2, t4, 63\n    li t3, 2147483647\n    xor t2, t2, t3\n    sext.w a0, t4\n    sub t4, t4, a0\n    snez t4, t4\n    neg t4, t4\n    xor t2, t2, a0\n    and t2, t2, t4\n    xor a0, a0, t2\n    sext.w a0, a0\n");
+      else fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    andi t1, a1, 31\n    sll a0, t0, t1\n    srli t2, a0, 32\n    snez t2, t2\n    neg t2, t2\n    or a0, a0, t2\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_srshr") == 0 || strcmp(fn, "__builtin_urshr") == 0) {
+    int is_u = (fn[10] == 'u');
+    if (!backend_ops) {
+      fprintf(cc->out, "    %s %%%s, %%%s\n    movl %%%s, %%ecx\n    andl $31, %%ecx\n    movl $1, %%edx\n    shll %%cl, %%edx\n    shrl $1, %%edx\n    addq %%rdx, %%rax\n    %s %%cl, %%rax\n    %s\n",
+              is_u ? "movl" : "movslq", r32, is_u ? "eax" : "rax", s32, is_u ? "shrq" : "sarq", is_u ? "movl %eax, %eax" : "movslq %eax, %rax");
+    } else if (is_a64) {
+      fprintf(cc->out, "    %s x0, w0\n    and w1, w1, #31\n    mov w2, #1\n    lsl w2, w2, w1\n    lsr w2, w2, #1\n    add x0, x0, x2\n    %s x0, x0, x1\n%s",
+              is_u ? "uxtw" : "sxtw", is_u ? "lsr" : "asr", is_u ? "    mov w0, w0\n" : "    sxtw x0, w0\n");
+    } else if (is_rv64) {
+      if (!is_u) fprintf(cc->out, "    sext.w t0, a0\n    andi t1, a1, 31\n    li t2, 1\n    sllw t2, t2, t1\n    srliw t2, t2, 1\n    slli t2, t2, 32\n    srli t2, t2, 32\n    add t0, t0, t2\n    sra a0, t0, t1\n    sext.w a0, a0\n");
+      else fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    andi t1, a1, 31\n    li t2, 1\n    sllw t2, t2, t1\n    srliw t2, t2, 1\n    slli t2, t2, 32\n    srli t2, t2, 32\n    add t0, t0, t2\n    srl a0, t0, t1\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_qdmulh") == 0 || strcmp(fn, "__builtin_qrdmulh") == 0) {
+    int is_rnd = (fn[11] == 'r');
+    if (!backend_ops) {
+      fprintf(cc->out, "    movslq %%%s, %%rax\n    movslq %%%s, %%rcx\n    imulq %%rcx, %%rax\n%s    sarq $31, %%rax\n    movq %%rax, %%rcx\n    sarq $63, %%rcx\n    movq $2147483647, %%rdx\n    xorq %%rdx, %%rcx\n    movslq %%eax, %%rdx\n    cmpq %%rdx, %%rax\n    setne %%dl\n    movzbl %%dl, %%edx\n    negq %%rdx\n    xorq %%rax, %%rcx\n    andq %%rdx, %%rcx\n    xorq %%rcx, %%rax\n    movslq %%eax, %%rax\n",
+              r32, s32, is_rnd ? "    movq $1073741824, %rdx\n    addq %rdx, %rax\n" : "");
+    } else if (is_a64) {
+      fprintf(cc->out, "    smull x0, w0, w1\n%s    asr x0, x0, #31\n    asr x2, x0, #63\n    eor w2, w2, #0x7fffffff\n    sxtw x3, w0\n    cmp x0, x3\n    csel w0, w2, w0, ne\n    sxtw x0, w0\n",
+              is_rnd ? "    mov w2, #0x40000000\n    add x0, x0, x2\n" : "");
+    } else if (is_rv64) {
+      fprintf(cc->out, "    sext.w t0, a0\n    sext.w t1, a1\n    mul t4, t0, t1\n%s    srai t4, t4, 31\n    srai t2, t4, 63\n    li t3, 2147483647\n    xor t2, t2, t3\n    sext.w a0, t4\n    sub t4, t4, a0\n    snez t4, t4\n    neg t4, t4\n    xor t2, t2, a0\n    and t2, t2, t4\n    xor a0, a0, t2\n    sext.w a0, a0\n",
+              is_rnd ? "    li t2, 1073741824\n    add t4, t4, t2\n" : "");
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_qpauli_weight") == 0 || strcmp(fn, "__builtin_qpauli_commute") == 0) {
+    int is_c = (fn[17] == 'c'), lbl = cc->label_count++;
+    if (!backend_ops) {
+      if (!is_c) fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%eax, %%ecx\n    shrl $16, %%ecx\n    orl %%ecx, %%eax\n    movzwl %%ax, %%eax\n    popcntl %%eax, %%eax\n", r32);
+      else fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    movl %%ecx, %%edx\n    shrl $16, %%edx\n    andl %%eax, %%edx\n    shrl $16, %%eax\n    andl %%ecx, %%eax\n    xorl %%edx, %%eax\n    movzwl %%ax, %%eax\n    popcntl %%eax, %%eax\n    andl $1, %%eax\n", r32, s32);
+    } else if (is_a64) {
+      if (!is_c) fprintf(cc->out, "    orr w0, w0, w0, lsr #16\n    and w0, w0, #0xffff\n    fmov s0, w0\n    cnt v0.8b, v0.8b\n    uaddlv h0, v0.8b\n    fmov w0, s0\n");
+      else fprintf(cc->out, "    lsr w2, w1, #16\n    and w2, w0, w2\n    lsr w3, w0, #16\n    and w3, w3, w1\n    eor w0, w2, w3\n    and w0, w0, #0xffff\n    fmov s0, w0\n    cnt v0.8b, v0.8b\n    uaddlv h0, v0.8b\n    fmov w0, s0\n    and w0, w0, #1\n");
+    } else if (is_rv64) {
+      if (!is_c) fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    srli t1, t0, 16\n    or t0, t0, t1\n    li t1, 65535\n    and t0, t0, t1\n    li a0, 0\n.Lrv_qpw_l_%d:\n    beqz t0, .Lrv_qpw_d_%d\n    andi t1, t0, 1\n    add a0, a0, t1\n    srli t0, t0, 1\n    j .Lrv_qpw_l_%d\n.Lrv_qpw_d_%d:\n", lbl, lbl, lbl, lbl);
+      else fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    srli t2, t1, 16\n    and t2, t0, t2\n    srli t3, t0, 16\n    and t3, t3, t1\n    xor t0, t2, t3\n    li t1, 65535\n    and t0, t0, t1\n    li a0, 0\n.Lrv_qpc_l_%d:\n    beqz t0, .Lrv_qpc_d_%d\n    andi t1, t0, 1\n    xor a0, a0, t1\n    srli t0, t0, 1\n    j .Lrv_qpc_l_%d\n.Lrv_qpc_d_%d:\n", lbl, lbl, lbl, lbl);
     } else return 0;
     return 1;
   }

@@ -49,26 +49,28 @@ python3 -m unittest discover -s tests -p "test_wasm_mv02.py" -v
 echo "=== [WASM-MV-02] Gate 4C: Negative-Control Oracle Harness ==="
 python3 ZCC_ORACLE_NEGATIVE_CONTROLS.py
 
-echo "=== [ZCC-PROVE-23] Gate 4D: Peephole Truth Machine (Formal Z3 SMT + 5,000-State Differential Verification) ==="
+echo "=== [ZCC-PROVE-25..29] Gate 4D: Peephole Truth Machine (Formal Z3 SMT + 5,000-State Differential Verification) ==="
 python3 tools/zcc_prove_01.py --out-json "$EVIDENCE_DIR/zcc_prove_01.json"
 
-echo "=== [WASM-MV-32 / BITOPS-SSAD-MINMAX32-01 / ZCC-PROVE-23] Gate 5: 116-Mutation Adversarial Kill Ledger (MV02..MV32) ==="
+echo "=== [WASM-MV-34..38 / ZCC-PROVE-25..29] Gate 5: 140-Mutation Adversarial Kill Ledger (MV02..MV38) ==="
 python3 tools/mv02_mutation.py --repo "$ROOT" --run-ledger --out-json "$EVIDENCE_DIR/mv02_mutation_ledger.json"
 
-echo "=== [WASM-MV-32] Saving Patch & SHA-256 Artifact Hashes ==="
-git diff -- part0_pp.c part2.c part3.c part4.c part5.c part6_arm.c part6_riscv.c part6_wasm.c src/arm64_codegen.c src/riscv_codegen.c src/codegen.c src/x86_codegen_sse.c src/wasm_emit.c src/wasm_emit.h zcc_test_suite.sh BOOTSTRAP_BASELINES.tsv > "$EVIDENCE_DIR/wasm-mv02.patch"
+echo "=== [WASM-MV-34..38] Saving Patch & SHA-256 Artifact Hashes ==="
+git diff -- part0_pp.c part2.c part3.c part4.c part5.c part6_arm.c part6_riscv.c part6_wasm.c src/arm64_codegen.c src/riscv_codegen.c src/codegen.c src/x86_codegen_sse.c src/wasm_emit.c src/wasm_emit.h src/gfx/sdf_compiler.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_topological_qpu.c src/quantum/zcc_topological_qpu.h include/zcc_qasm.h src/zk/zcc_pq_light_client.c zcc_test_suite.sh BOOTSTRAP_BASELINES.tsv > "$EVIDENCE_DIR/wasm-mv02.patch"
 ./zcc -S tests/x86_mv02_imm64.c -o "$EVIDENCE_DIR/x86_mv02_imm64.s"
 sha256sum \
     "$EVIDENCE_DIR/wasm-mv02.patch" \
     "$EVIDENCE_DIR/x86_mv02_imm64.s" \
     "$EVIDENCE_DIR/zcc_prove_01.json" \
-    part0_pp.c part2.c part3.c part4.c part5.c part6_arm.c part6_riscv.c part6_wasm.c src/arm64_codegen.c src/riscv_codegen.c src/codegen.c src/x86_codegen_sse.c src/wasm_emit.c src/wasm_emit.h \
+    part0_pp.c part2.c part3.c part4.c part5.c part6_arm.c part6_riscv.c part6_wasm.c src/arm64_codegen.c src/riscv_codegen.c src/codegen.c src/x86_codegen_sse.c src/wasm_emit.c src/wasm_emit.h src/gfx/sdf_compiler.c \
+    src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_stabilizer.c src/quantum/zcc_topological_qpu.c src/quantum/zcc_topological_qpu.h include/zcc_qasm.h src/zk/zcc_pq_light_client.c circuits/qft_4qubit.qasm \
     zcc zcc2.s zcc3.s zcc2 zcc3 \
     tests/wasm_mv02_signedness.c tests/x86_mv02_imm64.c \
     tests/typedef_compatible.c tests/typedef_incompatible.c \
-    tests/test_wasm_i64.py tests/test_wasm_mv02.py \
+    tests/test_wasm_i64.py tests/test_wasm_mv02.py tests/test_qasm_opt.py tests/test_qasm_sim.py \
+    tests/test_qasm_stabilizer_gauntlet.c tests/test_zcc_topological_qpu_gauntlet.c \
     tools/mv02_mutation.py tools/zcc_prove_01.py scripts/run_mv02_gate.sh \
     "$EVIDENCE_DIR/mv02_mutation_ledger.json" | tee "$EVIDENCE_DIR/sha256sums.txt"
 
-echo "ALL WASM-MV-02..32 / ARCH-AUDIT-01..02 / BITOPS-SSAD-MINMAX32-01 / ZCC-PROVE-01..23 GATES PASSED (EXIT 0)"
+echo "ALL WASM-MV-02..38 / ARCH-AUDIT-01..02 / BITOPS-QPAULI-SYMPLECTIC-01 / Q1-Q5-QUANTUM-STACK / ZCC-PROVE-01..29 GATES PASSED (EXIT 0)"
 

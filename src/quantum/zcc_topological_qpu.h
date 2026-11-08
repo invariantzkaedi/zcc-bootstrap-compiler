@@ -73,7 +73,11 @@ bool topo_verify_fusion_rule(AnyonType a, AnyonType b, AnyonType result);
 
 /* T2: Artin Braid Group & Yang-Baxter Verification */
 bool topo_eval_braid_generator(uint32_t strand_idx, int8_t dir, TopoUnitary2x2 *out_u);
+bool topo_eval_fibonacci_braid_generator(uint32_t strand_idx, int8_t dir, TopoUnitary2x2 *out_u);
 bool topo_verify_yang_baxter_relation(void);
+double topo_yang_baxter_residual(AnyonType model);
+double topo_unitary_trace_fidelity(const TopoUnitary2x2 *a, const TopoUnitary2x2 *b);
+bool topo_braid_circuit_unitary(const TopoBraidCircuit *circuit, AnyonType model, TopoUnitary2x2 *out_u);
 
 /* T3: Solovay-Kitaev Topological Gate Compiler */
 bool topo_compile_unitary_to_braid(

@@ -2010,7 +2010,6 @@ mv12_consume_escaped_ptr:
     movq $999999, %rax
     pushq %rax
     movslq -200(%rbp), %rax
-    cltq
     movq %rax, %r11
     popq %rax
     addq %r11, %rax
@@ -2112,10 +2111,8 @@ mv12_tco_caller:
     pushq %rax
     movq $10, %rax
     cltq
-    pushq %rax
-    movq -24(%rbp), %rax
-    movq %rax, %rdi
-    popq %rsi
+    movq %rax, %rsi
+    movq -24(%rbp), %rdi
     popq %rdx
     xorl %eax, %eax
     movq %rsp, %r11
@@ -3136,10 +3133,8 @@ main:
     movq $200, %rax
     pushq %rax
     movq $100, %rax
-    pushq %rax
-    movq $9, %rax
-    movq %rax, %rdi
-    popq %rsi
+    movq %rax, %rsi
+    movq $9, %rdi
     popq %rdx
     xorl %eax, %eax
     movq %rsp, %r11

@@ -94,16 +94,17 @@ bool pqlc_compute_algebraic_hash(const uint64_t state[4], uint64_t out_digest[4]
             s[i] = pqlc_field_add(s[i], (uint64_t)(round * 0x9E3779B97F4A7C15ULL + i + 1));
         }
 
-        /* Maximum Distance Separable (MDS) Linear Diffusion Matrix */
-        uint64_t m0 = pqlc_field_add(pqlc_field_add(s[0], s[1]), pqlc_field_add(s[2], s[3]));
-        uint64_t m1 = pqlc_field_add(pqlc_field_add(s[0], s[1]), pqlc_field_add(s[2], s[3]));
-        uint64_t m2 = pqlc_field_add(pqlc_field_add(s[0], s[1]), pqlc_field_add(s[2], s[3]));
-        uint64_t m3 = pqlc_field_add(pqlc_field_add(s[0], s[1]), pqlc_field_add(s[2], s[3]));
+        /* Maximum Distance Separable (MDS) Linear Diffusion Matrix: circ(2, 3, 1, 1) */
+        uint64_t sum = pqlc_field_add(pqlc_field_add(s[0], s[1]), pqlc_field_add(s[2], s[3]));
+        uint64_t n0 = pqlc_field_add(sum, pqlc_field_add(s[0], pqlc_field_mul(2, s[1])));
+        uint64_t n1 = pqlc_field_add(sum, pqlc_field_add(s[1], pqlc_field_mul(2, s[2])));
+        uint64_t n2 = pqlc_field_add(sum, pqlc_field_add(s[2], pqlc_field_mul(2, s[3])));
+        uint64_t n3 = pqlc_field_add(sum, pqlc_field_add(s[3], pqlc_field_mul(2, s[0])));
 
-        s[0] = pqlc_field_add(s[0], m0);
-        s[1] = pqlc_field_add(s[1], m1);
-        s[2] = pqlc_field_add(s[2], m2);
-        s[3] = pqlc_field_add(s[3], m3);
+        s[0] = n0;
+        s[1] = n1;
+        s[2] = n2;
+        s[3] = n3;
     }
 
     for (int i = 0; i < 4; i++) out_digest[i] = s[i];

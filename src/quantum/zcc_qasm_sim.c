@@ -826,12 +826,33 @@ static int execute_op(ZCCQasmSimulator *sim, const ZCCQasmCircuit *circ, const Z
     }
 
     if (op->kind == QASM_OP_RESET) {
+        if (n_qbound == 0 && op->qubits[0].index < 0) {
+            const ZCCQasmRegister *qreg = find_sim_reg(circ, op->qubits[0].reg_name);
+            if (qreg) {
+                int k;
+                for (k = 0; k < qreg->size; k++) {
+                    sim_reset_qubit(sim, (size_t)(qreg->base_offset + k));
+                }
+                return 1;
+            }
+        }
         size_t qidx = resolve_bound_qubit(circ, &op->qubits[0], qubit_names, qubit_indices, n_qbound);
         sim_reset_qubit(sim, qidx);
         return 1;
     }
 
     if (op->kind == QASM_OP_MEASURE) {
+        if (n_qbound == 0 && op->qubits[0].index < 0 && op->meas_target.index < 0) {
+            const ZCCQasmRegister *qreg = find_sim_reg(circ, op->qubits[0].reg_name);
+            const ZCCQasmRegister *creg = find_sim_reg(circ, op->meas_target.reg_name);
+            if (qreg && creg) {
+                int k, limit = qreg->size < creg->size ? qreg->size : creg->size;
+                for (k = 0; k < limit; k++) {
+                    sim_measure_qubit(sim, (size_t)(qreg->base_offset + k), (size_t)(creg->base_offset + k));
+                }
+                return 1;
+            }
+        }
         size_t qidx = resolve_bound_qubit(circ, &op->qubits[0], qubit_names, qubit_indices, n_qbound);
         size_t cidx = resolve_clbit_idx(circ, &op->meas_target);
         sim_measure_qubit(sim, qidx, cidx);

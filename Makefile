@@ -11,7 +11,7 @@ FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TEL
 FORTIFY_PACK_DIR ?= fortify_zcc_clean
 
 PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c part6_riscv.c part6_wasm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c
-PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c src/opt/q_licm_pass.c src/opt/cap_tripwire.c src/evm/evm2native_pass.c src/evm/evm2native_fuzzer.c src/zk/zk_air_trace.c src/zk/zk_witness_bridge.c src/zk/zk_stark_emit.c src/codegen/avxzkd_jit_x86.c src/engine/zcc_hyper_engine.c src/ai/bare_gguf_jit.c src/optics/optiqpu_emitter.c src/dynamic/oneiro_kernel.c src/crypto/fhe_encrypted_ssa.c src/crypto/lattice_guard.c src/concurrency/chrono_spec.c src/neuromorphic/zcc_neuromorphic.c src/vector/zcc_hyper_vector_db.c src/quantum/zcc_topological_qpu.c src/physics/zcc_celestial_nbody.c src/zk/zcc_pq_light_client.c src/security/zcc_enclave_seal.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c src/zcc_binary_vector_engine.c
+PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c src/opt/q_licm_pass.c src/opt/cap_tripwire.c src/evm/evm2native_pass.c src/evm/evm2native_fuzzer.c src/zk/zk_air_trace.c src/zk/zk_witness_bridge.c src/zk/zk_stark_emit.c src/codegen/avxzkd_jit_x86.c src/engine/zcc_hyper_engine.c src/ai/bare_gguf_jit.c src/optics/optiqpu_emitter.c src/dynamic/oneiro_kernel.c src/crypto/fhe_encrypted_ssa.c src/crypto/lattice_guard.c src/concurrency/chrono_spec.c src/neuromorphic/zcc_neuromorphic.c src/vector/zcc_hyper_vector_db.c src/quantum/zcc_topological_qpu.c src/physics/zcc_celestial_nbody.c src/zk/zcc_pq_light_client.c src/security/zcc_enclave_seal.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_stabilizer.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c src/zcc_binary_vector_engine.c
 COMPAT_SMOKE_SRCS = \
 	exp1_raytracer_simd.c \
 	exp2_voxel_engine.c \
@@ -195,6 +195,12 @@ test-triton-bridge: src/quantum/zcc_triton_bridge.c tests/test_triton_bridge.c i
 test-topological-qpu: src/quantum/zcc_topological_qpu.c tests/test_zcc_topological_qpu_gauntlet.c src/quantum/zcc_topological_qpu.h
 	$(CC) -O3 -Iinclude -I. src/quantum/zcc_topological_qpu.c tests/test_zcc_topological_qpu_gauntlet.c -o /tmp/test_topological_qpu -lm
 	/tmp/test_topological_qpu
+
+.PHONY: test-qasm-stabilizer
+
+test-qasm-stabilizer: src/quantum/zcc_qasm_stabilizer.c tests/test_qasm_stabilizer_gauntlet.c include/zcc_qasm.h
+	$(CC) -O2 -Iinclude -I. src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_stabilizer.c tests/test_qasm_stabilizer_gauntlet.c -o /tmp/test_qasm_stabilizer -lm
+	/tmp/test_qasm_stabilizer
 
 # =========================================================================
 # ZKAEDI Temporal Drift Substrate Target
@@ -533,7 +539,7 @@ check-qasm: zcc
 	@echo "=== [4/6] Running OpenQASM 2.0 Standalone C Code Generator Test Suite ==="
 	@python3 tests/test_qasm_sim_c.py
 	@echo "=== [5/6] Running C API Native Quantum Tests ==="
-	@gcc -O2 -Iinclude -I. -o /tmp/test_qasm_c_api tests/test_qasm_c_api.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c -lm
+	@gcc -O2 -Iinclude -I. -o /tmp/test_qasm_c_api tests/test_qasm_c_api.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_stabilizer.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c -lm
 	@/tmp/test_qasm_c_api
 	@echo "=== [6/6] Running Multi-Dimensional Multi-Diagonal Quantum Torture Gauntlet ==="
 	@python3 tests/test_quantum_multidimensional_gauntlet.py

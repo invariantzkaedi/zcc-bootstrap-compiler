@@ -236,6 +236,88 @@ static int qasm_gate_is_fusible_rotation(ZCCQasmOpKind kind) {
     }
 }
 
+/* Discrete Clifford+T Z-axis phase octant (k * pi/4 mod 2*pi, k in 1..7) */
+static int qasm_discrete_z_octant(ZCCQasmOpKind kind) {
+    switch (kind) {
+        case QASM_OP_T:   return 1;
+        case QASM_OP_S:   return 2;
+        case QASM_OP_Z:   return 4;
+        case QASM_OP_SDG: return 6;
+        case QASM_OP_TDG: return 7;
+        default:          return 0;
+    }
+}
+
+static void qasm_set_discrete_z_octant_gate(ZCCQasmOp *op, int octant) {
+    switch (octant & 7) {
+        case 1:
+            op->kind = QASM_OP_T;
+            strncpy(op->gate_name, "t", sizeof(op->gate_name) - 1);
+            break;
+        case 2:
+            op->kind = QASM_OP_S;
+            strncpy(op->gate_name, "s", sizeof(op->gate_name) - 1);
+            break;
+        case 4:
+            op->kind = QASM_OP_Z;
+            strncpy(op->gate_name, "z", sizeof(op->gate_name) - 1);
+            break;
+        case 6:
+            op->kind = QASM_OP_SDG;
+            strncpy(op->gate_name, "sdg", sizeof(op->gate_name) - 1);
+            break;
+        case 7:
+            op->kind = QASM_OP_TDG;
+            strncpy(op->gate_name, "tdg", sizeof(op->gate_name) - 1);
+            break;
+        default:
+            break;
+    }
+}
+
+static int qasm_op_is_diagonal_z(const ZCCQasmOp *op) {
+    if (!op || op->has_condition) return 0;
+    switch (op->kind) {
+        case QASM_OP_ID:
+        case QASM_OP_Z:
+        case QASM_OP_S:
+        case QASM_OP_SDG:
+        case QASM_OP_T:
+        case QASM_OP_TDG:
+        case QASM_OP_RZ:
+        case QASM_OP_P:
+        case QASM_OP_U1:
+        case QASM_OP_CZ:
+        case QASM_OP_CRZ:
+        case QASM_OP_CU1:
+        case QASM_OP_RZZ:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+static int qasm_op_is_x_basis_1q(const ZCCQasmOp *op) {
+    if (!op || op->has_condition) return 0;
+    return (op->kind == QASM_OP_X || op->kind == QASM_OP_RX);
+}
+
+static int qasm_qubit_refs_equal(const ZCCQasmQubitRef *a, const ZCCQasmQubitRef *b) {
+    if (!a || !b) return 0;
+    return (a->index == b->index && strcmp(a->reg_name, b->reg_name) == 0);
+}
+
+static int qasm_op_touches_qubit(const ZCCQasmOp *op, const ZCCQasmQubitRef *q) {
+    if (!op || !q) return 1;
+    for (int i = 0; i < op->num_qubits; i++) {
+        if (strcmp(op->qubits[i].reg_name, q->reg_name) == 0 &&
+            (op->qubits[i].index == q->index || op->qubits[i].index == -1 || q->index == -1)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int qasm_same_operands(const ZCCQasmOp *a, const ZCCQasmOp *b) {
     if (!a || !b) return 0;
     if (a->num_qubits != b->num_qubits) return 0;
@@ -276,8 +358,42 @@ static int qasm_ops_share_qubit(const ZCCQasmOp *a, const ZCCQasmOp *b) {
 
 static int qasm_ops_can_commute_disjoint(const ZCCQasmOp *a, const ZCCQasmOp *b) {
     if (qasm_op_is_rewrite_barrier(a) || qasm_op_is_rewrite_barrier(b)) return 0;
-    if (qasm_ops_share_qubit(a, b)) return 0;
-    return 1;
+    if (!qasm_ops_share_qubit(a, b)) return 1;
+
+    /* C1. All Z-diagonal operators commute with one another on shared wires */
+    if (qasm_op_is_diagonal_z(a) && qasm_op_is_diagonal_z(b)) return 1;
+
+    /* C2. Z-diagonal gate commutes across CNOT control wire (if disjoint from target) */
+    if (a->kind == QASM_OP_CX && a->num_qubits == 2 && qasm_op_is_diagonal_z(b)) {
+        if (!qasm_op_touches_qubit(b, &a->qubits[1])) return 1;
+    }
+    if (b->kind == QASM_OP_CX && b->num_qubits == 2 && qasm_op_is_diagonal_z(a)) {
+        if (!qasm_op_touches_qubit(a, &b->qubits[1])) return 1;
+    }
+
+    /* C3. X-basis 1Q gate (X, Rx) commutes across CNOT target wire */
+    if (a->kind == QASM_OP_CX && a->num_qubits == 2 && qasm_op_is_x_basis_1q(b) && b->num_qubits == 1) {
+        if (qasm_qubit_refs_equal(&b->qubits[0], &a->qubits[1]) &&
+            !qasm_qubit_refs_equal(&b->qubits[0], &a->qubits[0])) {
+            return 1;
+        }
+    }
+    if (b->kind == QASM_OP_CX && b->num_qubits == 2 && qasm_op_is_x_basis_1q(a) && a->num_qubits == 1) {
+        if (qasm_qubit_refs_equal(&a->qubits[0], &b->qubits[1]) &&
+            !qasm_qubit_refs_equal(&a->qubits[0], &b->qubits[0])) {
+            return 1;
+        }
+    }
+
+    /* C4. Two CNOTs CX(c1, t1) and CX(c2, t2) commute iff c1 != t2 and c2 != t1 */
+    if (a->kind == QASM_OP_CX && b->kind == QASM_OP_CX && a->num_qubits == 2 && b->num_qubits == 2) {
+        if (!qasm_qubit_refs_equal(&a->qubits[0], &b->qubits[1]) &&
+            !qasm_qubit_refs_equal(&b->qubits[0], &a->qubits[1])) {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 /* ================================================================ */
@@ -325,6 +441,17 @@ static int qasm_try_cancel_inverse_pair(const ZCCQasmOp *a, const ZCCQasmOp *b) 
     return qasm_same_operands(a, b);
 }
 
+static int qasm_discrete_z_pair_reducible(const ZCCQasmOp *a, const ZCCQasmOp *b) {
+    if (!a || !b || a->has_condition || b->has_condition) return 0;
+    int oa = qasm_discrete_z_octant(a->kind);
+    int ob = qasm_discrete_z_octant(b->kind);
+    if (oa == 0 || ob == 0) return 0;
+    if (!qasm_same_operands(a, b)) return 0;
+    int sum = (oa + ob) & 7;
+    /* Octants 0, 1, 2, 4, 6, 7 reduce 2 gates to 0 or 1 gate */
+    return (sum != 3 && sum != 5);
+}
+
 typedef enum {
     ZCC_REWRITE_NONE = 0,
     ZCC_REWRITE_DELETE_BOTH,
@@ -354,9 +481,11 @@ static ZCCRewriteAction qasm_try_fuse_rotations(ZCCQasmOp *a, const ZCCQasmOp *b
 }
 
 static int qasm_ops_are_cancellable_or_fusible(const ZCCQasmOp *a, const ZCCQasmOp *b, double eps) {
+    (void)eps;
     if (!a || !b) return 0;
     if (qasm_try_cancel_self_inverse(a, b)) return 1;
     if (qasm_try_cancel_inverse_pair(a, b)) return 1;
+    if (qasm_discrete_z_pair_reducible(a, b)) return 1;
     if (a->kind == b->kind && qasm_gate_is_fusible_rotation(a->kind) && qasm_same_operands(a, b)) {
         if (a->num_params == 1 && b->num_params == 1 && a->params[0] && b->params[0]) {
             int ok1 = 0, ok2 = 0;
@@ -458,42 +587,24 @@ static int qasm_opt_local_pass(QasmOpArray *arr, const ZCCQasmOptConfig *cfg, ZC
             continue;
         }
 
-        /* 4. Algebraic 2-Gate Peephole (S S -> Z, T T -> S, Sdg Sdg -> Z, Tdg Tdg -> Sdg) */
-        if (qasm_same_operands(a, b)) {
-            if (a->kind == QASM_OP_S && b->kind == QASM_OP_S) {
-                a->kind = QASM_OP_Z;
-                strncpy(a->gate_name, "z", sizeof(a->gate_name) - 1);
-                op_array_remove_at(arr, i + 1);
-                stats->gates_removed++;
+        /* 4. Z8 Discrete Clifford+T Phase Octant Fusion (T, S, Z, Sdg, Tdg) */
+        if (qasm_discrete_z_pair_reducible(a, b)) {
+            int sum = (qasm_discrete_z_octant(a->kind) + qasm_discrete_z_octant(b->kind)) & 7;
+            if (sum == 0) {
+                op_array_remove_two(arr, i);
+                stats->gates_removed += 2;
                 stats->rewrite_count++;
                 changed = 1;
+                if (i > 0) i--;
                 continue;
-            }
-            if (a->kind == QASM_OP_T && b->kind == QASM_OP_T) {
-                a->kind = QASM_OP_S;
-                strncpy(a->gate_name, "s", sizeof(a->gate_name) - 1);
+            } else {
+                qasm_set_discrete_z_octant_gate(a, sum);
                 op_array_remove_at(arr, i + 1);
                 stats->gates_removed++;
+                stats->gates_fused++;
                 stats->rewrite_count++;
                 changed = 1;
-                continue;
-            }
-            if (a->kind == QASM_OP_SDG && b->kind == QASM_OP_SDG) {
-                a->kind = QASM_OP_Z;
-                strncpy(a->gate_name, "z", sizeof(a->gate_name) - 1);
-                op_array_remove_at(arr, i + 1);
-                stats->gates_removed++;
-                stats->rewrite_count++;
-                changed = 1;
-                continue;
-            }
-            if (a->kind == QASM_OP_TDG && b->kind == QASM_OP_TDG) {
-                a->kind = QASM_OP_SDG;
-                strncpy(a->gate_name, "sdg", sizeof(a->gate_name) - 1);
-                op_array_remove_at(arr, i + 1);
-                stats->gates_removed++;
-                stats->rewrite_count++;
-                changed = 1;
+                if (i > 0) i--;
                 continue;
             }
         }
@@ -510,6 +621,7 @@ static int qasm_opt_local_pass(QasmOpArray *arr, const ZCCQasmOptConfig *cfg, ZC
                     stats->gates_removed += 2;
                     stats->rewrite_count++;
                     changed = 1;
+                    if (i > 0) i--;
                     continue;
                 }
                 if (a->kind == QASM_OP_H && b->kind == QASM_OP_X && c->kind == QASM_OP_H) {
@@ -520,12 +632,80 @@ static int qasm_opt_local_pass(QasmOpArray *arr, const ZCCQasmOptConfig *cfg, ZC
                     stats->gates_removed += 2;
                     stats->rewrite_count++;
                     changed = 1;
+                    if (i > 0) i--;
                     continue;
                 }
             }
         }
 
-        /* 4. Rotation angle fusion (Rx(a) Rx(b) -> Rx(a+b)) */
+        /* 6. Hadamard CNOT-Direction Inversion: H(c) H(t) CX(c,t) H(c) H(t) -> CX(t,c) */
+        if (i + 4 < arr->count) {
+            ZCCQasmOp *o0 = arr->ops[i];
+            ZCCQasmOp *o1 = arr->ops[i + 1];
+            ZCCQasmOp *o2 = arr->ops[i + 2];
+            ZCCQasmOp *o3 = arr->ops[i + 3];
+            ZCCQasmOp *o4 = arr->ops[i + 4];
+            if (!qasm_op_is_rewrite_barrier(o0) && !qasm_op_is_rewrite_barrier(o1) &&
+                !qasm_op_is_rewrite_barrier(o2) && !qasm_op_is_rewrite_barrier(o3) &&
+                !qasm_op_is_rewrite_barrier(o4) &&
+                o0->kind == QASM_OP_H && o1->kind == QASM_OP_H &&
+                o2->kind == QASM_OP_CX && o2->num_qubits == 2 &&
+                o3->kind == QASM_OP_H && o4->kind == QASM_OP_H) {
+                const ZCCQasmQubitRef *qc = &o2->qubits[0];
+                const ZCCQasmQubitRef *qt = &o2->qubits[1];
+                int pre_ok = (qasm_qubit_refs_equal(&o0->qubits[0], qc) && qasm_qubit_refs_equal(&o1->qubits[0], qt)) ||
+                             (qasm_qubit_refs_equal(&o0->qubits[0], qt) && qasm_qubit_refs_equal(&o1->qubits[0], qc));
+                int post_ok = (qasm_qubit_refs_equal(&o3->qubits[0], qc) && qasm_qubit_refs_equal(&o4->qubits[0], qt)) ||
+                              (qasm_qubit_refs_equal(&o3->qubits[0], qt) && qasm_qubit_refs_equal(&o4->qubits[0], qc));
+                if (pre_ok && post_ok) {
+                    ZCCQasmQubitRef tmp_q = o2->qubits[0];
+                    o2->qubits[0] = o2->qubits[1];
+                    o2->qubits[1] = tmp_q;
+                    op_array_remove_at(arr, i + 4);
+                    op_array_remove_at(arr, i + 3);
+                    op_array_remove_at(arr, i + 1);
+                    op_array_remove_at(arr, i);
+                    stats->gates_removed += 4;
+                    stats->rewrite_count++;
+                    changed = 1;
+                    if (i > 0) i--;
+                    continue;
+                }
+            }
+        }
+
+        /* 7. ZX-Calculus CNOT-Phase Gadget Target Diagonal Commutation:
+         *    CX(c,t); D1(t); CX(c,t); D_mid(t); CX(c,t) -> D_mid(t); CX(c,t); D1(t); CX(c,t); CX(c,t)
+         *    Because CX(c,t) D1(t) CX(c,t) = exp(-i theta/2 Z_c Z_t) is diagonal in the Z basis,
+         *    it commutes with any 1Q Z-diagonal gate D_mid(t) on the target wire, exposing
+         *    adjacent CX(c,t); CX(c,t) cancellation. */
+        if (i + 4 < arr->count) {
+            ZCCQasmOp *g0 = arr->ops[i];
+            ZCCQasmOp *g1 = arr->ops[i + 1];
+            ZCCQasmOp *g2 = arr->ops[i + 2];
+            ZCCQasmOp *g3 = arr->ops[i + 3];
+            ZCCQasmOp *g4 = arr->ops[i + 4];
+            if (!qasm_op_is_rewrite_barrier(g0) && !qasm_op_is_rewrite_barrier(g1) &&
+                !qasm_op_is_rewrite_barrier(g2) && !qasm_op_is_rewrite_barrier(g3) &&
+                !qasm_op_is_rewrite_barrier(g4) &&
+                g0->kind == QASM_OP_CX && g2->kind == QASM_OP_CX && g4->kind == QASM_OP_CX &&
+                qasm_same_operands(g0, g2) && qasm_same_operands(g2, g4) &&
+                qasm_op_is_diagonal_z(g1) && g1->num_qubits == 1 &&
+                qasm_op_is_diagonal_z(g3) && g3->num_qubits == 1 &&
+                qasm_qubit_refs_equal(&g1->qubits[0], &g0->qubits[1]) &&
+                qasm_qubit_refs_equal(&g3->qubits[0], &g0->qubits[1])) {
+                arr->ops[i]     = g3;
+                arr->ops[i + 1] = g0;
+                arr->ops[i + 2] = g1;
+                arr->ops[i + 3] = g2;
+                stats->gates_slid += 3;
+                stats->rewrite_count++;
+                changed = 1;
+                continue;
+            }
+        }
+
+        /* 8. Rotation angle fusion (Rx(a) Rx(b) -> Rx(a+b)) */
         ZCCRewriteAction action = qasm_try_fuse_rotations(a, b, cfg->angle_epsilon);
         if (action == ZCC_REWRITE_DELETE_BOTH) {
             op_array_remove_two(arr, i);

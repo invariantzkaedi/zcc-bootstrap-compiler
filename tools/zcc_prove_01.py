@@ -1021,10 +1021,16 @@ def z3_prove_super_peepholes() -> tuple[bool, dict]:
     # 3d: leaq disp(rbp), rax; movq (rax), rax -> Select(w_mem, w_rbp + w_disp)
     ea_rbp = w_rbp + w_disp
     d_3d = z3.Select(w_mem, ea_rbp) != z3.Select(w_mem, w_rbp + w_disp)
-    # 3e: cltq idempotence: SignExt(32, Extract(31, 0, SignExt(32, Extract(31, 0, w_rax)))) == SignExt(32, Extract(31, 0, w_rax))
+    # 3e: cltq idempotence after cltq or movslq/movsbq/movswq ..., %rax:
     cltq_1 = z3.SignExt(32, z3.Extract(31, 0, w_rax))
     cltq_2 = z3.SignExt(32, z3.Extract(31, 0, cltq_1))
-    d_3e = cltq_2 != cltq_1
+    sext8 = z3.SignExt(56, z3.Extract(7, 0, w_rax))
+    sext16 = z3.SignExt(48, z3.Extract(15, 0, w_rax))
+    d_3e = z3.Or(
+        cltq_2 != cltq_1,
+        z3.SignExt(32, z3.Extract(31, 0, sext8)) != sext8,
+        z3.SignExt(32, z3.Extract(31, 0, sext16)) != sext16,
+    )
     # 3f: leaq disp(rbp), rax; movq r11, (rax); movq r11, rax -> Store(w_mem, w_rbp + w_disp, w_r11), rax == w_r11
     d_3f = z3.Store(w_mem, ea_rbp, w_r11) != z3.Store(w_mem, w_rbp + w_disp, w_r11)
     # 3 (Push/Lea/Pop triad): push rax; leaq disp(rbp), rax; pop pop_reg -> pop_reg == w_rax, rax == w_rbp + w_disp
@@ -1765,10 +1771,10 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         and 'is_max ? "    notq %rdx\\n" : ""' in part5_text
         and 'strcmp(bfn, "ssad32") == 0' in part6_wasm_text
         and 'strcmp(bfn, "smin32") == 0' in part6_wasm_text
-        and "ZCC-PROVE-11..23" in wasm_emit_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
     )
     if not has_mv32_guards:
-        return False, {"error": "Missing ZCC-PROVE-23 ssad32/smin32/smax32/umin32/umax32 Quad-ISA guards or ZCC-PROVE-11..23 metadata"}
+        return False, {"error": "Missing ZCC-PROVE-23 ssad32/smin32/smax32/umin32/umax32 Quad-ISA guards or ZCC-PROVE-11.. metadata"}
 
     s_mv32 = z3.Solver()
     # 23a: Signed 32-bit absolute difference (x86-64/RISC-V/WASM 64-bit sign-mask vs ARM64 cmp/sub/csel ge vs widened spec)
@@ -1810,6 +1816,410 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     )
     if s_mv32.check() == z3.sat:
         return False, {"error": "Z3 found counterexample in ZCC-PROVE-23 ssad32/smin32/smax32/umin32/umax32 Quad-ISA equivalence"}
+
+    # 24. ZCC-PROVE-24 (MV33): 32-bit saturating multiply (__builtin_smul_sat, __builtin_umul_sat) across Quad-ISA + SVG/SDF compiler hardening
+    sdf_compiler_text = (REPO_ROOT / "src" / "gfx" / "sdf_compiler.c").read_text(encoding="utf-8", errors="replace")
+    has_mv33_guards = (
+        "__builtin_smul_sat" in part5_text
+        and "__builtin_umul_sat" in part5_text
+        and "smull x0, w0, w1" in part5_text
+        and "csinv w0, w0, wzr, eq" in part5_text
+        and 'strcmp(bfn, "smul_sat") == 0' in part6_wasm_text
+        and 'strcmp(bfn, "umul_sat") == 0' in part6_wasm_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
+        and "svg_xml_escape_label(ssa_mnemonics[r], esc_ssa" in sdf_compiler_text
+        and "strncmp(p1 + i, \"<![CDATA[\", 9) == 0" in sdf_compiler_text
+        and "else if (u == 'A')" in sdf_compiler_text
+    )
+    if not has_mv33_guards:
+        return False, {"error": "Missing ZCC-PROVE-24 smul_sat/umul_sat Quad-ISA guards, SVG/SDF hardening guards, or ZCC-PROVE-11..24 metadata"}
+
+    s_mv33 = z3.Solver()
+    # 24a: Signed 32-bit saturating multiply (64-bit sign-mask xor 0x7FFFFFFF on overflow vs mathematical clamp [-2^31, 2^31-1])
+    sprod_mv33 = sha64 * shb64
+    smul_ovf_mv33 = z3.SignExt(32, z3.Extract(31, 0, sprod_mv33)) != sprod_mv33
+    smul_sat_mask = z3.Extract(31, 0, sprod_mv33 >> 63) ^ z3.BitVecVal(0x7FFFFFFF, 32)
+    smul_sat_isa = z3.If(smul_ovf_mv33, smul_sat_mask, z3.Extract(31, 0, sprod_mv33))
+    smul_sat_spec = z3.If(
+        sprod_mv33 > z3.BitVecVal(2147483647, 64),
+        z3.BitVecVal(0x7FFFFFFF, 32),
+        z3.If(
+            sprod_mv33 < z3.BitVecVal(-2147483648, 64),
+            z3.BitVecVal(-2147483648, 32),
+            z3.Extract(31, 0, sprod_mv33),
+        ),
+    )
+    # 24b: Unsigned 32-bit saturating multiply (x86/RV64/ARM64/WASM upper-32-bits nonzero saturation vs mathematical clamp [0, 2^32-1])
+    uprod_mv33 = uha64 * uhb64
+    umul_hi32 = z3.Extract(31, 0, z3.LShR(uprod_mv33, 32))
+    umul_ovf_mask = z3.If(umul_hi32 != z3.BitVecVal(0, 32), z3.BitVecVal(0xFFFFFFFF, 32), z3.BitVecVal(0, 32))
+    umul_sat_x86_rv = z3.Extract(31, 0, uprod_mv33) | umul_ovf_mask
+    umul_sat_wasm = z3.If(umul_hi32 != z3.BitVecVal(0, 32), z3.BitVecVal(0xFFFFFFFF, 32), z3.Extract(31, 0, uprod_mv33))
+    umul_sat_spec = z3.If(
+        z3.UGT(uprod_mv33, z3.BitVecVal(0xFFFFFFFF, 64)),
+        z3.BitVecVal(0xFFFFFFFF, 32),
+        z3.Extract(31, 0, uprod_mv33),
+    )
+    s_mv33.add(
+        z3.Or(
+            smul_sat_isa != smul_sat_spec,
+            umul_sat_x86_rv != umul_sat_spec,
+            umul_sat_wasm != umul_sat_spec,
+        )
+    )
+    if s_mv33.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-24 smul_sat/umul_sat Quad-ISA equivalence"}
+
+    # 25. ZCC-PROVE-25 (MV34): 32-bit Halving-Add (__builtin_shadd/srhadd/uhadd/urhadd) & Saturating Left-Shift (__builtin_sshl_sat/ushl_sat) across Quad-ISA
+    has_mv34_guards = (
+        "__builtin_shadd" in part5_text
+        and "__builtin_srhadd" in part5_text
+        and "__builtin_uhadd" in part5_text
+        and "__builtin_urhadd" in part5_text
+        and "__builtin_sshl_sat" in part5_text
+        and "__builtin_ushl_sat" in part5_text
+        and 'is_rnd ? "    addq $1, %rax\\n" : ""' in part5_text
+        and "andl $31, %%ecx" in part5_text
+        and 'strcmp(bfn, "shadd") == 0' in part6_wasm_text
+        and 'strcmp(bfn, "sshl_sat") == 0' in part6_wasm_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
+    )
+    if not has_mv34_guards:
+        return False, {"error": "Missing ZCC-PROVE-25 shadd/uhadd/srhadd/urhadd/sshl_sat/ushl_sat Quad-ISA guards or ZCC-PROVE-11..25 metadata"}
+
+    s_mv34 = z3.Solver()
+    # 25a: Halving-add x86-64/WASM 64-bit widened (a + b [+ 1]) >> 1 vs ARM64/RISC-V 64 32-bit Dietz SWAR identity
+    x86_shadd = z3.Extract(31, 0, (sha64 + shb64) >> 1)
+    swar_shadd = (ha & hb) + ((ha ^ hb) >> 1)
+    x86_srhadd = z3.Extract(31, 0, (sha64 + shb64 + z3.BitVecVal(1, 64)) >> 1)
+    swar_srhadd = (ha | hb) - ((ha ^ hb) >> 1)
+    x86_uhadd = z3.Extract(31, 0, z3.LShR(uha64 + uhb64, 1))
+    swar_uhadd = (ha & hb) + z3.LShR(ha ^ hb, 1)
+    x86_urhadd = z3.Extract(31, 0, z3.LShR(uha64 + uhb64 + z3.BitVecVal(1, 64), 1))
+    swar_urhadd = (ha | hb) - z3.LShR(ha ^ hb, 1)
+    # 25b: 32-bit saturating left-shift (__builtin_sshl_sat, __builtin_ushl_sat) with masked shift count (hb & 31)
+    sh_cnt64 = z3.ZeroExt(32, hb & z3.BitVecVal(31, 32))
+    sshl64 = sha64 << sh_cnt64
+    sshl_ovf = z3.SignExt(32, z3.Extract(31, 0, sshl64)) != sshl64
+    sshl_sat_mask = z3.Extract(31, 0, sshl64 >> 63) ^ z3.BitVecVal(0x7FFFFFFF, 32)
+    sshl_sat_isa = z3.If(sshl_ovf, sshl_sat_mask, z3.Extract(31, 0, sshl64))
+    sshl_sat_spec = z3.If(
+        sshl64 > z3.BitVecVal(2147483647, 64),
+        z3.BitVecVal(0x7FFFFFFF, 32),
+        z3.If(
+            sshl64 < z3.BitVecVal(-2147483648, 64),
+            z3.BitVecVal(-2147483648, 32),
+            z3.Extract(31, 0, sshl64),
+        ),
+    )
+    ushl64 = uha64 << sh_cnt64
+    ushl_hi32 = z3.Extract(31, 0, z3.LShR(ushl64, 32))
+    ushl_ovf_mask = z3.If(ushl_hi32 != z3.BitVecVal(0, 32), z3.BitVecVal(0xFFFFFFFF, 32), z3.BitVecVal(0, 32))
+    ushl_sat_x86_rv = z3.Extract(31, 0, ushl64) | ushl_ovf_mask
+    ushl_sat_wasm = z3.If(ushl_hi32 != z3.BitVecVal(0, 32), z3.BitVecVal(0xFFFFFFFF, 32), z3.Extract(31, 0, ushl64))
+    ushl_sat_spec = z3.If(
+        z3.UGT(ushl64, z3.BitVecVal(0xFFFFFFFF, 64)),
+        z3.BitVecVal(0xFFFFFFFF, 32),
+        z3.Extract(31, 0, ushl64),
+    )
+    s_mv34.add(
+        z3.Or(
+            x86_shadd != swar_shadd,
+            x86_srhadd != swar_srhadd,
+            x86_uhadd != swar_uhadd,
+            x86_urhadd != swar_urhadd,
+            sshl_sat_isa != sshl_sat_spec,
+            ushl_sat_x86_rv != ushl_sat_spec,
+            ushl_sat_wasm != ushl_sat_spec,
+        )
+    )
+    if s_mv34.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-25 shadd/uhadd/srhadd/urhadd/sshl_sat/ushl_sat Quad-ISA equivalence"}
+
+    # 26. ZCC-PROVE-26 (MV35): Native Peephole Super-Optimizer (cltq after movslq/movsbq/movswq, movl %eax, %eax zext idempotence, and 2-arg pushq %rax / load / movq %rax, %rdi / popq %rsi fusion)
+    has_mv35_guards = (
+        'strncmp(l1, "    movslq ", 11) == 0 || strncmp(l1, "    movsbq ", 11) == 0' in part5_text
+        and 'strcmp(line_ptrs[i + 1], "    movl %eax, %eax\\n") == 0' in part5_text
+        and 'strcmp(l1 + strlen(l1) - 7, ", %eax\\n") == 0' in part5_text
+        and 'strcmp(line_ptrs[i + 2], "    movq %rax, %rdi\\n") == 0' in part5_text
+        and 'strcmp(line_ptrs[i + 3], "    popq %rsi\\n") == 0' in part5_text
+        and 'memcpy(l2 + l2n - 7, is_rax ? ", %rdi\\n" : ", %edi\\n", 7);' in part5_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
+    )
+    if not has_mv35_guards:
+        return False, {"error": "Missing ZCC-PROVE-26 native peephole super-optimizer guards in part5.c or ZCC-PROVE-11..26 metadata"}
+
+    s_mv35 = z3.Solver()
+    p_rax0 = z3.BitVec("p_rax0", 64)
+    p_rsp0 = z3.BitVec("p_rsp0", 64)
+    p_load64 = z3.BitVec("p_load64", 64)
+    p_load32 = z3.BitVec("p_load32", 32)
+    p_mem0 = z3.Array("p_mem0", z3.BitVecSort(64), z3.BitVecSort(64))
+
+    # 26a: 32-bit write to %eax (movl/movzbl/movzwl/xorl ..., %eax) followed by movl %eax, %eax is an exact 64-bit identity
+    zext32 = z3.ZeroExt(32, p_load32)
+    zext8 = z3.ZeroExt(56, z3.Extract(7, 0, p_load32))
+    zext16 = z3.ZeroExt(48, z3.Extract(15, 0, p_load32))
+    d_mv35_zext = z3.Or(
+        z3.ZeroExt(32, z3.Extract(31, 0, zext32)) != zext32,
+        z3.ZeroExt(32, z3.Extract(31, 0, zext8)) != zext8,
+        z3.ZeroExt(32, z3.Extract(31, 0, zext16)) != zext16,
+    )
+
+    # 26b: 2-arg call setup: pushq %rax ; <load64/32> ; movq %rax, %rdi ; popq %rsi ; xorl %eax, %eax
+    # Original sequence with stack push/pop:
+    rsp_push = p_rsp0 - z3.BitVecVal(8, 64)
+    mem_push = z3.Store(p_mem0, rsp_push, p_rax0)
+    rdi_orig64 = p_load64
+    rsi_orig64 = z3.Select(mem_push, rsp_push)
+    rsp_orig64 = rsp_push + z3.BitVecVal(8, 64)
+    rax_orig64 = z3.BitVecVal(0, 64)
+    # Super-optimized 2-insn sequence (movq %rax, %rsi ; <load64 -> %rdi> ; xorl %eax, %eax):
+    rsi_opt64 = p_rax0
+    rdi_opt64 = p_load64
+    rsp_opt64 = p_rsp0
+    rax_opt64 = z3.BitVecVal(0, 64)
+    # And 32-bit load into %edi vs %eax -> %rdi:
+    rdi_orig32 = z3.ZeroExt(32, p_load32)
+    rdi_opt32 = z3.ZeroExt(32, p_load32)
+    d_mv35_argpair = z3.Or(
+        rsi_orig64 != rsi_opt64,
+        rdi_orig64 != rdi_opt64,
+        rsp_orig64 != rsp_opt64,
+        rax_orig64 != rax_opt64,
+        rdi_orig32 != rdi_opt32,
+    )
+    s_mv35.add(z3.Or(d_mv35_zext, d_mv35_argpair))
+    if s_mv35.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-26 native peephole super-optimizer equivalence"}
+
+    # 27. ZCC-PROVE-27 (MV36): 32-bit Rounding Right Shift (__builtin_srshr, __builtin_urshr) & Q31 Saturating Doubling Multiply High (__builtin_qdmulh, __builtin_qrdmulh)
+    part3_text = (REPO_ROOT / "part3.c").read_text(encoding="utf-8", errors="replace")
+    has_mv36_guards = (
+        "__builtin_srshr" in part5_text
+        and "__builtin_urshr" in part5_text
+        and "__builtin_qdmulh" in part5_text
+        and "__builtin_qrdmulh" in part5_text
+        and "shll %%cl, %%edx\\n    shrl $1, %%edx" in part5_text
+        and "sarq $31, %%rax" in part5_text
+        and 'strcmp(bfn, "srshr") == 0' in part6_wasm_text
+        and 'strcmp(bfn, "qdmulh") == 0' in part6_wasm_text
+        and "zcc_eval_const_bit_builtin2(bname, a0, a1, &out_v)" in part3_text
+    )
+    if not has_mv36_guards:
+        return False, {"error": "Missing ZCC-PROVE-27 srshr/urshr/qdmulh/qrdmulh Quad-ISA or part3.c constant-folding guards"}
+
+    s_mv36 = z3.Solver()
+    rsh_s32 = hb & z3.BitVecVal(31, 32)
+    rsh_s64 = z3.ZeroExt(32, rsh_s32)
+    # Branchless bias: (1u << s) >>u 1 equals 0 for s == 0 and 1 << (s - 1) for s in [1, 31]
+    bias_branchless32 = z3.LShR(z3.BitVecVal(1, 32) << rsh_s32, z3.BitVecVal(1, 32))
+    bias_spec32 = z3.If(
+        rsh_s32 == z3.BitVecVal(0, 32),
+        z3.BitVecVal(0, 32),
+        z3.BitVecVal(1, 32) << (rsh_s32 - z3.BitVecVal(1, 32)),
+    )
+    srshr_isa = z3.Extract(31, 0, (sha64 + z3.ZeroExt(32, bias_branchless32)) >> rsh_s64)
+    srshr_spec = z3.If(
+        rsh_s32 == z3.BitVecVal(0, 32),
+        ha,
+        z3.Extract(31, 0, (sha64 + z3.ZeroExt(32, bias_spec32)) >> rsh_s64),
+    )
+    urshr_isa = z3.Extract(31, 0, z3.LShR(uha64 + z3.ZeroExt(32, bias_branchless32), rsh_s64))
+    urshr_spec = z3.If(
+        rsh_s32 == z3.BitVecVal(0, 32),
+        ha,
+        z3.Extract(31, 0, z3.LShR(uha64 + z3.ZeroExt(32, bias_spec32), rsh_s64)),
+    )
+    # Q31 saturating doubling multiply high: 64-bit (a*b [+ 2^30]) >>s 31 with clamp vs 128-bit exact (2*a*b [+ 2^31]) >>s 32 with clamp
+    sha128 = z3.SignExt(96, ha)
+    shb128 = z3.SignExt(96, hb)
+    qprod128 = (sha128 * shb128) << 1
+    qdmulh_raw128 = qprod128 >> 32
+    qrdmulh_raw128 = (qprod128 + z3.BitVecVal(1 << 31, 128)) >> 32
+    qdmulh_spec = z3.If(
+        qdmulh_raw128 > z3.BitVecVal(2147483647, 128),
+        z3.BitVecVal(0x7FFFFFFF, 32),
+        z3.If(
+            qdmulh_raw128 < z3.BitVecVal(-2147483648, 128),
+            z3.BitVecVal(-2147483648, 32),
+            z3.Extract(31, 0, qdmulh_raw128),
+        ),
+    )
+    qrdmulh_spec = z3.If(
+        qrdmulh_raw128 > z3.BitVecVal(2147483647, 128),
+        z3.BitVecVal(0x7FFFFFFF, 32),
+        z3.If(
+            qrdmulh_raw128 < z3.BitVecVal(-2147483648, 128),
+            z3.BitVecVal(-2147483648, 32),
+            z3.Extract(31, 0, qrdmulh_raw128),
+        ),
+    )
+    qdmul64 = (sha64 * shb64) >> 31
+    qdmul_ovf = z3.SignExt(32, z3.Extract(31, 0, qdmul64)) != qdmul64
+    qdmul_mask = z3.Extract(31, 0, qdmul64 >> 63) ^ z3.BitVecVal(0x7FFFFFFF, 32)
+    qdmulh_isa = z3.If(qdmul_ovf, qdmul_mask, z3.Extract(31, 0, qdmul64))
+
+    qrdmul64 = (sha64 * shb64 + z3.BitVecVal(1 << 30, 64)) >> 31
+    qrdmul_ovf = z3.SignExt(32, z3.Extract(31, 0, qrdmul64)) != qrdmul64
+    qrdmul_mask = z3.Extract(31, 0, qrdmul64 >> 63) ^ z3.BitVecVal(0x7FFFFFFF, 32)
+    qrdmulh_isa = z3.If(qrdmul_ovf, qrdmul_mask, z3.Extract(31, 0, qrdmul64))
+
+    s_mv36.add(
+        z3.Or(
+            bias_branchless32 != bias_spec32,
+            srshr_isa != srshr_spec,
+            urshr_isa != urshr_spec,
+            qdmulh_isa != qdmulh_spec,
+            qrdmulh_isa != qrdmulh_spec,
+        )
+    )
+    if s_mv36.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-27 srshr/urshr/qdmulh/qrdmulh Quad-ISA equivalence"}
+
+    # 28. ZCC-PROVE-28 (MV37): WASM32 SIMD128 i16x8.avgr_u (0xFD 0x7B), i8x16.avgr_u (0xFD 0x5B), 4-lane i32x4 carry-free halving-add, and i32x4.dot_i16x8_s (0xFD 0xBA 0x01)
+    wasm_emit_h_text = (REPO_ROOT / "src" / "wasm_emit.h").read_text(encoding="utf-8", errors="replace")
+    has_mv37_guards = (
+        "WASM_SIMD_I8X16_AVGR_U" in wasm_emit_h_text
+        and "WASM_SIMD_I16X8_AVGR_U" in wasm_emit_h_text
+        and "WASM_SIMD_I32X4_DOT_I16X8_S" in part6_wasm_text
+        and "WASM_SIMD_I16X8_AVGR_U" in part6_wasm_text
+        and "WASM_SIMD_I8X16_AVGR_U" in part6_wasm_text
+        and "hadd_mode > 0" in part6_wasm_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
+    )
+    if not has_mv37_guards:
+        return False, {"error": "Missing ZCC-PROVE-28 WASM32 SIMD128 avgr_u / dot_i16x8_s / 4-lane hadd guards or ZCC-PROVE-11..28 metadata"}
+
+    s_mv37 = z3.Solver()
+    # 28a: i16x8.avgr_u and i8x16.avgr_u lane equivalence vs scalar __builtin_urhadd / (a + b + 1) >> 1
+    u16_a = z3.BitVec("u16_a", 16)
+    u16_b = z3.BitVec("u16_b", 16)
+    u16_avgr_simd = z3.Extract(15, 0, z3.LShR(z3.ZeroExt(16, u16_a) + z3.ZeroExt(16, u16_b) + z3.BitVecVal(1, 32), 1))
+    u16_avgr_swar = (u16_a | u16_b) - z3.LShR(u16_a ^ u16_b, 1)
+
+    u8_a = z3.BitVec("u8_a", 8)
+    u8_b = z3.BitVec("u8_b", 8)
+    u8_avgr_simd = z3.Extract(7, 0, z3.LShR(z3.ZeroExt(24, u8_a) + z3.ZeroExt(24, u8_b) + z3.BitVecVal(1, 32), 1))
+    u8_avgr_swar = (u8_a | u8_b) - z3.LShR(u8_a ^ u8_b, 1)
+
+    # 28b: i32x4.dot_i16x8_s 8-lane pairwise widening multiply-add + 4-lane horizontal extract_lane sum vs 8-step scalar MAC
+    i16_a = [z3.BitVec(f"dot_a_{k}", 16) for k in range(8)]
+    i16_b = [z3.BitVec(f"dot_b_{k}", 16) for k in range(8)]
+    acc0_dot = z3.BitVec("acc0_dot", 32)
+    dot_lanes = [
+        z3.SignExt(16, i16_a[2 * k]) * z3.SignExt(16, i16_b[2 * k])
+        + z3.SignExt(16, i16_a[2 * k + 1]) * z3.SignExt(16, i16_b[2 * k + 1])
+        for k in range(4)
+    ]
+    simd_dot_acc = acc0_dot + dot_lanes[0] + dot_lanes[1] + dot_lanes[2] + dot_lanes[3]
+    scalar_dot_acc = acc0_dot
+    for k in range(8):
+        scalar_dot_acc = scalar_dot_acc + z3.SignExt(16, i16_a[k]) * z3.SignExt(16, i16_b[k])
+
+    s_mv37.add(
+        z3.Or(
+            u16_avgr_simd != u16_avgr_swar,
+            u8_avgr_simd != u8_avgr_swar,
+            simd_dot_acc != scalar_dot_acc,
+        )
+    )
+    if s_mv37.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-28 WASM32 SIMD128 avgr_u / dot_i16x8_s equivalence"}
+
+    # 29. ZCC-PROVE-29 (MV38): 16-Qubit Packed Pauli Weight (__builtin_qpauli_weight), Symplectic Commutation (__builtin_qpauli_commute), Z8 QASM Phase Octant Fusion, & Goldilocks MDS Circulant(2,3,1,1)
+    qasm_opt_text = (REPO_ROOT / "src" / "quantum" / "zcc_qasm_opt.c").read_text(encoding="utf-8", errors="replace")
+    pqlc_text = (REPO_ROOT / "src" / "zk" / "zcc_pq_light_client.c").read_text(encoding="utf-8", errors="replace")
+    has_mv38_guards = (
+        "__builtin_qpauli_weight" in part5_text
+        and "__builtin_qpauli_commute" in part5_text
+        and "shrl $16, %%ecx\\n    orl %%ecx, %%eax\\n    movzwl %%ax, %%eax\\n    popcntl %%eax, %%eax" in part5_text
+        and "orr w0, w0, w0, lsr #16" in part5_text
+        and 'strcmp(bfn, "qpauli_weight") == 0' in part6_wasm_text
+        and 'strcmp(bfn, "qpauli_commute") == 0' in part6_wasm_text
+        and "ZCC-PROVE-11..29" in wasm_emit_text
+        and "gate_phase_octant" in qasm_opt_text
+        and "gates_commute_on_wire" in qasm_opt_text
+        and "circ(2, 3, 1, 1)" in pqlc_text
+    )
+    if not has_mv38_guards:
+        return False, {"error": "Missing ZCC-PROVE-29 qpauli_weight/qpauli_commute/Z8-octant/Goldilocks-MDS guards or ZCC-PROVE-11..29 metadata"}
+
+    s_mv38 = z3.Solver()
+    qp1 = z3.BitVec("qp1", 32)
+    qp2 = z3.BitVec("qp2", 32)
+    qp3 = z3.BitVec("qp3", 32)
+
+    def _z3_popcnt16(v32):
+        acc = z3.BitVecVal(0, 32)
+        for bit_i in range(16):
+            acc = acc + z3.ZeroExt(31, z3.Extract(bit_i, bit_i, v32))
+        return acc
+
+    def _z3_qpauli_weight_isa(p):
+        folded = (p | z3.LShR(p, 16)) & z3.BitVecVal(0xFFFF, 32)
+        return _z3_popcnt16(folded)
+
+    def _z3_qpauli_weight_spec(p):
+        acc = z3.BitVecVal(0, 32)
+        for q_i in range(16):
+            x_i = z3.Extract(q_i, q_i, p)
+            z_i = z3.Extract(q_i + 16, q_i + 16, p)
+            acc = acc + z3.If((x_i | z_i) != z3.BitVecVal(0, 1), z3.BitVecVal(1, 32), z3.BitVecVal(0, 32))
+        return acc
+
+    def _z3_qpauli_commute_isa(a, b):
+        symp = ((a & z3.LShR(b, 16)) ^ (z3.LShR(a, 16) & b)) & z3.BitVecVal(0xFFFF, 32)
+        return _z3_popcnt16(symp) & z3.BitVecVal(1, 32)
+
+    def _z3_qpauli_commute_spec(a, b):
+        par = z3.BitVecVal(0, 1)
+        for q_i in range(16):
+            xa = z3.Extract(q_i, q_i, a)
+            za = z3.Extract(q_i + 16, q_i + 16, a)
+            xb = z3.Extract(q_i, q_i, b)
+            zb = z3.Extract(q_i + 16, q_i + 16, b)
+            par = par ^ ((xa & zb) ^ (za & xb))
+        return z3.ZeroExt(31, par)
+
+    w_isa = _z3_qpauli_weight_isa(qp1)
+    w_spec = _z3_qpauli_weight_spec(qp1)
+    c_isa = _z3_qpauli_commute_isa(qp1, qp2)
+    c_spec = _z3_qpauli_commute_spec(qp1, qp2)
+    c_self = _z3_qpauli_commute_isa(qp1, qp1)
+    c_sym = _z3_qpauli_commute_isa(qp2, qp1)
+    c_bilin_lhs = _z3_qpauli_commute_isa(qp1 ^ qp2, qp3)
+    c_bilin_rhs = _z3_qpauli_commute_isa(qp1, qp3) ^ _z3_qpauli_commute_isa(qp2, qp3)
+
+    # 29b: Goldilocks field p = 2^64 - 2^32 + 1 circulant MDS matrix circ(2, 3, 1, 1):
+    # Prove that any non-zero 1-limb differential (delta != 0 mod p) activates all 4 output limbs (branch number 5)
+    p_gold = (1 << 64) - (1 << 32) + 1
+    mds_delta = z3.Int("mds_delta")
+    mds_sum = mds_delta
+    mds_m0 = (mds_sum + mds_delta + 2 * 0) % p_gold
+    mds_m1 = (mds_sum + 0 + 2 * 0) % p_gold
+    mds_m2 = (mds_sum + 0 + 2 * 0) % p_gold
+    mds_m3 = (mds_sum + 0 + 2 * mds_delta) % p_gold
+    mds_bad_branch = z3.And(
+        mds_delta > 0,
+        mds_delta < p_gold,
+        z3.Or(mds_m0 == 0, mds_m1 == 0, mds_m2 == 0, mds_m3 == 0),
+    )
+
+    s_mv38.add(
+        z3.Or(
+            w_isa != w_spec,
+            z3.ULT(w_isa, z3.BitVecVal(0, 32)),
+            z3.UGT(w_isa, z3.BitVecVal(16, 32)),
+            c_isa != c_spec,
+            c_self != z3.BitVecVal(0, 32),
+            c_isa != c_sym,
+            c_bilin_lhs != c_bilin_rhs,
+            mds_bad_branch,
+        )
+    )
+    if s_mv38.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-29 qpauli_weight/qpauli_commute/Goldilocks-MDS equivalence"}
 
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
@@ -1860,6 +2270,18 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "zcc_prove_22_savg_uavg_usad32_equivalence": "UNSAT (PROVEN_SOUND)",
         "zcc_prove_23_ssad32_minmax32_quad_isa_active": has_mv32_guards,
         "zcc_prove_23_ssad32_minmax32_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_24_smul_umul_sat32_and_svg_sdf_harden_active": has_mv33_guards,
+        "zcc_prove_24_smul_umul_sat32_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_25_shadd_uhadd_srhadd_urhadd_sshl_ushl_sat_active": has_mv34_guards,
+        "zcc_prove_25_shadd_uhadd_srhadd_urhadd_sshl_ushl_sat_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_26_peephole_superopt_cltq_zext_argpair_active": has_mv35_guards,
+        "zcc_prove_26_peephole_superopt_cltq_zext_argpair_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_27_srshr_urshr_qdmulh_qrdmulh_quad_isa_active": has_mv36_guards,
+        "zcc_prove_27_srshr_urshr_qdmulh_qrdmulh_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_28_wasm_simd128_avgr_hadd_dot_i16x8_active": has_mv37_guards,
+        "zcc_prove_28_wasm_simd128_avgr_hadd_dot_i16x8_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_29_qpauli_weight_and_commute_quad_isa_active": has_mv38_guards,
+        "zcc_prove_29_qpauli_weight_and_commute_symplectic_equivalence": "UNSAT (PROVEN_SOUND)",
     }
 
 

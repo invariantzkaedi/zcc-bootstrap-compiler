@@ -327,17 +327,31 @@ cx q[0],q[1];
         self.assertIn("h q[2];", out)
 
     def test_20_negative_same_wire_interference(self):
+        # Non-commuting, non-conjugating H-T-H on same wire must NOT cancel H gates
         qasm = """OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[1];
+h q[0];
+t q[0];
+h q[0];
+"""
+        rc, out, err = run_zcc_opt(qasm)
+        self.assertEqual(rc, 0, f"Opt failed: {err}")
+        self.assertEqual(out.count("h q[0];"), 2)
+        self.assertIn("t q[0];", out)
+
+        # Hadamard Pauli conjugation: H X H -> Z and H Z H -> X
+        qasm_hxh = """OPENQASM 2.0;
 include "qelib1.inc";
 qreg q[1];
 h q[0];
 x q[0];
 h q[0];
 """
-        rc, out, err = run_zcc_opt(qasm)
-        self.assertEqual(rc, 0, f"Opt failed: {err}")
-        self.assertEqual(out.count("h q[0];"), 2)
-        self.assertIn("x q[0];", out)
+        rc2, out2, err2 = run_zcc_opt(qasm_hxh)
+        self.assertEqual(rc2, 0, f"Opt failed: {err2}")
+        self.assertNotIn("h q[0];", out2)
+        self.assertIn("z q[0];", out2)
 
     def test_21_reversed_cx_non_cancellation(self):
         qasm = """OPENQASM 2.0;
@@ -560,6 +574,90 @@ x q[0];
         self.assertEqual(rc, 0, f"Opt failed: {err}")
         self.assertNotIn("h q[0];", out)
         self.assertNotIn("x q[0];", out)
+
+    def test_33_z8_phase_octant_t_count_reduction(self):
+        # T + S + T = Z (reduces two T gates + one S gate to a single Clifford Z gate)
+        qasm = """OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[1];
+t q[0];
+s q[0];
+t q[0];
+"""
+        rc, out, err = run_zcc_opt(qasm)
+        self.assertEqual(rc, 0, f"Opt failed: {err}")
+        self.assertNotIn("t q[0];", out)
+        self.assertNotIn("s q[0];", out)
+        self.assertIn("z q[0];", out)
+        _, sim_orig, _ = run_zcc_sim(qasm)
+        _, sim_opt, _ = run_zcc_sim(out)
+        assert_statevectors_equivalent_up_to_global_phase(self, parse_statevector_dump(sim_orig), parse_statevector_dump(sim_opt))
+
+    def test_34_diagonal_commutation_across_cnot_control_and_cz(self):
+        # T on CNOT control wire slides across CX and CZ to cancel Tdg
+        qasm = """OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[2];
+h q[0];
+t q[0];
+cx q[0],q[1];
+cz q[0],q[1];
+tdg q[0];
+"""
+        rc, out, err = run_zcc_opt(qasm)
+        self.assertEqual(rc, 0, f"Opt failed: {err}")
+        self.assertNotIn("t q[0];", out)
+        self.assertNotIn("tdg q[0];", out)
+        _, sim_orig, _ = run_zcc_sim(qasm)
+        _, sim_opt, _ = run_zcc_sim(out)
+        assert_statevectors_equivalent_up_to_global_phase(self, parse_statevector_dump(sim_orig), parse_statevector_dump(sim_opt))
+
+    def test_35_hadamard_cnot_direction_inversion(self):
+        # H(c) H(t) CX(c,t) H(c) H(t) -> CX(t,c)
+        qasm = """OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[2];
+ry(0.7) q[0];
+rx(0.4) q[1];
+h q[0];
+h q[1];
+cx q[0],q[1];
+h q[0];
+h q[1];
+"""
+        rc, out, err = run_zcc_opt(qasm)
+        self.assertEqual(rc, 0, f"Opt failed: {err}")
+        self.assertNotIn("h q[0];", out)
+        self.assertNotIn("h q[1];", out)
+        self.assertIn("cx q[1], q[0];", out)
+        _, sim_orig, _ = run_zcc_sim(qasm)
+        _, sim_opt, _ = run_zcc_sim(out)
+        assert_statevectors_equivalent_up_to_global_phase(self, parse_statevector_dump(sim_orig), parse_statevector_dump(sim_opt))
+
+    def test_36_zx_phase_gadget_fusion_t_elimination(self):
+        # Two CX-T-CX parity phase gadgets separated by a target Z-diagonal gate S(q[1])
+        # fuse into a single CX-S-CX gadget, eliminating both T gates!
+        qasm = """OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[2];
+h q[0];
+h q[1];
+cx q[0],q[1];
+t q[1];
+cx q[0],q[1];
+s q[1];
+cx q[0],q[1];
+t q[1];
+cx q[0],q[1];
+"""
+        rc, out, err = run_zcc_opt(qasm)
+        self.assertEqual(rc, 0, f"Opt failed: {err}")
+        self.assertNotIn("t q[1];", out)
+        self.assertEqual(out.count("cx q[0], q[1];"), 2)
+        self.assertEqual(out.count("s q[1];"), 2)
+        _, sim_orig, _ = run_zcc_sim(qasm)
+        _, sim_opt, _ = run_zcc_sim(out)
+        assert_statevectors_equivalent_up_to_global_phase(self, parse_statevector_dump(sim_orig), parse_statevector_dump(sim_opt))
 
 
 if __name__ == "__main__":

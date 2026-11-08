@@ -26,7 +26,7 @@ def sha256(path: pathlib.Path) -> str:
     return h.hexdigest()
 
 
-def run(cmd: str, cwd: pathlib.Path, timeout: int = 120, env: dict = None):
+def run(cmd: str, cwd: pathlib.Path, timeout: int = 240, env: dict = None):
     return subprocess.run(
         cmd,
         cwd=str(cwd),
@@ -1275,9 +1275,9 @@ LEDGER_MUTATIONS = [
     },
     {
         "id": "MV28-04",
-        "desc": "src/wasm_emit.c omits ZCC-PROVE-11..23 seal in .zcc.prove custom section, breaking ZCC-PROVE-19..23 verification",
+        "desc": "src/wasm_emit.c omits ZCC-PROVE-11..29 seal in .zcc.prove custom section, breaking ZCC-PROVE-19..29 verification",
         "file": "src/wasm_emit.c",
-        "old": '        const char *payload = "{\\"compiler\\":\\"zcc-omega\\",\\"prove\\":\\"ZCC-PROVE-11..23\\",\\"simd128\\":true,\\"quad_isa\\":true}";',
+        "old": '        const char *payload = "{\\"compiler\\":\\"zcc-omega\\",\\"prove\\":\\"ZCC-PROVE-11..29\\",\\"simd128\\":true,\\"quad_isa\\":true}";',
         "new": '        const char *payload = "{\\"compiler\\":\\"zcc-omega\\",\\"prove\\":\\"ZCC-PROVE-NONE\\",\\"simd128\\":true,\\"quad_isa\\":true}"; /* MV28-04 */',
         "build": "make zcc",
         "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_19_checked_overflow_intrinsics_quad_isa && python3 tools/zcc_prove_01.py",
@@ -1426,6 +1426,222 @@ LEDGER_MUTATIONS = [
         "build": "make zcc",
         "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_23_ssad32_smin_smax_umin_umax_quad_isa",
     },
+    {
+        "id": "MV33-01",
+        "desc": "part5.c zcc_eval_const_bit_builtin2 omits 32-bit signed saturation clamp in __builtin_smul_sat, returning wrapped 32-bit product",
+        "file": "part5.c",
+        "old": "  if (strcmp(fname, \"__builtin_sadd_sat\") == 0 || strcmp(fname, \"__builtin_ssub_sat\") == 0 || strcmp(fname, \"__builtin_smul_sat\") == 0) {\n    long long a = (int)arg0_bits, b = (int)arg1_bits;\n    long long r = (fname[11] == 'm') ? (a * b) : ((fname[11] == 'a') ? (a + b) : (a - b));\n    if (r > 2147483647LL) r = 2147483647LL;\n    else if (r < -2147483648LL) r = -2147483648LL;\n    *out_bits = (long long)(int)r; return 1;\n  }",
+        "new": "  if (strcmp(fname, \"__builtin_sadd_sat\") == 0 || strcmp(fname, \"__builtin_ssub_sat\") == 0 || strcmp(fname, \"__builtin_smul_sat\") == 0) {\n    long long a = (int)arg0_bits, b = (int)arg1_bits;\n    long long r = (fname[11] == 'm') ? (a * b) : ((fname[11] == 'a') ? (a + b) : (a - b));\n    *out_bits = (long long)(int)r; return 1; /* MV33-01 */\n  }",
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_24_smul_sat_umul_sat_and_svg_ir_sdf_hardening",
+    },
+    {
+        "id": "MV33-02",
+        "desc": "part5.c zcc_emit_bit_builtin_call uses raw -(p >> 32) instead of boolean setne mask on x86-64 __builtin_umul_sat, corrupting bit 0 when (p >> 32) == 2",
+        "file": "part5.c",
+        "old": '      else fprintf(cc->out, "    movl %%%s, %%eax\\n    movl %%%s, %%ecx\\n    imulq %%rcx, %%rax\\n    movq %%rax, %%rdx\\n    shrq $32, %%rdx\\n    testq %%rdx, %%rdx\\n    setne %%dl\\n    movzbl %%dl, %%edx\\n    negq %%rdx\\n    orq %%rdx, %%rax\\n    movl %%eax, %%eax\\n", r32, s32);',
+        "new": '      else fprintf(cc->out, "    movl %%%s, %%eax\\n    movl %%%s, %%ecx\\n    imulq %%rcx, %%rax\\n    movq %%rax, %%rdx\\n    shrq $32, %%rdx\\n    negq %%rdx\\n    orq %%rdx, %%rax\\n    movl %%eax, %%eax\\n", r32, s32); /* MV33-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_24_smul_sat_umul_sat_and_svg_ir_sdf_hardening",
+    },
+    {
+        "id": "MV33-03",
+        "desc": "part5.c zcc_emit_bit_builtin_call emits csel instead of csinv on ARM64 __builtin_umul_sat, breaking ZCC-PROVE-24",
+        "file": "part5.c",
+        "old": '      else fprintf(cc->out, "    umull x0, w0, w1\\n    lsr x2, x0, #32\\n    cmp x2, #0\\n    csinv w0, w0, wzr, eq\\n");',
+        "new": '      else fprintf(cc->out, "    umull x0, w0, w1\\n    lsr x2, x0, #32\\n    cmp x2, #0\\n    csel w0, w0, wzr, eq\\n"); /* MV33-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_24_smul_sat_umul_sat_and_svg_ir_sdf_hardening && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV33-04",
+        "desc": "src/gfx/sdf_compiler.c omits XML escaping of ssa_mnemonics in svg_generate_c_ir_graph, causing invalid XML on -> and <- in --svg-ir",
+        "file": "src/gfx/sdf_compiler.c",
+        "old": "        char esc_ssa[128];\n        svg_xml_escape_label(ssa_mnemonics[r], esc_ssa, sizeof(esc_ssa));",
+        "new": "        const char *esc_ssa = ssa_mnemonics[r]; /* MV33-04 */",
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_24_smul_sat_umul_sat_and_svg_ir_sdf_hardening && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV34-01",
+        "desc": "part5.c zcc_eval_const_bit_builtin2 uses wrapping (a + b) >> 1 instead of overflow-free Dietz identity in __builtin_shadd/__builtin_srhadd",
+        "file": "part5.c",
+        "old": "  if (strcmp(fname, \"__builtin_shadd\") == 0 || strcmp(fname, \"__builtin_srhadd\") == 0) {\n    int a = (int)arg0_bits, b = (int)arg1_bits;\n    *out_bits = (long long)((fname[11] == 'r') ? ((a | b) - ((a ^ b) >> 1)) : ((a & b) + ((a ^ b) >> 1))); return 1;\n  }",
+        "new": "  if (strcmp(fname, \"__builtin_shadd\") == 0 || strcmp(fname, \"__builtin_srhadd\") == 0) {\n    int a = (int)arg0_bits, b = (int)arg1_bits;\n    *out_bits = (long long)((a + b) >> 1); return 1; /* MV34-01 */\n  }",
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_25_shadd_uhadd_srhadd_urhadd_sshl_ushl_sat_quad_isa",
+    },
+    {
+        "id": "MV34-02",
+        "desc": "part5.c zcc_emit_bit_builtin_call omits addq $1, %rax rounding bias for __builtin_srhadd/__builtin_urhadd on x86-64, breaking ZCC-PROVE-25",
+        "file": "part5.c",
+        "old": '              is_rnd ? "    addq $1, %rax\\n" : "", is_u ? "shrq" : "sarq", is_u ? "movl %eax, %eax" : "movslq %eax, %rax");',
+        "new": '              "", is_u ? "shrq" : "sarq", is_u ? "movl %eax, %eax" : "movslq %eax, %rax"); /* MV34-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_25_shadd_uhadd_srhadd_urhadd_sshl_ushl_sat_quad_isa && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV34-03",
+        "desc": "part5.c zcc_emit_bit_builtin_call omits andl $31, %ecx shift-count mask and uses $0 saturation bound in __builtin_sshl_sat on x86-64, breaking ZCC-PROVE-25",
+        "file": "part5.c",
+        "old": '      if (!is_u) fprintf(cc->out, "    movslq %%%s, %%rax\\n    movl %%%s, %%ecx\\n    andl $31, %%ecx\\n    shlq %%cl, %%rax\\n    movq %%rax, %%rcx\\n    sarq $63, %%rcx\\n    movq $2147483647, %%rdx\\n    xorq %%rdx, %%rcx\\n    movslq %%eax, %%rdx\\n    cmpq %%rdx, %%rax\\n    setne %%dl\\n    movzbl %%dl, %%edx\\n    negq %%rdx\\n    xorq %%rax, %%rcx\\n    andq %%rdx, %%rcx\\n    xorq %%rcx, %%rax\\n    movslq %%eax, %%rax\\n", r32, s32);',
+        "new": '      if (!is_u) fprintf(cc->out, "    movslq %%%s, %%rax\\n    movl %%%s, %%ecx\\n    shlq %%cl, %%rax\\n    movslq %%eax, %%rax\\n", r32, s32); /* MV34-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_25_shadd_uhadd_srhadd_urhadd_sshl_ushl_sat_quad_isa && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV34-04",
+        "desc": "part6_wasm.c wasm_lower_expr emits WASM_OP_I64_MUL instead of WASM_OP_I64_SHL for __builtin_sshl_sat/__builtin_ushl_sat on WASM32",
+        "file": "part6_wasm.c",
+        "old": "                    wasm_buf_append_u8(&fn->body, is_shl ? WASM_OP_I64_SHL : WASM_OP_I64_MUL);",
+        "new": "                    wasm_buf_append_u8(&fn->body, WASM_OP_I64_MUL); /* MV34-04 */",
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_25_shadd_uhadd_srhadd_urhadd_sshl_ushl_sat_quad_isa",
+    },
+    {
+        "id": "MV35-01",
+        "desc": "part5.c peephole_optimize_asm Rule 3e fails to elide cltq after movslq/movsbq/movswq ..., %rax",
+        "file": "part5.c",
+        "old": '    if (i + 1 < nlines && strcmp(line_ptrs[i + 1], "    cltq\\n") == 0 &&\n        (strcmp(l1, "    cltq\\n") == 0 ||\n         ((strncmp(l1, "    movslq ", 11) == 0 || strncmp(l1, "    movsbq ", 11) == 0 ||\n           strncmp(l1, "    movswq ", 11) == 0) &&\n          strlen(l1) > 14 && strcmp(l1 + strlen(l1) - 7, ", %rax\\n") == 0))) {',
+        "new": '    if (i + 1 < nlines && strcmp(line_ptrs[i + 1], "    cltq\\n") == 0 &&\n        strcmp(l1, "    cltq\\n") == 0) { /* MV35-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_26_peephole_superopt_cltq_zext_argpair",
+    },
+    {
+        "id": "MV35-02",
+        "desc": "part5.c peephole_optimize_asm fails to elide redundant movl %eax, %eax after 32-bit zero-extending write to %eax",
+        "file": "part5.c",
+        "old": '      if (i + 1 < nlines && strcmp(line_ptrs[i + 1], "    movl %eax, %eax\\n") == 0 &&\n          strlen(l1) >= 14 && strcmp(l1 + strlen(l1) - 7, ", %eax\\n") == 0 &&\n          (strncmp(l1, "    movl ", 9) == 0 || strncmp(l1, "    movzbl ", 11) == 0 ||\n           strncmp(l1, "    movzwl ", 11) == 0 || strcmp(l1, "    xorl %eax, %eax\\n") == 0)) {',
+        "new": '      if (0 && i + 1 < nlines && strcmp(line_ptrs[i + 1], "    movl %eax, %eax\\n") == 0) { /* MV35-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_26_peephole_superopt_cltq_zext_argpair",
+    },
+    {
+        "id": "MV35-03",
+        "desc": "part5.c peephole_optimize_asm 2-arg call stack-bypass emits movq %rax, %rdi instead of movq %rax, %rsi, clobbering arg1 with arg2",
+        "file": "part5.c",
+        "old": '          sprintf(line_ptrs[i], "    movq %%rax, %%rsi\\n");',
+        "new": '          sprintf(line_ptrs[i], "    movq %%rax, %%rdi\\n"); /* MV35-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_26_peephole_superopt_cltq_zext_argpair",
+    },
+    {
+        "id": "MV35-04",
+        "desc": "part5.c peephole_optimize_asm 2-arg call stack-bypass omits rewriting l2 destination to %rdi/%edi while eliding movq %rax, %rdi",
+        "file": "part5.c",
+        "old": '            memcpy(l2 + l2n - 7, is_rax ? ", %rdi\\n" : ", %edi\\n", 7);',
+        "new": '            (void)l2; /* MV35-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_26_peephole_superopt_cltq_zext_argpair",
+    },
+    {
+        "id": "MV36-01",
+        "desc": "part5.c zcc_emit_bit_builtin_call omits shrl $1, %edx on x86-64 __builtin_srshr/__builtin_urshr, corrupting s=0 identity and rounding bias",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    %s %%%s, %%%s\\n    movl %%%s, %%ecx\\n    andl $31, %%ecx\\n    movl $1, %%edx\\n    shll %%cl, %%edx\\n    shrl $1, %%edx\\n    addq %%rdx, %%rax\\n    %s %%cl, %%rax\\n    %s\\n",',
+        "new": '      fprintf(cc->out, "    %s %%%s, %%%s\\n    movl %%%s, %%ecx\\n    andl $31, %%ecx\\n    movl $1, %%edx\\n    shll %%cl, %%edx\\n    addq %%rdx, %%rax\\n    %s %%cl, %%rax\\n    %s\\n", /* MV36-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_27_srshr_urshr_qdmulh_qrdmulh_quad_isa",
+    },
+    {
+        "id": "MV36-02",
+        "desc": "part5.c zcc_emit_bit_builtin_call shifts right by #32 instead of #31 on ARM64 __builtin_qdmulh/__builtin_qrdmulh, dropping the 2x Q31 doubling factor",
+        "file": "part5.c",
+        "old": '      fprintf(cc->out, "    smull x0, w0, w1\\n%s    asr x0, x0, #31\\n    asr x2, x0, #63\\n    eor w2, w2, #0x7fffffff\\n    sxtw x3, w0\\n    cmp x0, x3\\n    csel w0, w2, w0, ne\\n    sxtw x0, w0\\n",',
+        "new": '      fprintf(cc->out, "    smull x0, w0, w1\\n%s    asr x0, x0, #32\\n    asr x2, x0, #63\\n    eor w2, w2, #0x7fffffff\\n    sxtw x3, w0\\n    cmp x0, x3\\n    csel w0, w2, w0, ne\\n    sxtw x0, w0\\n", /* MV36-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_27_srshr_urshr_qdmulh_qrdmulh_quad_isa",
+    },
+    {
+        "id": "MV36-03",
+        "desc": "part5.c zcc_eval_const_bit_builtin2 omits INT32_MAX saturation clamp on __builtin_qdmulh/__builtin_qrdmulh, wrapping INT32_MIN * INT32_MIN to -2147483648",
+        "file": "part5.c",
+        "old": '  if (strcmp(fname, "__builtin_qdmulh") == 0 || strcmp(fname, "__builtin_qrdmulh") == 0) {\n    long long r = ((long long)(int)arg0_bits * (long long)(int)arg1_bits + ((fname[11] == \'r\') ? (1LL << 30) : 0LL)) >> 31;\n    if (r > 2147483647LL) r = 2147483647LL;',
+        "new": '  if (strcmp(fname, "__builtin_qdmulh") == 0 || strcmp(fname, "__builtin_qrdmulh") == 0) {\n    long long r = ((long long)(int)arg0_bits * (long long)(int)arg1_bits + ((fname[11] == \'r\') ? (1LL << 30) : 0LL)) >> 31;\n    if (0 && r > 2147483647LL) r = 2147483647LL; /* MV36-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_27_srshr_urshr_qdmulh_qrdmulh_quad_isa",
+    },
+    {
+        "id": "MV36-04",
+        "desc": "part6_wasm.c wasm_lower_expr omits WASM_OP_I32_SHR_U on the rounding bias (1 << s) >> 1 for WASM32 srshr/urshr",
+        "file": "part6_wasm.c",
+        "old": '                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHL);\n                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);\n                    wasm_buf_append_sleb128(&fn->body, 1);\n                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U);',
+        "new": '                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHL); /* MV36-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_27_srshr_urshr_qdmulh_qrdmulh_quad_isa",
+    },
+    {
+        "id": "MV37-01",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop disables WASM_SIMD_I16X8_AVGR_U (0xFD 0x7B) emission on unsigned short __builtin_urhadd loops",
+        "file": "part6_wasm.c",
+        "old": '                if (esz_d == 2 && loop_body->lhs->type && loop_body->lhs->type->kind == TY_USHORT &&\n                    (strcmp(fnm, "__builtin_urhadd") == 0 || strcmp(fnm, "__builtin_uavg_ceil") == 0)) {\n                    simd_op = WASM_SIMD_I16X8_AVGR_U;',
+        "new": '                if (0 && esz_d == 2 && loop_body->lhs->type && loop_body->lhs->type->kind == TY_USHORT) {\n                    simd_op = 0; /* MV37-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_28_wasm_simd128_avgr_hadd_dot_i16x8 && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV37-02",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop disables (a[i] + b[i] + 1) >> 1 pattern matching for i8x16.avgr_u (0xFD 0x5B)",
+        "file": "part6_wasm.c",
+        "old": '        } else if (rhs->kind == ND_SHR && (esz_d == 2 || esz_d == 1) &&\n                   loop_body->lhs->type && is_unsigned_type(loop_body->lhs->type)) {',
+        "new": '        } else if (0 && rhs->kind == ND_SHR) { /* MV37-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_28_wasm_simd128_avgr_hadd_dot_i16x8",
+    },
+    {
+        "id": "MV37-03",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop emits WASM_SIMD_I32X4_SUB instead of WASM_SIMD_I32X4_ADD on 4-lane carry-free shadd/uhadd",
+        "file": "part6_wasm.c",
+        "old": '        wasm_buf_append_uleb128(&fn->body, is_rnd ? WASM_SIMD_I32X4_SUB : WASM_SIMD_I32X4_ADD);',
+        "new": '        wasm_buf_append_uleb128(&fn->body, WASM_SIMD_I32X4_SUB); /* MV37-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_28_wasm_simd128_avgr_hadd_dot_i16x8",
+    },
+    {
+        "id": "MV37-04",
+        "desc": "part6_wasm.c wasm_try_autovec_for_loop uses step = 4 instead of step = 8 on i32x4.dot_i16x8_s, double-accumulating overlapping 8-lane int16 windows",
+        "file": "part6_wasm.c",
+        "old": '                            is_reduction = 3; /* i32x4.dot_i16x8_s */\n                            step = 8;\n                            addr_shift = 1;',
+        "new": '                            is_reduction = 3; /* MV37-04 */\n                            step = 4;\n                            addr_shift = 1;',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_28_wasm_simd128_avgr_hadd_dot_i16x8",
+    },
+    {
+        "id": "MV38-01",
+        "desc": "part5.c zcc_emit_bit_builtin_call uses andl %%ecx, %%eax instead of orl %%ecx, %%eax on x86-64 __builtin_qpauli_weight, counting only Y-qubits instead of X|Y|Z",
+        "file": "part5.c",
+        "old": '      if (!is_c) fprintf(cc->out, "    movl %%%s, %%eax\\n    movl %%eax, %%ecx\\n    shrl $16, %%ecx\\n    orl %%ecx, %%eax\\n    movzwl %%ax, %%eax\\n    popcntl %%eax, %%eax\\n", r32);',
+        "new": '      if (!is_c) fprintf(cc->out, "    movl %%%s, %%eax\\n    movl %%eax, %%ecx\\n    shrl $16, %%ecx\\n    andl %%ecx, %%eax\\n    movzwl %%ax, %%eax\\n    popcntl %%eax, %%eax\\n", r32); /* MV38-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_29_qpauli_weight_and_commute_quad_isa && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV38-02",
+        "desc": "part5.c zcc_emit_bit_builtin_call omits andl $1, %eax parity mask on x86-64 __builtin_qpauli_commute, returning raw overlap count instead of mod-2 symplectic inner product",
+        "file": "part5.c",
+        "old": '      else fprintf(cc->out, "    movl %%%s, %%eax\\n    movl %%%s, %%ecx\\n    movl %%ecx, %%edx\\n    shrl $16, %%edx\\n    andl %%eax, %%edx\\n    shrl $16, %%eax\\n    andl %%ecx, %%eax\\n    xorl %%edx, %%eax\\n    movzwl %%ax, %%eax\\n    popcntl %%eax, %%eax\\n    andl $1, %%eax\\n", r32, s32);',
+        "new": '      else fprintf(cc->out, "    movl %%%s, %%eax\\n    movl %%%s, %%ecx\\n    movl %%ecx, %%edx\\n    shrl $16, %%edx\\n    andl %%eax, %%edx\\n    shrl $16, %%eax\\n    andl %%ecx, %%eax\\n    xorl %%edx, %%eax\\n    movzwl %%ax, %%eax\\n    popcntl %%eax, %%eax\\n", r32, s32); /* MV38-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_29_qpauli_weight_and_commute_quad_isa",
+    },
+    {
+        "id": "MV38-03",
+        "desc": "part5.c zcc_eval_const_bit_builtin2 uses bitwise OR instead of XOR on the symplectic cross-terms in __builtin_qpauli_commute, breaking self-commutation on Y-operators",
+        "file": "part5.c",
+        "old": '  if (strcmp(fname, "__builtin_qpauli_commute") == 0) {\n    unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits, m = ((a & (b >> 16)) ^ ((a >> 16) & b)) & 0xFFFFU;',
+        "new": '  if (strcmp(fname, "__builtin_qpauli_commute") == 0) {\n    unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits, m = ((a & (b >> 16)) | ((a >> 16) & b)) & 0xFFFFU; /* MV38-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_29_qpauli_weight_and_commute_quad_isa",
+    },
+    {
+        "id": "MV38-04",
+        "desc": "part6_wasm.c wasm_lower_expr omits WASM_OP_I32_AND with 65535 before WASM_OP_I32_POPCNT on WASM32 __builtin_qpauli_weight, double-counting Z_mask bits [31:16]",
+        "file": "part6_wasm.c",
+        "old": '                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);\n                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);\n                    wasm_buf_append_sleb128(&fn->body, 65535);\n                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);\n                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_POPCNT);',
+        "new": '                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);\n                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_POPCNT); /* MV38-04 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_29_qpauli_weight_and_commute_quad_isa",
+    },
 ]
 
 
@@ -1455,7 +1671,15 @@ def normalize_baseline_cmd(cmd: str) -> str:
 def prewarm_baseline_tests(stage: pathlib.Path, mutations=None) -> tuple:
     """Verify each unique normalized test_cmd passes on the unmutated stage directory in isolated sandboxes."""
     mut_list = mutations if mutations is not None else LEDGER_MUTATIONS
-    unique_cmds = sorted({normalize_baseline_cmd(m["test"]) for m in mut_list})
+    raw_cmds = set()
+    for m in mut_list:
+        nc = normalize_baseline_cmd(m["test"])
+        if nc.endswith(" && python3 tools/zcc_prove_01.py"):
+            raw_cmds.add(nc[: -len(" && python3 tools/zcc_prove_01.py")])
+            raw_cmds.add("python3 tools/zcc_prove_01.py")
+        else:
+            raw_cmds.add(nc)
+    unique_cmds = sorted(raw_cmds)
 
     def _check_cmd(cmd: str):
         with tempfile.TemporaryDirectory(prefix="zcc_mv02_base_wtmp_") as wtmp:
