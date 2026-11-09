@@ -2667,7 +2667,7 @@ int main(void) {
             r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv38_c), "-o", str(wasm_out)], capture_output=True, text=True)
             self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
             wb = wasm_out.read_bytes()
-            self.assertIn(b"ZCC-PROVE-11..29", wb)
+            self.assertIn(b"ZCC-PROVE-11..", wb)
             if shutil.which("wasm-validate"):
                 self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
             self.assertEqual(run_wasm_node(wasm_out), 151)
@@ -2719,6 +2719,126 @@ int main(void) {
             )
             self.assertEqual(r_pqlc.returncode, 0, r_pqlc.stderr)
             self.assertEqual(subprocess.run([str(pqlc_bin)], capture_output=True).returncode, 0)
+
+    def test_30_qpauli_mul_phase_and_qec_decoder_quad_isa(self) -> None:
+        """
+        MV-39 / BITOPS-QPAULI-MUL-PHASE-01 / ZCC-PROVE-30:
+        1. __builtin_qpauli_mul(p1, p2) & __builtin_qpauli_phase(p1, p2) across constant folding
+           (_Static_assert + switch/case) and all 4 target ISAs (x86-64, ARM64, RISC-V 64, WASM32).
+        2. Embedded Steane [[7, 1, 3]] + Laflamme [[5, 1, 3]] + Shor [[9, 1, 3]] degeneracy syndrome
+           recovery loop compiled by ZCC across all 4 ISAs returning exact exit code 173.
+        3. Full Multi-Code Fault-Tolerant QEC Syndrome Decoder Gauntlet (QEC-D1..D5).
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            mv39_c = pathlib.Path(tmp) / "quad_mv39.c"
+            mv39_c.write_text(
+                "enum {\n"
+                "    E_MUL_XZ = __builtin_qpauli_mul(0x00000001u, 0x00010000u),\n"
+                "    E_PH_XY  = __builtin_qpauli_phase(0x00000001u, 0x00010001u),\n"
+                "    E_PH_YX  = __builtin_qpauli_phase(0x00010001u, 0x00000001u),\n"
+                "    E_PH_YZ  = __builtin_qpauli_phase(0x00010001u, 0x00010000u),\n"
+                "    E_PH_ZY  = __builtin_qpauli_phase(0x00010000u, 0x00010001u),\n"
+                "    E_PH_ZX  = __builtin_qpauli_phase(0x00010000u, 0x00000001u),\n"
+                "    E_PH_XZ  = __builtin_qpauli_phase(0x00000001u, 0x00010000u),\n"
+                "    E_PH_2Q  = __builtin_qpauli_phase(0x00000003u, 0x00030003u)\n"
+                "};\n"
+                "unsigned int g_mul_xz = __builtin_qpauli_mul(0x00000001u, 0x00010000u);\n"
+                "int g_ph_yx = __builtin_qpauli_phase(0x00010001u, 0x00000001u);\n"
+                "unsigned int rt_qpauli_mul(unsigned int a, unsigned int b) { return __builtin_qpauli_mul(a, b); }\n"
+                "int rt_qpauli_phase(unsigned int a, unsigned int b) { return __builtin_qpauli_phase(a, b); }\n"
+                "int rt_qpauli_weight(unsigned int p) { return __builtin_qpauli_weight(p); }\n"
+                "int rt_qpauli_commute(unsigned int a, unsigned int b) { return __builtin_qpauli_commute(a, b); }\n"
+                "int main(void) {\n"
+                "    if (E_MUL_XZ != 0x00010001u || E_PH_XY != 1 || E_PH_YX != 3) return 15;\n"
+                "    if (E_PH_YZ != 1 || E_PH_ZY != 3 || E_PH_ZX != 1 || E_PH_XZ != 3 || E_PH_2Q != 2) return 16;\n"
+                "    if (g_mul_xz != 0x00010001u || g_ph_yx != 3) return 17;\n"
+                "    unsigned int x0 = 0x00000001u, z0 = 0x00010000u, y0 = 0x00010001u;\n"
+                "    if (rt_qpauli_mul(x0, z0) != y0) return 1;\n"
+                "    if (rt_qpauli_mul(x0, y0) != z0) return 2;\n"
+                "    if (rt_qpauli_mul(y0, z0) != x0) return 3;\n"
+                "    if (rt_qpauli_mul(y0, y0) != 0u) return 4;\n"
+                "    /* Check all 6 single-qubit cyclic/anti-cyclic phases at runtime */\n"
+                "    if (rt_qpauli_phase(x0, y0) != 1 || rt_qpauli_phase(y0, x0) != 3) return 5;\n"
+                "    if (rt_qpauli_phase(y0, z0) != 1 || rt_qpauli_phase(z0, y0) != 3) return 6;\n"
+                "    if (rt_qpauli_phase(z0, x0) != 1 || rt_qpauli_phase(x0, z0) != 3) return 7;\n"
+                "    if (rt_qpauli_phase(y0, y0) != 0 || rt_qpauli_phase(0u, y0) != 0) return 8;\n"
+                "    /* 2-cocycle associativity check at runtime: (P1 * P2) * P3 == P1 * (P2 * P3) */\n"
+                "    unsigned int p1 = 0x00150007u, p2 = 0x000B0013u, p3 = 0x001C000Eu;\n"
+                "    unsigned int m12 = rt_qpauli_mul(p1, p2), m23 = rt_qpauli_mul(p2, p3);\n"
+                "    if (rt_qpauli_mul(m12, p3) != rt_qpauli_mul(p1, m23)) return 9;\n"
+                "    int lhs = (rt_qpauli_phase(p1, p2) + rt_qpauli_phase(m12, p3)) & 3;\n"
+                "    int rhs = (rt_qpauli_phase(p1, m23) + rt_qpauli_phase(p2, p3)) & 3;\n"
+                "    if (lhs != rhs) return 10;\n"
+                "    if ((rt_qpauli_phase(p1, p2) & 1) != rt_qpauli_commute(p1, p2)) return 11;\n"
+                "    /* Steane [[7, 1, 3]] Fano-plane syndrome decode & recovery for Y_5 (qubit 5, 1-indexed 6 = 0b110) */\n"
+                "    unsigned int gx0 = 0x00000055u, gx1 = 0x00000066u, gx2 = 0x00000078u;\n"
+                "    unsigned int gz0 = 0x00550000u, gz1 = 0x00660000u, gz2 = 0x00780000u;\n"
+                "    unsigned int err_y5 = (1u << 5) | (1u << 21);\n"
+                "    int syn_x = rt_qpauli_commute(err_y5, gz0) | (rt_qpauli_commute(err_y5, gz1) << 1) | (rt_qpauli_commute(err_y5, gz2) << 2);\n"
+                "    int syn_z = rt_qpauli_commute(err_y5, gx0) | (rt_qpauli_commute(err_y5, gx1) << 1) | (rt_qpauli_commute(err_y5, gx2) << 2);\n"
+                "    if (syn_x != 6 || syn_z != 6) return 12;\n"
+                "    unsigned int rec = (1u << (syn_x - 1)) | (1u << ((syn_z - 1) + 16));\n"
+                "    unsigned int res = rt_qpauli_mul(err_y5, rec);\n"
+                "    if (res != 0u || rt_qpauli_weight(res) != 0 || rt_qpauli_phase(err_y5, rec) != 0) return 13;\n"
+                "    /* Shor [[9, 1, 3]] degenerate phase error Z_1 corrected by Z_0 leaves weight-2 stabilizer Z_0 Z_1 */\n"
+                "    unsigned int z_1 = 1u << 17, z_0 = 1u << 16;\n"
+                "    unsigned int deg_res = rt_qpauli_mul(z_1, z_0);\n"
+                "    if (rt_qpauli_weight(deg_res) != 2 || rt_qpauli_phase(z_1, z_0) != 0) return 14;\n"
+                "    return 160 + syn_x + syn_z + rt_qpauli_phase(x0, y0); /* 160 + 6 + 6 + 1 = 173 */\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            x86_s = pathlib.Path(tmp) / "mv39_x86.s"
+            x86_bin = pathlib.Path(tmp) / "mv39_x86"
+            r_s = subprocess.run([str(ZCC_BIN), "-S", str(mv39_c), "-o", str(x86_s)], capture_output=True, text=True)
+            self.assertEqual(r_s.returncode, 0, r_s.stderr)
+            x86_txt = x86_s.read_text(encoding="utf-8")
+            self.assertIn("popcntl %eax, %eax\n    popcntl %edx, %edx\n    subl %edx, %eax\n    andl $3, %eax", x86_txt)
+            r_x86 = subprocess.run([str(ZCC_BIN), str(mv39_c), "-o", str(x86_bin)], capture_output=True, text=True)
+            self.assertEqual(r_x86.returncode, 0, r_x86.stderr)
+            self.assertEqual(subprocess.run([str(x86_bin)], capture_output=True).returncode, 173)
+
+            if shutil.which("aarch64-linux-gnu-as") and shutil.which("qemu-aarch64-static"):
+                a64_s = pathlib.Path(tmp) / "mv39_a64.s"
+                a64_o = pathlib.Path(tmp) / "mv39_a64.o"
+                a64_bin = pathlib.Path(tmp) / "mv39_a64"
+                r_a64 = subprocess.run([str(ZCC_BIN), "--target=arm64", "-S", str(mv39_c), "-o", str(a64_s)], capture_output=True, text=True)
+                self.assertEqual(r_a64.returncode, 0, r_a64.stderr)
+                a64_txt = a64_s.read_text(encoding="utf-8")
+                self.assertIn("bic w0, w5, w0", a64_txt)
+                a64_s.write_text(a64_txt + "\n.text\n.globl _start\n_start:\n    bl main\n    mov x8, #93\n    svc #0\n", encoding="utf-8")
+                self.assertEqual(subprocess.run(["aarch64-linux-gnu-as", str(a64_s), "-o", str(a64_o)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["aarch64-linux-gnu-ld", str(a64_o), "-o", str(a64_bin)], capture_output=True).returncode, 0)
+                self.assertEqual(subprocess.run(["qemu-aarch64-static", str(a64_bin)], capture_output=True).returncode, 173)
+
+            if shutil.which("riscv64-linux-gnu-gcc") and shutil.which("qemu-riscv64-static"):
+                rv_s = pathlib.Path(tmp) / "mv39_rv64.s"
+                rv_bin = pathlib.Path(tmp) / "mv39_rv64"
+                r_rv = subprocess.run([str(ZCC_BIN), "--target=riscv64", "-S", str(mv39_c), "-o", str(rv_s)], capture_output=True, text=True)
+                self.assertEqual(r_rv.returncode, 0, r_rv.stderr)
+                r_rgcc = subprocess.run(["riscv64-linux-gnu-gcc", "-static", str(rv_s), "-o", str(rv_bin)], capture_output=True, text=True)
+                self.assertEqual(r_rgcc.returncode, 0, r_rgcc.stderr)
+                self.assertEqual(subprocess.run(["qemu-riscv64-static", str(rv_bin)], capture_output=True).returncode, 173)
+
+            wasm_out = pathlib.Path(tmp) / "mv39.wasm"
+            r_wasm = subprocess.run([str(ZCC_BIN), "--wasm", str(mv39_c), "-o", str(wasm_out)], capture_output=True, text=True)
+            self.assertEqual(r_wasm.returncode, 0, r_wasm.stderr)
+            wb = wasm_out.read_bytes()
+            self.assertIn(b"ZCC-PROVE-11..30", wb)
+            if shutil.which("wasm-validate"):
+                self.assertEqual(subprocess.run(["wasm-validate", str(wasm_out)], capture_output=True).returncode, 0)
+            self.assertEqual(run_wasm_node(wasm_out), 173)
+
+            qec_bin = pathlib.Path(tmp) / "mv39_qec_gauntlet"
+            qec_src = REPO_ROOT / "src" / "quantum" / "zcc_qec_decoder.c"
+            qec_test = REPO_ROOT / "tests" / "test_zcc_qec_decoder_gauntlet.c"
+            r_qec = subprocess.run(
+                ["gcc", "-O2", f"-I{REPO_ROOT / 'include'}", f"-I{REPO_ROOT}", str(qec_src), str(qec_test), "-o", str(qec_bin), "-lm"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(r_qec.returncode, 0, r_qec.stderr)
+            self.assertEqual(subprocess.run([str(qec_bin)], capture_output=True).returncode, 0)
 
 
 if __name__ == "__main__":

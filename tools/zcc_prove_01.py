@@ -2137,9 +2137,9 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         and "orr w0, w0, w0, lsr #16" in part5_text
         and 'strcmp(bfn, "qpauli_weight") == 0' in part6_wasm_text
         and 'strcmp(bfn, "qpauli_commute") == 0' in part6_wasm_text
-        and "ZCC-PROVE-11..29" in wasm_emit_text
-        and "gate_phase_octant" in qasm_opt_text
-        and "gates_commute_on_wire" in qasm_opt_text
+        and "ZCC-PROVE-11.." in wasm_emit_text
+        and "qasm_discrete_z_octant" in qasm_opt_text
+        and "qasm_op_is_diagonal_z" in qasm_opt_text
         and "circ(2, 3, 1, 1)" in pqlc_text
     )
     if not has_mv38_guards:
@@ -2221,6 +2221,115 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
     if s_mv38.check() == z3.sat:
         return False, {"error": "Z3 found counterexample in ZCC-PROVE-29 qpauli_weight/qpauli_commute/Goldilocks-MDS equivalence"}
 
+    # 30. ZCC-PROVE-30 (MV39): 16-Qubit Packed Pauli Product (__builtin_qpauli_mul), Mod-4 Levi-Civita Phase (__builtin_qpauli_phase), 2-Cocycle Group Associativity, & Multi-Code QEC Syndrome Decoder
+    qec_dec_text = (REPO_ROOT / "src" / "quantum" / "zcc_qec_decoder.c").read_text(encoding="utf-8", errors="replace")
+    has_mv39_guards = (
+        "__builtin_qpauli_mul" in part5_text
+        and "__builtin_qpauli_phase" in part5_text
+        and "popcntl %%eax, %%eax\\n    popcntl %%edx, %%edx\\n    subl %%edx, %%eax\\n    andl $3, %%eax" in part5_text
+        and "bic w0, w5, w0" in part5_text
+        and 'strcmp(bfn, "qpauli_mul") == 0' in part6_wasm_text
+        and 'strcmp(bfn, "qpauli_phase") == 0' in part6_wasm_text
+        and "ZCC-PROVE-11..30" in wasm_emit_text
+        and "zcc_qec_decode_and_recover" in qec_dec_text
+        and "zcc_qec_verify_shor_degeneracy" in qec_dec_text
+    )
+    if not has_mv39_guards:
+        return False, {"error": "Missing ZCC-PROVE-30 qpauli_mul/qpauli_phase/QEC-decoder guards or ZCC-PROVE-11..30 metadata"}
+
+    s_mv39 = z3.Solver()
+
+    def _z3_popcnt4(v32):
+        acc = z3.BitVecVal(0, 32)
+        for bit_i in range(4):
+            acc = acc + z3.ZeroExt(31, z3.Extract(bit_i, bit_i, v32))
+        return acc
+
+    def _z3_qpauli_mul_isa(a, b):
+        return a ^ b
+
+    def _z3_qpauli_phase_masks(a, b):
+        z1 = z3.LShR(a, 16)
+        z2 = z3.LShR(b, 16)
+        u = a & z2
+        v = z1 & b
+        anti = (u ^ v) & z3.BitVecVal(0xFFFF, 32)
+        pos = ((u & (b ^ z1)) | (v & ~(a | z2))) & z3.BitVecVal(0xFFFF, 32)
+        neg = anti ^ pos
+        return anti, pos, neg
+
+    def _z3_qpauli_phase_masks_spec(a, b):
+        pos_bits = []
+        neg_bits = []
+        for q_i in range(16):
+            x1 = z3.Extract(q_i, q_i, a)
+            z1 = z3.Extract(q_i + 16, q_i + 16, a)
+            x2 = z3.Extract(q_i, q_i, b)
+            z2 = z3.Extract(q_i + 16, q_i + 16, b)
+            p_a = z3.Concat(z1, x1)
+            p_b = z3.Concat(z2, x2)
+            is_pos = z3.Or(
+                z3.And(p_a == 1, p_b == 3),
+                z3.And(p_a == 3, p_b == 2),
+                z3.And(p_a == 2, p_b == 1),
+            )
+            is_neg = z3.Or(
+                z3.And(p_a == 3, p_b == 1),
+                z3.And(p_a == 2, p_b == 3),
+                z3.And(p_a == 1, p_b == 2),
+            )
+            pos_bits.append(z3.If(is_pos, z3.BitVecVal(1, 1), z3.BitVecVal(0, 1)))
+            neg_bits.append(z3.If(is_neg, z3.BitVecVal(1, 1), z3.BitVecVal(0, 1)))
+        return (
+            z3.ZeroExt(16, z3.Concat(*reversed(pos_bits))),
+            z3.ZeroExt(16, z3.Concat(*reversed(neg_bits))),
+        )
+
+    def _z3_qpauli_phase4_isa(a, b):
+        _, pos, neg = _z3_qpauli_phase_masks(a, b)
+        return (_z3_popcnt4(pos) - _z3_popcnt4(neg)) & z3.BitVecVal(3, 32)
+
+    def _z3_qpauli_phase4_wasm(a, b):
+        anti, pos, _ = _z3_qpauli_phase_masks(a, b)
+        return ((_z3_popcnt4(pos) << z3.BitVecVal(1, 32)) - _z3_popcnt4(anti)) & z3.BitVecVal(3, 32)
+
+    def _z3_qpauli_commute4(a, b):
+        anti, _, _ = _z3_qpauli_phase_masks(a, b)
+        return _z3_popcnt4(anti) & z3.BitVecVal(1, 32)
+
+    anti_ab, pos_ab, neg_ab = _z3_qpauli_phase_masks(qp1, qp2)
+    anti_ba, pos_ba, neg_ba = _z3_qpauli_phase_masks(qp2, qp1)
+    _, pos_aa, neg_aa = _z3_qpauli_phase_masks(qp1, qp1)
+    pos_spec, neg_spec = _z3_qpauli_phase_masks_spec(qp1, qp2)
+
+    m4_1 = qp1 & z3.BitVecVal(0x000F000F, 32)
+    m4_2 = qp2 & z3.BitVecVal(0x000F000F, 32)
+    m4_3 = qp3 & z3.BitVecVal(0x000F000F, 32)
+    cocycle_lhs = (_z3_qpauli_phase4_isa(m4_1, m4_2) + _z3_qpauli_phase4_isa(_z3_qpauli_mul_isa(m4_1, m4_2), m4_3)) & z3.BitVecVal(3, 32)
+    cocycle_rhs = (_z3_qpauli_phase4_isa(m4_1, _z3_qpauli_mul_isa(m4_2, m4_3)) + _z3_qpauli_phase4_isa(m4_2, m4_3)) & z3.BitVecVal(3, 32)
+
+    s_mv39.add(
+        z3.Or(
+            (pos_ab & neg_ab) != z3.BitVecVal(0, 32),
+            (pos_ab | neg_ab) != anti_ab,
+            pos_ab != pos_spec,
+            neg_ab != neg_spec,
+            pos_ba != neg_ab,
+            neg_ba != pos_ab,
+            anti_ba != anti_ab,
+            pos_aa != z3.BitVecVal(0, 32),
+            neg_aa != z3.BitVecVal(0, 32),
+            _z3_qpauli_mul_isa(qp1, qp1) != z3.BitVecVal(0, 32),
+            _z3_qpauli_mul_isa(_z3_qpauli_mul_isa(qp1, qp2), qp2) != qp1,
+            _z3_qpauli_phase4_isa(m4_1, m4_2) != _z3_qpauli_phase4_wasm(m4_1, m4_2),
+            (_z3_qpauli_phase4_isa(m4_1, m4_2) & z3.BitVecVal(1, 32)) != _z3_qpauli_commute4(m4_1, m4_2),
+            _z3_qpauli_phase4_isa(m4_2, m4_1) != ((z3.BitVecVal(4, 32) - _z3_qpauli_phase4_isa(m4_1, m4_2)) & z3.BitVecVal(3, 32)),
+            cocycle_lhs != cocycle_rhs,
+        )
+    )
+    if s_mv39.check() == z3.sat:
+        return False, {"error": "Z3 found counterexample in ZCC-PROVE-30 qpauli_mul/qpauli_phase 2-cocycle equivalence"}
+
     return True, {
         "boost_rules_1a_1b_1c_3_4a_4c_6": "UNSAT (PROVEN_SOUND)",
         "pass7_dead_write_rmw_negative_control": "SAT_CAUGHT (addq disp(%rbp), %rax clobbers live %rdx->%rax)",
@@ -2282,6 +2391,8 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         "zcc_prove_28_wasm_simd128_avgr_hadd_dot_i16x8_equivalence": "UNSAT (PROVEN_SOUND)",
         "zcc_prove_29_qpauli_weight_and_commute_quad_isa_active": has_mv38_guards,
         "zcc_prove_29_qpauli_weight_and_commute_symplectic_equivalence": "UNSAT (PROVEN_SOUND)",
+        "zcc_prove_30_qpauli_mul_and_phase_quad_isa_active": has_mv39_guards,
+        "zcc_prove_30_qpauli_mul_and_phase_2cocycle_equivalence": "UNSAT (PROVEN_SOUND)",
     }
 
 

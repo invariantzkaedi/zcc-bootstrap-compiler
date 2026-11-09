@@ -579,9 +579,9 @@ void init_compiler(Compiler *cc) {
         {
           const char *rot32[] = {"__builtin_rotateleft32", "__builtin_rotateright32"};
           const char *rot64[] = {"__builtin_rotateleft64", "__builtin_rotateright64"};
-          const char *ovf32[] = {"__builtin_sadd_overflow_p", "__builtin_ssub_overflow_p", "__builtin_smul_overflow_p", "__builtin_uadd_overflow_p", "__builtin_usub_overflow_p", "__builtin_umul_overflow_p", "__builtin_qpauli_commute"};
-          const char *sat32[] = {"__builtin_sadd_sat", "__builtin_ssub_sat", "__builtin_smul_sat", "__builtin_savg_floor", "__builtin_savg_ceil", "__builtin_shadd", "__builtin_srhadd", "__builtin_sshl_sat", "__builtin_srshr", "__builtin_qdmulh", "__builtin_qrdmulh", "__builtin_smin32", "__builtin_smax32", "__builtin_ssad32", "__builtin_uadd_sat", "__builtin_usub_sat", "__builtin_umul_sat", "__builtin_uavg_floor", "__builtin_uavg_ceil", "__builtin_uhadd", "__builtin_urhadd", "__builtin_ushl_sat", "__builtin_urshr", "__builtin_usad32", "__builtin_umin32", "__builtin_umax32"};
-          for (bi = 0; bi < 7; bi++) {
+          const char *ovf32[] = {"__builtin_sadd_overflow_p", "__builtin_ssub_overflow_p", "__builtin_smul_overflow_p", "__builtin_uadd_overflow_p", "__builtin_usub_overflow_p", "__builtin_umul_overflow_p", "__builtin_qpauli_commute", "__builtin_qpauli_phase"};
+          const char *sat32[] = {"__builtin_sadd_sat", "__builtin_ssub_sat", "__builtin_smul_sat", "__builtin_savg_floor", "__builtin_savg_ceil", "__builtin_shadd", "__builtin_srhadd", "__builtin_sshl_sat", "__builtin_srshr", "__builtin_qdmulh", "__builtin_qrdmulh", "__builtin_smin32", "__builtin_smax32", "__builtin_ssad32", "__builtin_uadd_sat", "__builtin_usub_sat", "__builtin_umul_sat", "__builtin_uavg_floor", "__builtin_uavg_ceil", "__builtin_uhadd", "__builtin_urhadd", "__builtin_ushl_sat", "__builtin_urshr", "__builtin_usad32", "__builtin_umin32", "__builtin_umax32", "__builtin_qpauli_mul"};
+          for (bi = 0; bi < 8; bi++) {
             ft = type_func(cc, cc->ty_int);
             ft->num_params = 2;
             ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
@@ -589,7 +589,7 @@ void init_compiler(Compiler *cc) {
             ft->params[1] = (bi >= 3) ? cc->ty_uint : cc->ty_int;
             sym = scope_add(cc, ovf32[bi], ft); sym->is_global = 1;
           }
-          for (bi = 0; bi < 26; bi++) {
+          for (bi = 0; bi < 27; bi++) {
             ft = type_func(cc, (bi >= 13) ? cc->ty_uint : cc->ty_int);
             ft->num_params = 2;
             ft->params = (Type **)cc_alloc(cc, sizeof(Type *) * 2);
@@ -3661,6 +3661,15 @@ int zcc_eval_const_bit_builtin2(const char *fname, long long arg0_bits, long lon
     int n = 0; while (m) { n ^= (int)(m & 1U); m >>= 1; }
     *out_bits = n; return 1;
   }
+  if (strcmp(fname, "__builtin_qpauli_mul") == 0) {
+    *out_bits = (long long)((unsigned int)arg0_bits ^ (unsigned int)arg1_bits); return 1;
+  }
+  if (strcmp(fname, "__builtin_qpauli_phase") == 0) {
+    unsigned int a = (unsigned int)arg0_bits, b = (unsigned int)arg1_bits, z1 = a >> 16, z2 = b >> 16;
+    unsigned int u = a & z2, v = z1 & b, an = (u ^ v) & 0xFFFFU, ps = ((u & (b ^ z1)) | (v & ~(a | z2))) & 0xFFFFU, ng = an ^ ps;
+    int k = 0; while (ps || ng) { k += (int)(ps & 1U) - (int)(ng & 1U); ps >>= 1; ng >>= 1; }
+    *out_bits = (long long)((unsigned int)k & 3U); return 1;
+  }
   if (strcmp(fname, "__builtin_rotateleft32") == 0) {
     unsigned int v = (unsigned int)arg0_bits;
     unsigned int s = (unsigned int)arg1_bits & 31U;
@@ -4132,6 +4141,20 @@ int zcc_emit_bit_builtin_call(Compiler *cc, Node *node) {
     } else if (is_rv64) {
       if (!is_c) fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    srli t1, t0, 16\n    or t0, t0, t1\n    li t1, 65535\n    and t0, t0, t1\n    li a0, 0\n.Lrv_qpw_l_%d:\n    beqz t0, .Lrv_qpw_d_%d\n    andi t1, t0, 1\n    add a0, a0, t1\n    srli t0, t0, 1\n    j .Lrv_qpw_l_%d\n.Lrv_qpw_d_%d:\n", lbl, lbl, lbl, lbl);
       else fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    srli t2, t1, 16\n    and t2, t0, t2\n    srli t3, t0, 16\n    and t3, t3, t1\n    xor t0, t2, t3\n    li t1, 65535\n    and t0, t0, t1\n    li a0, 0\n.Lrv_qpc_l_%d:\n    beqz t0, .Lrv_qpc_d_%d\n    andi t1, t0, 1\n    xor a0, a0, t1\n    srli t0, t0, 1\n    j .Lrv_qpc_l_%d\n.Lrv_qpc_d_%d:\n", lbl, lbl, lbl, lbl);
+    } else return 0;
+    return 1;
+  }
+  if (strcmp(fn, "__builtin_qpauli_mul") == 0 || strcmp(fn, "__builtin_qpauli_phase") == 0) {
+    int is_p = (fn[17] == 'p'), lbl = cc->label_count++;
+    if (!backend_ops) {
+      if (!is_p) fprintf(cc->out, "    movl %%%s, %%eax\n    xorl %%%s, %%eax\n", r32, s32);
+      else fprintf(cc->out, "    movl %%%s, %%eax\n    movl %%%s, %%ecx\n    movl %%eax, %%edx\n    shrl $16, %%edx\n    movl %%ecx, %%r8d\n    shrl $16, %%r8d\n    movl %%eax, %%r9d\n    andl %%r8d, %%r9d\n    movl %%edx, %%r10d\n    andl %%ecx, %%r10d\n    xorl %%ecx, %%edx\n    andl %%r9d, %%edx\n    orl %%r8d, %%eax\n    notl %%eax\n    andl %%r10d, %%eax\n    orl %%edx, %%eax\n    movzwl %%ax, %%eax\n    xorl %%r10d, %%r9d\n    xorl %%eax, %%r9d\n    movzwl %%r9w, %%edx\n    popcntl %%eax, %%eax\n    popcntl %%edx, %%edx\n    subl %%edx, %%eax\n    andl $3, %%eax\n", r32, s32);
+    } else if (is_a64) {
+      if (!is_p) fprintf(cc->out, "    eor w0, w0, w1\n");
+      else fprintf(cc->out, "    lsr w2, w0, #16\n    lsr w3, w1, #16\n    and w4, w0, w3\n    and w5, w2, w1\n    eor w2, w1, w2\n    and w2, w4, w2\n    orr w0, w0, w3\n    bic w0, w5, w0\n    orr w0, w2, w0\n    and w0, w0, #0xffff\n    eor w1, w4, w5\n    eor w1, w1, w0\n    and w1, w1, #0xffff\n    fmov s0, w0\n    cnt v0.8b, v0.8b\n    uaddlv h0, v0.8b\n    fmov w0, s0\n    fmov s0, w1\n    cnt v0.8b, v0.8b\n    uaddlv h0, v0.8b\n    fmov w1, s0\n    sub w0, w0, w1\n    and w0, w0, #3\n");
+    } else if (is_rv64) {
+      if (!is_p) fprintf(cc->out, "    xor a0, a0, a1\n    slli a0, a0, 32\n    srli a0, a0, 32\n");
+      else fprintf(cc->out, "    slli t0, a0, 32\n    srli t0, t0, 32\n    slli t1, a1, 32\n    srli t1, t1, 32\n    srli t2, t0, 16\n    srli t3, t1, 16\n    and t4, t0, t3\n    and t5, t2, t1\n    xor t2, t1, t2\n    and t2, t4, t2\n    or t0, t0, t3\n    not t0, t0\n    and t0, t5, t0\n    or t0, t2, t0\n    xor t1, t4, t5\n    xor t1, t1, t0\n    li t2, 65535\n    and t0, t0, t2\n    and t1, t1, t2\n    li a0, 0\n.Lrv_qpp_l_%d:\n    or t2, t0, t1\n    beqz t2, .Lrv_qpp_d_%d\n    andi t2, t0, 1\n    andi t3, t1, 1\n    add a0, a0, t2\n    sub a0, a0, t3\n    srli t0, t0, 1\n    srli t1, t1, 1\n    j .Lrv_qpp_l_%d\n.Lrv_qpp_d_%d:\n    andi a0, a0, 3\n", lbl, lbl, lbl, lbl);
     } else return 0;
     return 1;
   }

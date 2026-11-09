@@ -2082,6 +2082,54 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
                     break;
                 }
+                if (strcmp(bfn, "qpauli_mul") == 0) {
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_uint);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_XOR);
+                    break;
+                }
+                if (strcmp(bfn, "qpauli_phase") == 0 && lmap->tmp_addr_idx >= 0 && lmap->tmp_val_idx >= 0) {
+                    uint32_t la = (uint32_t)lmap->tmp_addr_idx, lb = (uint32_t)lmap->tmp_val_idx;
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET); wasm_buf_append_uleb128(&fn->body, la);
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_uint);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET); wasm_buf_append_uleb128(&fn->body, lb);
+                    /* pos = ((a & (b >> 16) & (b ^ (a >> 16))) | ((a >> 16) & b & ~(a | (b >> 16)))) & 65535 */
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, la);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, lb);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST); wasm_buf_append_sleb128(&fn->body, 16); wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U); wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, lb);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, la);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST); wasm_buf_append_sleb128(&fn->body, 16); wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U); wasm_buf_append_u8(&fn->body, WASM_OP_I32_XOR); wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, la);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST); wasm_buf_append_sleb128(&fn->body, 16); wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, lb); wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, la);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, lb);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST); wasm_buf_append_sleb128(&fn->body, 16); wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U); wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST); wasm_buf_append_sleb128(&fn->body, -1); wasm_buf_append_u8(&fn->body, WASM_OP_I32_XOR); wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST); wasm_buf_append_sleb128(&fn->body, 65535); wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_POPCNT);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST); wasm_buf_append_sleb128(&fn->body, 1); wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHL);
+                    /* anti = ((a & (b >> 16)) ^ ((a >> 16) & b)) & 65535 */
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, la);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, lb);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST); wasm_buf_append_sleb128(&fn->body, 16); wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U); wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, la);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST); wasm_buf_append_sleb128(&fn->body, 16); wasm_buf_append_u8(&fn->body, WASM_OP_I32_SHR_U);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET); wasm_buf_append_uleb128(&fn->body, lb); wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_XOR);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST); wasm_buf_append_sleb128(&fn->body, 65535); wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_POPCNT);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_SUB);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST); wasm_buf_append_sleb128(&fn->body, 3); wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                    break;
+                }
             }
             if (node->num_args == 1 && node->args && node->args[0] &&
                 wasm_find_func_idx(mod, node->func_name) < 0 &&

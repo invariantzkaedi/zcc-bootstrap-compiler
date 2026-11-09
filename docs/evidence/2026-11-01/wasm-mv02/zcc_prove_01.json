@@ -121,7 +121,9 @@
     "zcc_prove_28_wasm_simd128_avgr_hadd_dot_i16x8_active": true,
     "zcc_prove_28_wasm_simd128_avgr_hadd_dot_i16x8_equivalence": "UNSAT (PROVEN_SOUND)",
     "zcc_prove_29_qpauli_weight_and_commute_quad_isa_active": true,
-    "zcc_prove_29_qpauli_weight_and_commute_symplectic_equivalence": "UNSAT (PROVEN_SOUND)"
+    "zcc_prove_29_qpauli_weight_and_commute_symplectic_equivalence": "UNSAT (PROVEN_SOUND)",
+    "zcc_prove_30_qpauli_mul_and_phase_quad_isa_active": true,
+    "zcc_prove_30_qpauli_mul_and_phase_2cocycle_equivalence": "UNSAT (PROVEN_SOUND)"
   },
   "cases_verified": 25,
   "total_emulated_states": 5000,

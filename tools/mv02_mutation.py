@@ -53,6 +53,7 @@ _MV02_TESTS_NEEDED = (
     "typedef_compatible.c",
     "typedef_incompatible.c",
     "test_wasm_mv02.py",
+    "test_zcc_qec_decoder_gauntlet.c",
 )
 
 
@@ -1275,9 +1276,9 @@ LEDGER_MUTATIONS = [
     },
     {
         "id": "MV28-04",
-        "desc": "src/wasm_emit.c omits ZCC-PROVE-11..29 seal in .zcc.prove custom section, breaking ZCC-PROVE-19..29 verification",
+        "desc": "src/wasm_emit.c omits ZCC-PROVE-11..30 seal in .zcc.prove custom section, breaking ZCC-PROVE-19..30 verification",
         "file": "src/wasm_emit.c",
-        "old": '        const char *payload = "{\\"compiler\\":\\"zcc-omega\\",\\"prove\\":\\"ZCC-PROVE-11..29\\",\\"simd128\\":true,\\"quad_isa\\":true}";',
+        "old": '        const char *payload = "{\\"compiler\\":\\"zcc-omega\\",\\"prove\\":\\"ZCC-PROVE-11..30\\",\\"simd128\\":true,\\"quad_isa\\":true}";',
         "new": '        const char *payload = "{\\"compiler\\":\\"zcc-omega\\",\\"prove\\":\\"ZCC-PROVE-NONE\\",\\"simd128\\":true,\\"quad_isa\\":true}"; /* MV28-04 */',
         "build": "make zcc",
         "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_19_checked_overflow_intrinsics_quad_isa && python3 tools/zcc_prove_01.py",
@@ -1641,6 +1642,42 @@ LEDGER_MUTATIONS = [
         "new": '                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR);\n                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_POPCNT); /* MV38-04 */',
         "build": "make zcc",
         "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_29_qpauli_weight_and_commute_quad_isa",
+    },
+    {
+        "id": "MV39-01",
+        "desc": "part5.c zcc_emit_bit_builtin_call uses orl instead of xorl on x86-64 __builtin_qpauli_mul, failing to cancel identical Pauli operators (P * P = I)",
+        "file": "part5.c",
+        "old": '      if (!is_p) fprintf(cc->out, "    movl %%%s, %%eax\\n    xorl %%%s, %%eax\\n", r32, s32);',
+        "new": '      if (!is_p) fprintf(cc->out, "    movl %%%s, %%eax\\n    orl %%%s, %%eax\\n", r32, s32); /* MV39-01 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_30_qpauli_mul_phase_and_qec_decoder_quad_isa",
+    },
+    {
+        "id": "MV39-02",
+        "desc": "part5.c zcc_emit_bit_builtin_call uses addl %%edx, %%eax instead of subl %%edx, %%eax on x86-64 __builtin_qpauli_phase, breaking anti-cyclic (-i) Levi-Civita phase exponent",
+        "file": "part5.c",
+        "old": '    popcntl %%eax, %%eax\\n    popcntl %%edx, %%edx\\n    subl %%edx, %%eax\\n    andl $3, %%eax\\n", r32, s32);',
+        "new": '    popcntl %%eax, %%eax\\n    popcntl %%edx, %%edx\\n    addl %%edx, %%eax\\n    andl $3, %%eax\\n", r32, s32); /* MV39-02 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_30_qpauli_mul_phase_and_qec_decoder_quad_isa && python3 tools/zcc_prove_01.py",
+    },
+    {
+        "id": "MV39-03",
+        "desc": "part5.c zcc_eval_const_bit_builtin2 uses + instead of - between pos and neg bits in __builtin_qpauli_phase constant folding",
+        "file": "part5.c",
+        "old": '    int k = 0; while (ps || ng) { k += (int)(ps & 1U) - (int)(ng & 1U); ps >>= 1; ng >>= 1; }',
+        "new": '    int k = 0; while (ps || ng) { k += (int)(ps & 1U) + (int)(ng & 1U); ps >>= 1; ng >>= 1; } /* MV39-03 */',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_30_qpauli_mul_phase_and_qec_decoder_quad_isa",
+    },
+    {
+        "id": "MV39-04",
+        "desc": "part6_wasm.c wasm_lower_expr emits WASM_OP_I32_OR instead of WASM_OP_I32_XOR for WASM32 __builtin_qpauli_mul, breaking involutory group multiplication",
+        "file": "part6_wasm.c",
+        "old": '                if (strcmp(bfn, "qpauli_mul") == 0) {\n                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);\n                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);\n                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);\n                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_uint);\n                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_XOR);\n                    break;\n                }',
+        "new": '                if (strcmp(bfn, "qpauli_mul") == 0) {\n                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);\n                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_uint);\n                    wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);\n                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_uint);\n                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_OR); /* MV39-04 */\n                    break;\n                }',
+        "build": "make zcc",
+        "test": "python3 -m unittest tests.test_wasm_mv02.TestWasmMV02Adversarial.test_30_qpauli_mul_phase_and_qec_decoder_quad_isa",
     },
 ]
 

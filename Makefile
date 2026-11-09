@@ -260,6 +260,15 @@ test-qasm3-surface-qec: src/quantum/zcc_qasm3_surface_qec.c src/quantum/zcc_mult
 	/tmp/test_qasm3_surface_qec
 
 # =========================================================================
+# ZCC Hardware-Intrinsic Fault-Tolerant QEC Syndrome Decoder Target
+# =========================================================================
+.PHONY: test-qec-decoder
+
+test-qec-decoder: src/quantum/zcc_qec_decoder.c tests/test_zcc_qec_decoder_gauntlet.c include/zcc_qec_decoder.h
+	$(CC) -O3 -Iinclude -I. src/quantum/zcc_qec_decoder.c tests/test_zcc_qec_decoder_gauntlet.c -o /tmp/test_qec_decoder -lm
+	/tmp/test_qec_decoder
+
+# =========================================================================
 # ZCC Microarchitectural Profiler & RAPL Energy Harvester Target
 # =========================================================================
 .PHONY: test-perf-energy
