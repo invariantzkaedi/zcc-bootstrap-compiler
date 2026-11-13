@@ -1276,24 +1276,70 @@
 
         <div class="control-group">
           <div class="control-header">
-            <span>Palette / Colormap</span>
+            <span>Palette / Colormap (40 Presets)</span>
             <span class="control-val" id="valColormap">PRIME Cyberpunk</span>
           </div>
           <select id="selColormap" class="select-styled">
-            <option value="prime" selected>ZKAEDI PRIME (Cyan / Magenta / White)</option>
-            <option value="quantumSuperposition">⚛ Quantum Superposition (Phase-Interfered |ψ⟩)</option>
-            <option value="quantumBloch">⚛ Quantum Bloch (Violet / Cyan / Neon Gold)</option>
-            <option value="cyberNeon">Cyber Neon (Hot Pink / Electric Blue / Lime)</option>
-            <option value="solarFlare">Solar Flare (Gold / Amber / Plasma)</option>
-            <option value="matrixGreen">Matrix Terminal (Phosphor Emerald)</option>
-            <option value="deepAbyss">Deep Abyss (Bioluminescent Aqua)</option>
-            <option value="magma">Magma (Perceptual Deep Purple / Gold)</option>
-            <option value="viridis">Viridis (Sequential Blue / Green / Yellow)</option>
-            <option value="inferno">Inferno (High-Contrast Thermal Black/Red)</option>
-            <option value="emeraldGold">Glazed Brick (Emerald / Gold / Flare)</option>
-            <option value="turbo">Turbo (Full-Spectrum Perceptual)</option>
+            <optgroup label="⚡ ZKAEDI Sovereign & Cyberpunk (8)">
+              <option value="prime" selected>ZKAEDI PRIME (Cyan / Magenta / White)</option>
+              <option value="omegaSupreme">Ω OMEGA Supreme (Obsidian / Violet / Cyan / Gold)</option>
+              <option value="cyberNeon">Cyber Neon (Hot Pink / Electric Blue / Lime)</option>
+              <option value="synthwaveOutrun">Outrun Sunset 1984 (Indigo / Magenta / Chrome Gold)</option>
+              <option value="akiraNeoTokyo">Neo-Tokyo Tail-Light (Asphalt / Scarlet / Xenon)</option>
+              <option value="bladeRunner2049">Wallace Corp Vegas (Smog / Hologram Cyan / Amber)</option>
+              <option value="ghostInTheShell">Thermoptic Camo (Deep Slate / Cyber Teal / Ghost Violet)</option>
+              <option value="emeraldGold">Glazed Brick (Emerald / Gold / Flare)</option>
+            </optgroup>
+            <optgroup label="⚛ Quantum, Relativistic & Physics (8)">
+              <option value="quantumSuperposition">⚛ Quantum Superposition (Phase-Interfered |ψ⟩)</option>
+              <option value="quantumBloch">⚛ Quantum Bloch (Violet / Cyan / Neon Gold)</option>
+              <option value="cherenkovRadiation">Cherenkov Reactor Core (Abyss / Cobalt / Ionized Cyan)</option>
+              <option value="eventHorizonHawking">Kerr Accretion Disk (Redshift / Photon Gold / Blueshift)</option>
+              <option value="higgsBosonDecay">LHC Calorimeter Jet (Muon Blue / Hadron Green / TeV Pink)</option>
+              <option value="plasmaTokamak">ITER Magnetic Fusion (Deuterium Violet / Tritium Peach)</option>
+              <option value="schrodingerCat">Wigner Negativity (Teal Phase / Zero Void / Violet-Gold)</option>
+              <option value="superconductorMeissner">Meissner Cryo Levitation (Cryo Black / Frost Cyan / Silver)</option>
+            </optgroup>
+            <optgroup label="🔬 Perceptual Scientific & Thermal (8)">
+              <option value="viridis">Viridis (Sequential Blue / Green / Yellow)</option>
+              <option value="magma">Magma (Perceptual Deep Purple / Gold)</option>
+              <option value="inferno">Inferno (High-Contrast Thermal Black / Red)</option>
+              <option value="plasmaPerceptual">Plasma (Indigo / Vivid Magenta / Luminous Yellow)</option>
+              <option value="turbo">Turbo (Full-Spectrum Rainbow Perceptual)</option>
+              <option value="cividis">Cividis (Colorblind-Safe Navy / Olive / Gold)</option>
+              <option value="mako">Mako (Pelagic Deep Blue / Seafoam / Celeste)</option>
+              <option value="rocket">Rocket (Charcoal / Burgundy Plum / Crimson Cream)</option>
+            </optgroup>
+            <optgroup label="🎛 Studio Hardware, CRT & Mastering (6)">
+              <option value="matrixGreen">Matrix Terminal P1 (Phosphor Emerald)</option>
+              <option value="amberCrtP3">Tektronix Amber CRT P3 (Warm Umber / Halation Gold)</option>
+              <option value="oscilloscopeP31">HP Vector Scope P31 (Graticule Dark / Trace Mint)</option>
+              <option value="nixieTubeGlow">Soviet IN-18 Nixie Cathode (Ruby / Neon Strike Orange)</option>
+              <option value="vfdFluorescent">80s Hi-Fi VFD Vacuum Display (Anode Teal / Peak Coral)</option>
+              <option value="izotopeRxSpectral">Mastering Spectral Repair (Indigo / Magenta / Transient Gold)</option>
+            </optgroup>
+            <optgroup label="🌌 Cosmic, Oceanic & Elemental (6)">
+              <option value="solarFlare">Solar Flare (Gold / Amber / Plasma)</option>
+              <option value="deepAbyss">Deep Abyss (Bioluminescent Aqua)</option>
+              <option value="auroraBorealis">Arctic Magnetosphere Aurora (Violet / Oxygen Green / Rose)</option>
+              <option value="obsidianLava">Basalt Pahoehoe Lava (Cooled Crust / Molten Magma)</option>
+              <option value="bioluminescentReef">Dinoflagellate Midnight Reef (Trench Blue / Electric Neon)</option>
+              <option value="bloodMoonEclipse">Umbra Totality Eclipse (Void / Copper Blood / Corona White)</option>
+            </optgroup>
+            <optgroup label="🌈 Contour Isolators & Synth Aesthetics (4)">
+              <option value="isothermsContour">Zebra Iso-dB Contour Striations (Harmonic Ridge Locator)</option>
+              <option value="acidHouse303">TB-303 Acid Squelch (UV Purple / Chartreuse / Strobe)</option>
+              <option value="vaporwaveAesthetic">Macintosh Plus 420 (Lilac / Bubblegum Pink / Pool Cyan)</option>
+              <option value="monochromeSilver">Forensic Print Grayscale (Black / Graphite / Pure White)</option>
+            </optgroup>
           </select>
-          <div class="colormap-preview" id="colormapSwatch"></div>
+          <div class="colormap-preview" id="colormapSwatch" style="height:10px; border-radius:4px; margin-top:6px; border:1px solid rgba(255,255,255,0.14);"></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; margin-top:6px;">
+            <button id="btnPrevColormap" style="font-size:9px; padding:3px 4px;">◀ Prev</button>
+            <button id="btnRandColormap" style="font-size:9px; padding:3px 4px; color:var(--accent-cyan); border-color:rgba(0,243,255,0.35);">🎲 Random</button>
+            <button id="btnNextColormap" style="font-size:9px; padding:3px 4px;">Next ▶</button>
+          </div>
+          <div id="colormapMiniGrid" style="display:grid; grid-template-columns:repeat(8, 1fr); gap:3px; margin-top:6px;"></div>
         </div>
 
         <div class="control-group">
@@ -1425,13 +1471,13 @@
       <div class="spectrum-profile-wrap">
         <div class="spectrum-profile-title">Live Spectral Distribution (Instantaneous FFT Slice)</div>
         <div class="transient-alert" id="transientBadge">ONSET HIT</div>
-        <canvas id="profileCanvas"></canvas>
+        <canvas id="profileCanvas" width="800" height="120"></canvas>
       </div>
 
       <!-- MAIN WATERFALL CANVAS -->
       <div class="viewport-container" id="viewportContainer">
-        <canvas id="waterfallCanvas"></canvas>
-        <canvas id="overlayCanvas"></canvas>
+        <canvas id="waterfallCanvas" width="800" height="480"></canvas>
+        <canvas id="overlayCanvas" width="800" height="480"></canvas>
 
         <!-- HOVER READOUT TOOLTIP -->
         <div class="cursor-readout" id="cursorTooltip">
@@ -1513,7 +1559,7 @@
             <span id="primeStateBadge" style="color:var(--accent-cyan)">SUBCRITICAL</span>
           </div>
           <div class="prime-canvas-wrap">
-            <canvas id="primeCanvas"></canvas>
+            <canvas id="primeCanvas" width="300" height="140"></canvas>
           </div>
         </div>
 
@@ -1673,7 +1719,7 @@
         </div>
         <!-- p-q phase portrait canvas -->
         <div class="phase-canvas-wrap">
-          <canvas id="phaseCanvas"></canvas>
+          <canvas id="phaseCanvas" width="300" height="160"></canvas>
           <div class="phase-label-overlay">p (momentum) vs q (displacement)</div>
         </div>
         <div class="phase-axes-label">
@@ -1887,8 +1933,26 @@ function showToast(msg) {
   setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
-// --- COLORMAP COLOR LOOKUP TABLES ---
+// --- COLORMAP COLOR LOOKUP TABLES (40 MULTI-STOP & PERCEPTUAL PALETTES) ---
+function lerpColorStops(t, stops) {
+  const tc = Math.max(0, Math.min(1, t));
+  const n = stops.length - 1;
+  const scaled = tc * n;
+  const idx = Math.min(n - 1, Math.floor(scaled));
+  const u = scaled - idx;
+  // Smoothstep blend for silky perceptual transitions
+  const s = u * u * (3 - 2 * u);
+  const c0 = stops[idx];
+  const c1 = stops[idx + 1];
+  return [
+    Math.min(255, Math.max(0, Math.round(c0[0] + (c1[0] - c0[0]) * s))),
+    Math.min(255, Math.max(0, Math.round(c0[1] + (c1[1] - c0[1]) * s))),
+    Math.min(255, Math.max(0, Math.round(c0[2] + (c1[2] - c0[2]) * s)))
+  ];
+}
+
 const COLORMAPS = {
+  // ── GROUP 1: ⚡ ZKAEDI Sovereign & Cyberpunk (8) ──
   prime: (t) => {
     if (t < 0.3) {
       const u = t / 0.3;
@@ -1901,6 +1965,9 @@ const COLORMAPS = {
       return [255, Math.floor(255 * u), Math.floor(180 * (1 - u) + 255 * u)];
     }
   },
+  omegaSupreme: (t) => lerpColorStops(t, [
+    [3, 4, 12], [58, 12, 115], [180, 0, 210], [0, 243, 255], [255, 195, 0], [255, 255, 255]
+  ]),
   cyberNeon: (t) => {
     if (t < 0.33) {
       const u = t / 0.33;
@@ -1913,42 +1980,18 @@ const COLORMAPS = {
       return [Math.floor(255 * u), 255, Math.floor(255 * (1 - u) + 180 * u)];
     }
   },
-  solarFlare: (t) => {
-    const r = Math.floor(Math.min(255, Math.pow(t, 0.6) * 290));
-    const g = Math.floor(Math.min(255, Math.pow(t, 1.4) * 235));
-    const b = Math.floor(Math.min(255, Math.pow(t, 3.2) * 255));
-    return [r, g, b];
-  },
-  matrixGreen: (t) => {
-    const g = Math.floor(Math.min(255, Math.pow(t, 0.7) * 255));
-    const r = Math.floor(Math.pow(t, 2.5) * 160);
-    const b = Math.floor(Math.pow(t, 2.0) * 180);
-    return [r, g, b];
-  },
-  deepAbyss: (t) => {
-    const r = Math.floor(Math.pow(t, 2.2) * 120);
-    const g = Math.floor(Math.min(255, Math.pow(t, 0.8) * 240));
-    const b = Math.floor(Math.min(255, Math.pow(t, 0.5) * 255));
-    return [r, g, b];
-  },
-  magma: (t) => {
-    const r = Math.min(255, Math.max(0, Math.floor(Math.pow(t, 0.7) * 255 * 1.1)));
-    const g = Math.min(255, Math.max(0, Math.floor(Math.pow(t, 1.8) * 230)));
-    const b = Math.min(255, Math.max(0, Math.floor(Math.sin(t * Math.PI) * 160 + (t > 0.8 ? (t - 0.8) * 5 * 150 : 0))));
-    return [r, g, b];
-  },
-  viridis: (t) => {
-    const r = Math.floor(255 * Math.max(0, Math.min(1, 1.5 * Math.sin(t * Math.PI - 0.5))));
-    const g = Math.floor(255 * Math.sin(t * Math.PI * 0.9));
-    const b = Math.floor(255 * Math.cos(t * Math.PI * 0.6));
-    return [r, g, b];
-  },
-  inferno: (t) => {
-    const r = Math.floor(Math.min(1, t * 1.5) * 255);
-    const g = Math.floor(Math.max(0, t - 0.3) * 1.42 * 255);
-    const b = Math.floor(Math.max(0, Math.sin(t * Math.PI * 1.2)) * 180);
-    return [r, g, b];
-  },
+  synthwaveOutrun: (t) => lerpColorStops(t, [
+    [7, 4, 24], [52, 11, 96], [156, 14, 142], [255, 18, 118], [255, 118, 42], [255, 238, 110]
+  ]),
+  akiraNeoTokyo: (t) => lerpColorStops(t, [
+    [5, 5, 9], [48, 6, 18], [155, 8, 28], [242, 32, 24], [255, 142, 28], [255, 246, 225]
+  ]),
+  bladeRunner2049: (t) => lerpColorStops(t, [
+    [6, 10, 14], [18, 52, 68], [0, 178, 196], [198, 92, 24], [255, 162, 18], [255, 238, 175]
+  ]),
+  ghostInTheShell: (t) => lerpColorStops(t, [
+    [4, 9, 14], [14, 48, 62], [22, 165, 150], [118, 242, 205], [192, 145, 255], [245, 255, 255]
+  ]),
   emeraldGold: (t) => {
     if (t < 0.5) {
       const u = t / 0.5;
@@ -1958,14 +2001,9 @@ const COLORMAPS = {
       return [Math.floor(255 * u), Math.floor(240 * (1 - u) + 215 * u), Math.floor(120 * (1 - u))];
     }
   },
-  turbo: (t) => {
-    const r = Math.floor(255 * Math.sin(t * Math.PI * 0.8 + 0.1));
-    const g = Math.floor(255 * Math.sin(t * Math.PI * 0.9 + 0.5));
-    const b = Math.floor(255 * Math.cos(t * Math.PI * 0.8));
-    return [Math.max(0, r), Math.max(0, g), Math.max(0, b)];
-  },
+
+  // ── GROUP 2: ⚛ Quantum, Relativistic & Physics (8) ──
   quantumSuperposition: (t) => {
-    // Quantum probability density |ψ(x)|² with complex phase interference fringes
     const phase = t * Math.PI * 3.5;
     const psi_real = Math.cos(phase) * Math.sqrt(t);
     const psi_imag = Math.sin(phase) * Math.sqrt(t);
@@ -1976,12 +2014,141 @@ const COLORMAPS = {
     return [r, g, b];
   },
   quantumBloch: (t) => {
-    // Bloch sphere state vector projection: North pole (|0⟩ violet) to South pole (|1⟩ cyan/gold)
     const theta = t * Math.PI;
     const r = Math.floor(Math.min(255, Math.sin(theta * 0.5) * 255 + Math.pow(t, 2) * 80));
     const g = Math.floor(Math.min(255, Math.sin(theta) * 220 + Math.pow(t, 3) * 35));
     const b = Math.floor(Math.min(255, Math.cos(theta * 0.5) * 255));
     return [r, g, b];
+  },
+  cherenkovRadiation: (t) => lerpColorStops(t, [
+    [2, 4, 12], [6, 22, 78], [12, 85, 215], [0, 198, 255], [135, 248, 255], [250, 255, 255]
+  ]),
+  eventHorizonHawking: (t) => lerpColorStops(t, [
+    [2, 1, 4], [75, 8, 12], [195, 42, 10], [255, 148, 18], [255, 232, 145], [210, 248, 255]
+  ]),
+  higgsBosonDecay: (t) => lerpColorStops(t, [
+    [4, 7, 22], [18, 78, 198], [0, 212, 152], [185, 245, 42], [255, 168, 0], [255, 38, 145]
+  ]),
+  plasmaTokamak: (t) => lerpColorStops(t, [
+    [6, 2, 15], [68, 8, 118], [168, 16, 152], [245, 68, 108], [255, 165, 98], [255, 248, 235]
+  ]),
+  schrodingerCat: (t) => lerpColorStops(t, [
+    [0, 185, 195], [10, 58, 88], [6, 6, 12], [88, 18, 128], [235, 65, 145], [255, 225, 95]
+  ]),
+  superconductorMeissner: (t) => lerpColorStops(t, [
+    [3, 6, 16], [16, 42, 98], [45, 125, 210], [115, 215, 248], [205, 238, 252], [255, 255, 255]
+  ]),
+
+  // ── GROUP 3: 🔬 Perceptual Scientific & Thermal (8) ──
+  viridis: (t) => {
+    const r = Math.floor(255 * Math.max(0, Math.min(1, 1.5 * Math.sin(t * Math.PI - 0.5))));
+    const g = Math.floor(255 * Math.sin(t * Math.PI * 0.9));
+    const b = Math.floor(255 * Math.cos(t * Math.PI * 0.6));
+    return [r, g, b];
+  },
+  magma: (t) => {
+    const r = Math.min(255, Math.max(0, Math.floor(Math.pow(t, 0.7) * 255 * 1.1)));
+    const g = Math.min(255, Math.max(0, Math.floor(Math.pow(t, 1.8) * 230)));
+    const b = Math.min(255, Math.max(0, Math.floor(Math.sin(t * Math.PI) * 160 + (t > 0.8 ? (t - 0.8) * 5 * 150 : 0))));
+    return [r, g, b];
+  },
+  inferno: (t) => {
+    const r = Math.floor(Math.min(1, t * 1.5) * 255);
+    const g = Math.floor(Math.max(0, t - 0.3) * 1.42 * 255);
+    const b = Math.floor(Math.max(0, Math.sin(t * Math.PI * 1.2)) * 180);
+    return [r, g, b];
+  },
+  plasmaPerceptual: (t) => lerpColorStops(t, [
+    [13, 8, 135], [106, 0, 168], [177, 42, 144], [225, 100, 98], [252, 166, 54], [240, 249, 33]
+  ]),
+  turbo: (t) => {
+    const r = Math.floor(255 * Math.sin(t * Math.PI * 0.8 + 0.1));
+    const g = Math.floor(255 * Math.sin(t * Math.PI * 0.9 + 0.5));
+    const b = Math.floor(255 * Math.cos(t * Math.PI * 0.8));
+    return [Math.max(0, r), Math.max(0, g), Math.max(0, b)];
+  },
+  cividis: (t) => lerpColorStops(t, [
+    [0, 32, 76], [42, 64, 108], [92, 98, 110], [142, 134, 98], [198, 176, 70], [253, 234, 69]
+  ]),
+  mako: (t) => lerpColorStops(t, [
+    [11, 4, 5], [40, 26, 72], [53, 74, 135], [46, 134, 164], [72, 193, 173], [222, 245, 229]
+  ]),
+  rocket: (t) => lerpColorStops(t, [
+    [3, 5, 26], [54, 16, 62], [118, 22, 82], [188, 38, 73], [238, 92, 66], [250, 235, 221]
+  ]),
+
+  // ── GROUP 4: 🎛 Studio Hardware, CRT & Mastering (6) ──
+  matrixGreen: (t) => {
+    const g = Math.floor(Math.min(255, Math.pow(t, 0.7) * 255));
+    const r = Math.floor(Math.pow(t, 2.5) * 160);
+    const b = Math.floor(Math.pow(t, 2.0) * 180);
+    return [r, g, b];
+  },
+  amberCrtP3: (t) => lerpColorStops(t, [
+    [6, 3, 0], [45, 18, 0], [128, 52, 0], [218, 108, 4], [255, 178, 24], [255, 242, 185]
+  ]),
+  oscilloscopeP31: (t) => lerpColorStops(t, [
+    [2, 8, 6], [8, 48, 36], [16, 128, 92], [32, 224, 152], [125, 255, 205], [235, 255, 248]
+  ]),
+  nixieTubeGlow: (t) => lerpColorStops(t, [
+    [8, 2, 4], [52, 8, 16], [138, 18, 12], [235, 62, 8], [255, 138, 22], [255, 225, 165]
+  ]),
+  vfdFluorescent: (t) => lerpColorStops(t, [
+    [3, 8, 10], [8, 54, 62], [18, 148, 142], [65, 242, 212], [255, 188, 52], [255, 68, 42]
+  ]),
+  izotopeRxSpectral: (t) => lerpColorStops(t, [
+    [4, 4, 18], [22, 28, 96], [112, 24, 138], [212, 48, 92], [252, 138, 28], [255, 248, 165]
+  ]),
+
+  // ── GROUP 5: 🌌 Cosmic, Oceanic & Elemental (6) ──
+  solarFlare: (t) => {
+    const r = Math.floor(Math.min(255, Math.pow(t, 0.6) * 290));
+    const g = Math.floor(Math.min(255, Math.pow(t, 1.4) * 235));
+    const b = Math.floor(Math.min(255, Math.pow(t, 3.2) * 255));
+    return [r, g, b];
+  },
+  deepAbyss: (t) => {
+    const r = Math.floor(Math.pow(t, 2.2) * 120);
+    const g = Math.floor(Math.min(255, Math.pow(t, 0.8) * 240));
+    const b = Math.floor(Math.min(255, Math.pow(t, 0.5) * 255));
+    return [r, g, b];
+  },
+  auroraBorealis: (t) => lerpColorStops(t, [
+    [3, 5, 16], [28, 14, 72], [18, 98, 118], [16, 218, 128], [165, 248, 152], [252, 175, 235]
+  ]),
+  obsidianLava: (t) => lerpColorStops(t, [
+    [8, 8, 10], [28, 22, 26], [92, 14, 18], [198, 28, 8], [255, 118, 0], [255, 238, 95]
+  ]),
+  bioluminescentReef: (t) => lerpColorStops(t, [
+    [2, 5, 15], [6, 28, 85], [0, 98, 215], [0, 215, 245], [42, 255, 168], [215, 255, 235]
+  ]),
+  bloodMoonEclipse: (t) => lerpColorStops(t, [
+    [4, 2, 4], [38, 6, 14], [108, 14, 22], [188, 38, 28], [242, 118, 72], [255, 235, 218]
+  ]),
+
+  // ── GROUP 6: 🌈 Contour Isolators & Synth Aesthetics (4) ──
+  isothermsContour: (t) => {
+    const base = lerpColorStops(t, [
+      [4, 8, 22], [0, 92, 185], [0, 215, 195], [185, 235, 45], [255, 95, 35], [255, 250, 245]
+    ]);
+    // Superimpose crisp 12-band iso-dB contour lines for harmonic ridge tracking
+    const band = Math.pow(0.5 + 0.5 * Math.cos(t * Math.PI * 24.0), 8.0);
+    const boost = Math.round(band * 55 * t);
+    return [
+      Math.min(255, base[0] + boost),
+      Math.min(255, base[1] + boost),
+      Math.min(255, base[2] + boost)
+    ];
+  },
+  acidHouse303: (t) => lerpColorStops(t, [
+    [5, 2, 12], [58, 8, 112], [125, 18, 185], [82, 225, 18], [208, 255, 0], [255, 255, 210]
+  ]),
+  vaporwaveAesthetic: (t) => lerpColorStops(t, [
+    [16, 8, 38], [72, 24, 118], [185, 52, 168], [255, 112, 198], [98, 228, 255], [215, 255, 248]
+  ]),
+  monochromeSilver: (t) => {
+    const v = Math.min(255, Math.max(0, Math.round(Math.pow(t, 0.85) * 255)));
+    return [v, v, v];
   }
 };
 
@@ -2011,18 +2178,91 @@ function rebuildColormapLUT32() {
   }
 }
 
+function buildCssGradientForPalette(name) {
+  const fn = COLORMAPS[name] || COLORMAPS.prime;
+  const stops = [];
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8;
+    const [r, g, b] = fn(t);
+    stops.push(`rgb(${r},${g},${b}) ${(t * 100).toFixed(1)}%`);
+  }
+  return `linear-gradient(to right, ${stops.join(', ')})`;
+}
+
 function updateColormapSwatch() {
   rebuildColormapLUT32();
   const swatch = document.getElementById('colormapSwatch');
-  const fn = COLORMAPS[colormapName] || COLORMAPS.prime;
-  let stops = [];
-  for (let i = 0; i <= 10; i++) {
-    const t = i / 10;
-    const [r, g, b] = fn(t);
-    stops.push(`rgb(${r},${g},${b}) ${t * 100}%`);
+  if (swatch) {
+    swatch.style.background = buildCssGradientForPalette(colormapName);
   }
-  swatch.style.background = `linear-gradient(to right, ${stops.join(', ')})`;
+  document.querySelectorAll('.cmap-mini-chip').forEach(chip => {
+    const isSel = chip.getAttribute('data-cmap') === colormapName;
+    chip.style.borderColor = isSel ? '#00f3ff' : 'rgba(255,255,255,0.14)';
+    chip.style.boxShadow = isSel ? '0 0 6px rgba(0,243,255,0.75)' : 'none';
+  });
 }
+
+function setColormapByName(name, announce = true) {
+  if (!COLORMAPS[name]) return;
+  colormapName = name;
+  const sel = document.getElementById('selColormap');
+  if (sel) {
+    sel.value = name;
+    const opt = sel.options[sel.selectedIndex];
+    const lbl = document.getElementById('valColormap');
+    if (lbl && opt) {
+      lbl.innerText = opt.text.replace(/^[^\w]+/, '').split('(')[0].trim().slice(0, 18);
+    }
+  }
+  updateColormapSwatch();
+  if (typeof renderPrimeLandscape === 'function') renderPrimeLandscape();
+  if (announce) showToast(`Palette: ${name}`);
+}
+
+function initColormapMiniGrid() {
+  const grid = document.getElementById('colormapMiniGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const keys = Object.keys(COLORMAPS);
+  keys.forEach((key) => {
+    const chip = document.createElement('div');
+    chip.className = 'cmap-mini-chip';
+    chip.setAttribute('data-cmap', key);
+    chip.title = `Palette: ${key}`;
+    chip.style.height = '11px';
+    chip.style.borderRadius = '2px';
+    chip.style.cursor = 'pointer';
+    chip.style.border = key === colormapName ? '1px solid #00f3ff' : '1px solid rgba(255,255,255,0.14)';
+    chip.style.background = buildCssGradientForPalette(key);
+    chip.addEventListener('click', () => setColormapByName(key, true));
+    grid.appendChild(chip);
+  });
+
+  const btnPrev = document.getElementById('btnPrevColormap');
+  const btnNext = document.getElementById('btnNextColormap');
+  const btnRand = document.getElementById('btnRandColormap');
+  if (btnPrev) {
+    btnPrev.addEventListener('click', () => {
+      const idx = keys.indexOf(colormapName);
+      const prevKey = keys[(idx - 1 + keys.length) % keys.length];
+      setColormapByName(prevKey, true);
+    });
+  }
+  if (btnNext) {
+    btnNext.addEventListener('click', () => {
+      const idx = keys.indexOf(colormapName);
+      const nextKey = keys[(idx + 1) % keys.length];
+      setColormapByName(nextKey, true);
+    });
+  }
+  if (btnRand) {
+    btnRand.addEventListener('click', () => {
+      const randKey = keys[Math.floor(Math.random() * keys.length)];
+      setColormapByName(randKey, true);
+    });
+  }
+}
+window.addEventListener('DOMContentLoaded', initColormapMiniGrid);
 
 // --- WINDOWING FUNCTIONS (DSP MATH) ---
 const WINDOWS = {
@@ -2953,9 +3193,7 @@ document.getElementById('selRenderMode').addEventListener('change', (e) => {
 });
 
 document.getElementById('selColormap').addEventListener('change', (e) => {
-  colormapName = e.target.value;
-  document.getElementById('valColormap').innerText = e.target.options[e.target.selectedIndex].text.split(' ')[0];
-  updateColormapSwatch();
+  setColormapByName(e.target.value, true);
 });
 
 document.getElementById('rngScrollSpeed').addEventListener('input', (e) => {

@@ -85,18 +85,22 @@ static int stack_find(weaver_state_t *st, int vreg_id) {
 
 static void stack_push(weaver_state_t *st, int vreg_id, FILE *out) {
     if (st->stack_depth >= MAX_EVM_STACK) {
-        /* Spill lowest priority item */
-        int spill_vreg = st->stack[0];
+        /* Evict stack[depth-2] (at mu[2] below newly pushed TOS item) */
+        int spill_idx = st->stack_depth - 2;
+        int spill_vreg = st->stack[spill_idx];
         st->vregs[spill_vreg].spilled = true;
-        st->vregs[spill_vreg].slot = st->scratch_ptr;
-        st->scratch_ptr += 32;
+        if (st->vregs[spill_vreg].slot < 0) {
+            st->vregs[spill_vreg].slot = st->scratch_ptr;
+            st->scratch_ptr += 32;
+        }
         fprintf(out, "    /* SPILL %s -> slot 0x%x */\n", st->vregs[spill_vreg].name, st->vregs[spill_vreg].slot);
+        fprintf(out, "    swap2\n");
         fprintf(out, "    push4 0x%x\n", st->vregs[spill_vreg].slot);
         fprintf(out, "    mstore\n");
-        for (int i = 0; i < st->stack_depth - 1; i++) {
-            st->stack[i] = st->stack[i + 1];
-        }
-        st->stack_depth--;
+        fprintf(out, "    swap1\n");
+        st->stack[spill_idx] = st->stack[st->stack_depth - 1];
+        st->stack[st->stack_depth - 1] = vreg_id;
+        return;
     }
     st->stack[st->stack_depth++] = vreg_id;
 }
@@ -134,10 +138,26 @@ static bool bring_to_top_opt(weaver_state_t *st, int vreg_id, FILE *out, int opt
         }
     } else if (st->vregs[vreg_id].spilled) {
         /* Restore from spill */
+        st->vregs[vreg_id].spilled = false;
         fprintf(out, "    mload(0x%x) /* %s */\n", st->vregs[vreg_id].slot, st->vregs[vreg_id].name);
         stack_push(st, vreg_id, out);
     }
     return false;
+}
+
+static void bring_pair_to_top(weaver_state_t *st, int under_id, int top_id, FILE *out, int opt_level, int *rewrites_applied) {
+    if (under_id >= 0) bring_to_top_opt(st, under_id, out, opt_level, rewrites_applied);
+    if (top_id < 0) return;
+    if (under_id >= 0) {
+        int idx2 = stack_find(st, top_id);
+        if (idx2 >= 0 && idx2 < st->stack_depth - 2) {
+            int top_idx = st->stack_depth - 1;
+            fprintf(out, "    swap1 /* park %s */\n", st->vregs[under_id].name);
+            st->stack[top_idx] = st->stack[top_idx - 1];
+            st->stack[top_idx - 1] = under_id;
+        }
+    }
+    bring_to_top_opt(st, top_id, out, opt_level, rewrites_applied);
 }
 
 static void pop_dead_vregs(weaver_state_t *st, int line, FILE *out) {
@@ -191,12 +211,10 @@ int evm_yul_weaver_opt(ir_func_t *fn, FILE *out, int opt_level) {
                 if ((top0 == src1_id && top1 == src2_id) || (top0 == src2_id && top1 == src1_id)) {
                     rewrites_applied++;
                 } else {
-                    if (src2_id >= 0) bring_to_top_opt(&st, src2_id, out, opt_level, &rewrites_applied);
-                    if (src1_id >= 0) bring_to_top_opt(&st, src1_id, out, opt_level, &rewrites_applied);
+                    bring_pair_to_top(&st, src2_id, src1_id, out, opt_level, &rewrites_applied);
                 }
             } else {
-                if (src2_id >= 0) bring_to_top_opt(&st, src2_id, out, opt_level, &rewrites_applied);
-                if (src1_id >= 0) bring_to_top_opt(&st, src1_id, out, opt_level, &rewrites_applied);
+                bring_pair_to_top(&st, src2_id, src1_id, out, opt_level, &rewrites_applied);
             }
 
             if (n->op == IR_ADD) fprintf(out, "    add\n");
@@ -233,12 +251,10 @@ int evm_yul_weaver_opt(ir_func_t *fn, FILE *out, int opt_level) {
                 if (dst_id >= 0) bring_to_top_opt(&st, dst_id, out, opt_level, &rewrites_applied);
                 if (src1_id >= 0) bring_to_top_opt(&st, src1_id, out, opt_level, &rewrites_applied);
             } else {
-                if (src1_id >= 0) bring_to_top_opt(&st, src1_id, out, opt_level, &rewrites_applied);
-                if (dst_id >= 0) bring_to_top_opt(&st, dst_id, out, opt_level, &rewrites_applied);
+                bring_pair_to_top(&st, src1_id, dst_id, out, opt_level, &rewrites_applied);
             }
 #else
-            if (src1_id >= 0) bring_to_top_opt(&st, src1_id, out, opt_level, &rewrites_applied);
-            if (dst_id >= 0) bring_to_top_opt(&st, dst_id, out, opt_level, &rewrites_applied);
+            bring_pair_to_top(&st, src1_id, dst_id, out, opt_level, &rewrites_applied);
 #endif
             
             fprintf(out, "    sstore\n");

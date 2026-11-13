@@ -92,7 +92,7 @@ typedef enum {
   OP_SUB,
   OP_MUL,
   OP_DIV,
-  OP_MOD, /* TODO: x86 idiv sequence when lowering to asm    */
+  OP_MOD, /* modulo remainder (x86 idiv sequence in asm lowering) */
   OP_BAND,
   OP_BOR,
   OP_BXOR,
@@ -426,8 +426,8 @@ typedef struct {
  * store to p->x */
 #define MAX_LOOP_STORES 128
 typedef struct {
-  RegID base;
   int64_t offset;
+  RegID base;
   bool is_variable; /* true if offset is unknown/dynamic */
 } StoreTarget;
 typedef struct {
@@ -2860,10 +2860,7 @@ static void compute_reachability(Function *fn) {
 
 typedef struct ASTNode ASTNode;
 struct ASTNode {
-  int kind; /* AST_NUM, AST_VAR, AST_ADD, AST_ASSIGN, AST_LT, AST_IF, AST_WHILE,
-               AST_RETURN, AST_BLOCK */
   int64_t num_val;
-  char var_name[NAME_LEN];
   ASTNode *lhs;
   ASTNode *rhs;
   ASTNode *cond;
@@ -2871,7 +2868,10 @@ struct ASTNode {
   ASTNode *else_body;
   ASTNode *body;
   ASTNode **stmts;
+  int kind; /* AST_NUM, AST_VAR, AST_ADD, AST_ASSIGN, AST_LT, AST_IF, AST_WHILE,
+               AST_RETURN, AST_BLOCK */
   uint32_t n_stmts;
+  char var_name[NAME_LEN];
 };
 
 enum {
@@ -2892,13 +2892,12 @@ enum {
 
 typedef struct {
   Function *fn;
+  Instr *slot_alloca_instr[AST_MAX_VARS];
   BlockID cur_block;
   RegID next_reg;
   InstrID next_instr_id;
   /* var name → slot index; slot_alloca_reg[slot] = reg holding alloca result */
-  char var_names[AST_MAX_VARS][NAME_LEN];
   RegID slot_alloca_reg[AST_MAX_VARS];
-  Instr *slot_alloca_instr[AST_MAX_VARS];
   uint32_t n_vars;
   int want_address; /* 1 when lowering lhs of assign/compound_assign: return
                        address reg, no load */
@@ -2907,10 +2906,11 @@ typedef struct {
   BlockID loop_latch_stack[MAX_NESTED_LOOPS];
   int loop_depth;
   /* label mapping: label name -> BlockID */
-  char label_names[128][NAME_LEN];
   BlockID label_blocks[128];
   uint32_t n_labels;
   RegID last_ret_rdx;
+  char var_names[AST_MAX_VARS][NAME_LEN];
+  char label_names[128][NAME_LEN];
 } LowerCtx;
 
 static RegID lower_expr(LowerCtx *ctx, ASTNode *ast);
@@ -6775,8 +6775,8 @@ static void gvn_invalidate_loop_variant_loads(Function *fn, BlockID bid) {
   }
 
   typedef struct {
-    RegID base;
     int64_t offset;
+    RegID base;
     bool has_cast;
   } LoopStore;
   LoopStore stores[1024];
