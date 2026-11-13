@@ -470,10 +470,13 @@ TargetBackend backend_cortex_m4 = {
 /* PART 6B: AARCH64 / ARM64 TARGET BACKEND (System V / AAPCS64)     */
 /* ================================================================ */
 
+static void aarch64_emit_store_stack(Compiler *cc, int offset, const char *reg);
+
 static void aarch64_emit_prologue(Compiler *cc, Node *func) {
     int raw_stack = func->stack_size + 64;
     if (raw_stack < 256) raw_stack = 256;
     int aligned_stack = (raw_stack + 15) & ~15;
+    cc->abi_scratch_offset = -aligned_stack;
 
     fprintf(cc->out, "    .text\n");
     fprintf(cc->out, "    .arch armv8-a\n");
@@ -497,6 +500,18 @@ static void aarch64_emit_prologue(Compiler *cc, Node *func) {
         int off = -(i * 8 + 8);
         fprintf(cc->out, "    stur x%d, [x29, #%d]\n", i, off);
     }
+    /* Copy incoming stack arguments (9th+) from caller frame above x29 */
+    for (; i < func->num_params; i++) {
+        int in_off = 16 + 8 * (i - 8);
+        int out_off = -(i * 8 + 8);
+        if (in_off <= 4095) {
+            fprintf(cc->out, "    ldr x9, [x29, #%d]\n", in_off);
+        } else {
+            fprintf(cc->out, "    ldr x16, =%d\n", in_off);
+            fprintf(cc->out, "    ldr x9, [x29, x16]\n");
+        }
+        aarch64_emit_store_stack(cc, out_off, "x9");
+    }
 }
 
 static void aarch64_emit_epilogue(Compiler *cc, Node *func) {
@@ -508,7 +523,10 @@ static void aarch64_emit_epilogue(Compiler *cc, Node *func) {
 }
 
 static void aarch64_emit_call(Compiler *cc, Node *func) {
-    fprintf(cc->out, "    bl %s\n", func->func_name);
+    if (func && func->func_name[0] == 0)
+        fprintf(cc->out, "    blr x16\n");
+    else
+        fprintf(cc->out, "    bl %s\n", func->func_name);
 }
 
 static void aarch64_emit_binary_op(Compiler *cc, int op) {
@@ -642,7 +660,7 @@ static void aarch64_emit_addr(Compiler *cc, int folded_off) {
     if (folded_off < 0 && -folded_off <= 4095) fprintf(cc->out, "    sub x0, x29, #%d\n", -folded_off);
     else if (folded_off >= 0 && folded_off <= 4095) fprintf(cc->out, "    add x0, x29, #%d\n", folded_off);
     else {
-        fprintf(cc->out, "    mov x16, #%d\n", folded_off);
+        fprintf(cc->out, "    ldr x16, =%d\n", folded_off);
         fprintf(cc->out, "    add x0, x29, x16\n");
     }
 }

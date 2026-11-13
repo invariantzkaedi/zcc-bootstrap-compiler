@@ -1789,7 +1789,7 @@ gate-green: zcc-qopt
 
 test-qopt: gate-red gate-fault gate-green
 
-.PHONY: gate-red gate-fault gate-green test-qopt verify-argon4 verify-differential rebuild-m5-2
+.PHONY: gate-red gate-fault gate-green test-qopt verify-argon4 verify-differential rebuild-m5-2 test-quad-isa
 
 verify-differential:
 	@CAND="$${ZCC2_CANDIDATE:-./zcc2}"; python3 tools/zcc_differential_c99_oracle.py --compiler "$$CAND" --seeds 32 --receipt "$${DIFF_RECEIPT:-/tmp/zcc_differential_c99_receipt.json}"
@@ -1822,5 +1822,12 @@ rebuild-m5-2: zcc2
 	python3 experiments/zcc_eai_006_g3_m5/run_m5_2_bootstrap.py
 	python3 tools/verify_m5_2_noise_bootstrap.py
 	python3 tools/verify_m5_2_noise_bootstrap.py --self-test
+
+# ─── Stratified 3-Tier Quad-ISA Differential Gate & UI Verifier ──────────────
+test-quad-isa:
+	@if [ ! -x ./zcc ]; then $(MAKE) zcc; fi
+	python3 tools/zcc_quad_isa_gate.py --strict-tier 3 --verify-ui
+	python3 tools/zcc_quad_isa_gate.py --self-test
+	python3 tests/test_quad_isa_deep_regression.py
 
 

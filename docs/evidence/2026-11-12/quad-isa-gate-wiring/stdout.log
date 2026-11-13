@@ -1,0 +1,38 @@
+=== [GATE 1] Self-Host Identity (cmp zcc2.s zcc3.s) ===
+CMP_ZCC2_ZCC3: IDENTICAL (0 byte delta)
+e32ad1c2ae636c1cc0cc54285186346ade67e96affe01ee67d5f045e9d289e53  zcc2.s
+e32ad1c2ae636c1cc0cc54285186346ade67e96affe01ee67d5f045e9d289e53  zcc3.s
+de143d8157bfd676ea6b34af33fd7871658564f52513f72c99084bbd0fac0f8f  zcc2
+de143d8157bfd676ea6b34af33fd7871658564f52513f72c99084bbd0fac0f8f  zcc3
+
+=== [GATE 2] Cross-Toolchain Interoperability (zcc-lib + gcc-main && gcc-lib + zcc-main) ===
+zcc-lib + gcc-main => 0x7e07f55a67f3cc08 (EXIT:0)
+gcc-lib + zcc-main => 0x7e07f55a67f3cc08 (EXIT:0)
+
+=== [GATE 4-EVM] Yul Weaver Target Harness (tests/run_gate4evm.sh) ===
+Baseline: VERDICT: ORACLE-SUSPECT (EXIT 2 AS EXPECTED) | EXIT:2
+Fault:    VERDICT: GATE 4-EVM FAULT DETECTED (EXIT RED AS EXPECTED) | EXIT:1
+Green:    Gate 4-EVM PASS: Storage_opt == Storage_unopt identity & monotonic gas verified (swaps_unopt: 2, swaps_opt: 1, rewrites: 1). | EXIT:0
+
+=== [GATE 4-QUAD-ISA] Stratified 3-Tier Quad-ISA Gate & UI Verifier (make test-quad-isa) ===
+=== [ZCC QUAD-ISA GATE] Verdict: PASS (Rounds=64, Stage23=e32ad1c2ae636c1c...) ===
+  * tier1_core           | Spec=0x7e07f55a67f3cc08 | 7/7 lanes PASS | Tier Verdict=PASS
+  * tier2_struct_union   | Spec=0xfb986fd4f88819a9 | 6/7 lanes PASS | Tier Verdict=FAIL
+      -> zcc_riscv64_qemu  : FAIL (SILENT_WRONG_CODE, exit=0, fnv1a=0x45b674f0a55e6d23)
+  * tier3_edge_abi       | Spec=0x6d4f29801741710f | 5/7 lanes PASS | Tier Verdict=FAIL
+      -> zcc_arm64_qemu    : FAIL (ASSEMBLE_FAIL, exit=1, fnv1a=None)
+      -> zcc_riscv64_qemu  : FAIL (ASSEMBLE_FAIL, exit=1, fnv1a=None)
+  * Surfaced Tier-2/3 Backend Defects (5):
+      - BUG-QUAD-RV64-01 [src/riscv_codegen.c / K7/K8 (uint16_t cast)]: SILENT WRONG-CODE (EXIT 0)
+      - BUG-QUAD-RV64-02 [src/riscv_codegen.c / K7/K8 (packed & union u32 store)]: SILENT WRONG-CODE (EXIT 0)
+      - BUG-QUAD-RV64-03 [src/riscv_codegen.c / K9 (9-arg stack spill)]: ASSEMBLE FAIL
+      - BUG-QUAD-ARM64-01 [src/arm64_codegen.c / K9 (9-arg stack spill)]: ASSEMBLE FAIL
+      - BUG-QUAD-ARM64-02 [src/arm64_codegen.c / K10 (indirect fnptr call)]: ASSEMBLE FAIL
+=== [EF-7 UI VERIFIER] PASS: 1 script(s) AST-clean, 95 DOM IDs bound, WASM=2765B, 8/8 suites PASS, EF-0 self-certify trap killed (main=0 -> FAIL), 0x0 canvas safe, Stop=INCONCLUSIVE ===
+=== [ZCC-EF-0] Running Quad-ISA Gate Adversarial Self-Test (3 Negative Controls) ===
+  [PASS] POS-01 Clean 7-Lane Tier-1 Consensus: 0xa25afa3346e84091
+  [PASS] NEG-01 Killed Self-Certifying WASM Mutant [392] (zcc_quad_bitops_mix i32.xor->i32.and): exports.main()==0, observed=0xcbc2547dfb7d5f26 != spec=0xa25afa3346e84091
+  [PASS] NEG-02 Killed Silent RV64 QEMU Wrong-Code (exit=0, digest=0x5f98e4bb65a4dce3 != spec=0x10273aae5d18d2a7)
+  [PASS] NEG-03 Truncated TU Fail-Closed (ZCC_ZLD_COMPILE_FAIL)
+=== [ZCC-EF-0] ALL 3 ADVERSARIAL NEGATIVE CONTROLS KILLED (SELF-TEST PASS) ===
+

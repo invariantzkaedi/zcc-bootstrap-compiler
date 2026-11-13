@@ -1,0 +1,9 @@
+make selfhost && cmp zcc2.s zcc3.s
+sha256sum zcc2.s zcc3.s zcc2 zcc3
+bash tests/run_gate4evm.sh
+python3 tests/test_c_yulidity_4arm_z3.py
+make test-quad-isa
+python tools/zcc_quad_isa_gate.py --serve --host 127.0.0.1 --port 8799
+python "C:\Users\zkaed\.gemini\config\tools\pre_iterate_verify.py" "h:\__DOWNLOADS\zcc_github_upload\tools\zcc_quad_isa_gate.py" --artifact "h:\__DOWNLOADS\zcc_github_upload\artifacts\ZCC_QUAD_ISA_GATE_RECEIPT.json" --stamp-provenance
+git diff --stat -- Makefile src/evm/yul_weaver.c part0_pp.c part3.c part4.c
+

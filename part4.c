@@ -1368,6 +1368,11 @@ void codegen_expr(Compiler *cc, Node *node) {
           fprintf(cc->out, "    popq %%rsi\n");
           fprintf(cc->out, "    movq %%r11, %%rax\n");
         }
+      } else if (backend_ops && backend_ops->emit_store) {
+        Type mt; memset(&mt, 0, sizeof(Type));
+        mt.kind = (node->lhs->type && is_pointer(node->lhs->type)) ? TY_PTR : TY_INT;
+        mt.size = (mt.kind == TY_PTR) ? backend_ops->ptr_size : node->lhs->member_size;
+        backend_ops->emit_store(cc, &mt);
       } else {
         /* If member type is pointer/func, always use movq regardless of member_size */
         if (node->lhs->type && is_pointer(node->lhs->type)) {
@@ -2446,7 +2451,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
 
-    if (node->rhs->kind == ND_NUM && is_power_of_2_val(node->rhs->int_val)) {
+    if (!backend_ops && node->rhs->kind == ND_NUM && is_power_of_2_val(node->rhs->int_val)) {
       int shift;
       char rhs_val_str[32];
       codegen_expr_checked(cc, node->lhs);
@@ -2629,7 +2634,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       }
     }
 
-    if (node->rhs && node->rhs->kind == ND_NUM &&
+    if (!backend_ops && node->rhs && node->rhs->kind == ND_NUM &&
         is_power_of_2_val(node->rhs->int_val)) {
       long long mask;
       char rhs_val_str[32];
@@ -4159,7 +4164,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     return;
 
   case ND_CALL: {
-    char *argregs[6];
+    char *argregs[8];
     int i;
     int nargs;
     int shadow_and_stack;
@@ -4175,13 +4180,15 @@ void codegen_expr(Compiler *cc, Node *node) {
     int max_gp_args = g_win64_abi_mode ? 4 : 6;
     if (backend_ops) {
       if (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j') {
-        max_gp_args = 6;
+        max_gp_args = 8;
         argregs[0] = "a0"; argregs[1] = "a1"; argregs[2] = "a2";
         argregs[3] = "a3"; argregs[4] = "a4"; argregs[5] = "a5";
+        argregs[6] = "a6"; argregs[7] = "a7";
       } else if (backend_ops->ptr_size == 8) {
-        max_gp_args = 6;
+        max_gp_args = 8;
         argregs[0] = "x0"; argregs[1] = "x1"; argregs[2] = "x2";
         argregs[3] = "x3"; argregs[4] = "x4"; argregs[5] = "x5";
+        argregs[6] = "x6"; argregs[7] = "x7";
       } else {
         max_gp_args = 4;
         argregs[0] = "r0"; argregs[1] = "r1"; argregs[2] = "r2"; argregs[3] = "r3";
@@ -4325,11 +4332,16 @@ void codegen_expr(Compiler *cc, Node *node) {
     int shadow_space = g_win64_abi_mode ? 32 : 0;
     alignment_pad = 0;
     {
-      if ((cc->stack_depth + args_on_stack + (shadow_space / 8)) % 2 != 0) {
+      int d64 = (backend_ops && backend_ops->ptr_size == 8);
+      if ((d64 ? args_on_stack : (cc->stack_depth + args_on_stack + (shadow_space / 8))) % 2 != 0)
         alignment_pad = 8;
-      }
     }
 
+    if (backend_ops && backend_ops->ptr_size == 8 && (alignment_pad + args_on_stack) > 0) {
+      fprintf(cc->out, (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j')
+          ? "    addi sp, sp, -%d\n" : "    sub sp, sp, #%d\n", alignment_pad + args_on_stack * 8);
+      cc->stack_depth += args_on_stack + (alignment_pad / 8);
+    } else if (!(backend_ops && backend_ops->ptr_size == 8)) {
     if (alignment_pad > 0) {
       if (backend_ops) fprintf(cc->out, "    sub sp, sp, #%d\n", alignment_pad);
       else fprintf(cc->out, "    subq $%d, %%rsp\n", alignment_pad);
@@ -4341,6 +4353,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       if (backend_ops) fprintf(cc->out, "    sub sp, sp, #%d\n", args_on_stack * slot_sz);
       else fprintf(cc->out, "    subq $%d, %%rsp\n", args_on_stack * 8);
       cc->stack_depth += args_on_stack;
+    }
     }
 
     if (shadow_space > 0) {
@@ -4385,11 +4398,16 @@ void codegen_expr(Compiler *cc, Node *node) {
       int depth_before_arg = cc->stack_depth;
       codegen_expr_checked(cc, node->args[i]);
       if (cc->stack_depth > depth_before_arg && !arg_is_stack[i]) {
-          int extra = (cc->stack_depth - depth_before_arg) * (backend_ops ? backend_ops->ptr_size : 8);
+          int push_sz = (backend_ops && backend_ops->ptr_size == 8) ? 16 : (backend_ops ? backend_ops->ptr_size : 8);
+          int extra = (cc->stack_depth - depth_before_arg) * push_sz;
           if (backend_ops) {
-              fprintf(cc->out, "    mov r1, r0\n");
-              fprintf(cc->out, "    add sp, sp, #%d\n", extra);
-              fprintf(cc->out, "    mov r0, r1\n");
+              if (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j')
+                  fprintf(cc->out, "    mv t1, a0\n    addi sp, sp, %d\n    mv a0, t1\n", extra);
+              else {
+                  fprintf(cc->out, "    mov r1, r0\n");
+                  fprintf(cc->out, "    add sp, sp, #%d\n", extra);
+                  fprintf(cc->out, "    mov r0, r1\n");
+              }
           } else {
               fprintf(cc->out, "    movq %%rax, %%r11\n");
               fprintf(cc->out, "    addq $%d, %%rsp\n", extra);
@@ -4398,11 +4416,13 @@ void codegen_expr(Compiler *cc, Node *node) {
           cc->stack_depth = depth_before_arg;
       }
       Type *atype = (node->args[i] && !is_bad_ptr(node->args[i]) && node->args[i]->type) ? node->args[i]->type : 0;
-      int slot_sz = backend_ops ? backend_ops->ptr_size : 8;
+      int slot_sz = (backend_ops && backend_ops->ptr_size == 8) ? 16 : (backend_ops ? backend_ops->ptr_size : 8);
       int current_pushed_bytes = (cc->stack_depth - stack_depth_at_reservation) * slot_sz;
       if (arg_is_stack[i]) {
           if (backend_ops) {
-              fprintf(cc->out, "    str r0, [sp, #%d]\n", current_pushed_bytes + shadow_space + arg_stack_offset[i]);
+              int soff = current_pushed_bytes + shadow_space + arg_stack_offset[i];
+              fprintf(cc->out, (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j') ? "    sd a0, %d(sp)\n"
+                  : ((backend_ops->ptr_size == 8) ? "    str x0, [sp, #%d]\n" : "    str r0, [sp, #%d]\n"), soff);
           } else {
               if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION)) {
                   /* Copy aggregate to reserved stack slots */
@@ -4765,7 +4785,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     int cleanup_slot_sz = backend_ops ? backend_ops->ptr_size : 8;
     cleanup_bytes = (args_on_stack * cleanup_slot_sz) + alignment_pad + shadow_space;
     if (cleanup_bytes > 0) {
-      if (backend_ops) fprintf(cc->out, "    add sp, sp, #%d\n", cleanup_bytes);
+      if (backend_ops) fprintf(cc->out, (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j') ? "    addi sp, sp, %d\n" : "    add sp, sp, #%d\n", cleanup_bytes);
       else fprintf(cc->out, "    addq $%d, %%rsp\n", cleanup_bytes);
       cc->stack_depth -= (cleanup_bytes / cleanup_slot_sz);
     }

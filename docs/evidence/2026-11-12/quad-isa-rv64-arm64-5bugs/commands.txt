@@ -1,0 +1,28 @@
+# Execution order (after final edit to part4.c and tools/zcc_quad_isa_gate.py)
+# Environment: WSL Ubuntu-24.04, CWD: /mnt/h/__DOWNLOADS/zcc_github_upload
+
+# 1. Diff scope check against <50-line PARTS limit
+git diff --numstat -- part4.c part6_arm.c part6_riscv.c
+
+# 2. Rebuild compiler and run standalone pre/post EF-3 & EF-2 probes
+make zcc 2>&1 | tee /tmp/zcc-build-post.log
+./zcc --target=riscv64 -DZCC_HOST_STDOUT -DZCC_CAMPAIGN_ROUNDS=64 -DZCC_TORTURE_STRUCT_UNION -S tests/zcc_quad_isa_torture.c -o /tmp/ef3_post/rv64_t2.s
+riscv64-linux-gnu-gcc -static /tmp/ef3_post/rv64_t2.s -o /tmp/ef3_post/rv64_t2.elf && qemu-riscv64-static /tmp/ef3_post/rv64_t2.elf
+./zcc --target=riscv64 -DZCC_HOST_STDOUT -DZCC_CAMPAIGN_ROUNDS=64 -DZCC_TORTURE_STRUCT_UNION -DZCC_TORTURE_EDGE_ABI -S tests/zcc_quad_isa_torture.c -o /tmp/ef3_post/rv64_t3.s
+riscv64-linux-gnu-gcc -static /tmp/ef3_post/rv64_t3.s -o /tmp/ef3_post/rv64_t3.elf && qemu-riscv64-static /tmp/ef3_post/rv64_t3.elf
+./zcc --target=arm64 -DZCC_HOST_STDOUT -DZCC_CAMPAIGN_ROUNDS=64 -DZCC_TORTURE_STRUCT_UNION -S tests/zcc_quad_isa_torture.c -o /tmp/ef3_post/arm64_t2.s
+aarch64-linux-gnu-as /tmp/ef3_post/arm64_t2_start.s -o /tmp/ef3_post/arm64_t2.o && aarch64-linux-gnu-ld -static /tmp/ef3_post/arm64_t2.o -o /tmp/ef3_post/arm64_t2.elf && qemu-aarch64-static /tmp/ef3_post/arm64_t2.elf
+./zcc --target=arm64 -DZCC_HOST_STDOUT -DZCC_CAMPAIGN_ROUNDS=64 -DZCC_TORTURE_STRUCT_UNION -DZCC_TORTURE_EDGE_ABI -S tests/zcc_quad_isa_torture.c -o /tmp/ef3_post/arm64_t3.s
+aarch64-linux-gnu-as /tmp/ef3_post/arm64_t3_start.s -o /tmp/ef3_post/arm64_t3.o && aarch64-linux-gnu-ld -static /tmp/ef3_post/arm64_t3.o -o /tmp/ef3_post/arm64_t3.elf && qemu-aarch64-static /tmp/ef3_post/arm64_t3.elf
+
+# 3. Full Self-Host Bootstrap, Cross-TU Interop & ARGON 4 Gate (Gate 1 + Gate 2 + ARGON 4)
+set -o pipefail && make selfhost 2>&1 | tee /tmp/zcc-selfhost-post.log
+
+# 4. Explicit Gate 1 cmp, Gate 2 bidirectional cross-TU object link, Gate 4/5 Quad-ISA Strict-Tier 3 + Self-Test + EF-7 UI
+cmp -s evidence/zcc-omega-1794536838-894-f5121d046dad6310/stage2.s evidence/zcc-omega-1794536838-894-f5121d046dad6310/stage3.s
+./zcc -c /tmp/gate2_check/lib.c -o /tmp/gate2_check/lib_zcc.o && gcc /tmp/gate2_check/main.c /tmp/gate2_check/lib_zcc.o -o /tmp/gate2_check/zcc_lib_gcc_main && /tmp/gate2_check/zcc_lib_gcc_main
+gcc -c /tmp/gate2_check/lib.c -o /tmp/gate2_check/lib_gcc.o && ./zcc -c /tmp/gate2_check/main.c -o /tmp/gate2_check/main_zcc.o && gcc /tmp/gate2_check/main_zcc.o /tmp/gate2_check/lib_gcc.o -o /tmp/gate2_check/gcc_lib_zcc_main && /tmp/gate2_check/gcc_lib_zcc_main
+python3 tools/zcc_quad_isa_gate.py --strict-tier 3 --verify-ui | tee /tmp/zcc-quad-isa-final.log
+python3 tools/zcc_quad_isa_gate.py --self-test | tee -a /tmp/zcc-quad-isa-final.log
+make test-quad-isa
+

@@ -7,10 +7,13 @@
 /* PART 6C: RISC-V 64-BIT TARGET BACKEND (RV64GC / psABI)           */
 /* ================================================================ */
 
+static void riscv_emit_store_stack(Compiler *cc, int offset, const char *reg);
+
 static void riscv_emit_prologue(Compiler *cc, Node *func) {
     int stack_size = func->stack_size + 64;
     if (stack_size < 256) stack_size = 256;
     stack_size = (stack_size + 15) & ~15;
+    cc->abi_scratch_offset = -stack_size;
 
     fprintf(cc->out, "    .text\n");
     fprintf(cc->out, "    .option pic\n");
@@ -38,6 +41,19 @@ static void riscv_emit_prologue(Compiler *cc, Node *func) {
         int off = -8 * (i + 1);
         fprintf(cc->out, "    sd a%d, %d(s0)\n", i, off);
     }
+    /* Copy incoming stack arguments (9th+) from caller frame above s0 */
+    for (; i < func->num_params; i++) {
+        int in_off = 16 + 8 * (i - 8);
+        int out_off = -8 * (i + 1);
+        if (in_off <= 2047) {
+            fprintf(cc->out, "    ld t1, %d(s0)\n", in_off);
+        } else {
+            fprintf(cc->out, "    li t1, %d\n", in_off);
+            fprintf(cc->out, "    add t1, s0, t1\n");
+            fprintf(cc->out, "    ld t1, 0(t1)\n");
+        }
+        riscv_emit_store_stack(cc, out_off, "t1");
+    }
 }
 
 static void riscv_emit_epilogue(Compiler *cc, Node *func) {
@@ -51,7 +67,10 @@ static void riscv_emit_epilogue(Compiler *cc, Node *func) {
 }
 
 static void riscv_emit_call(Compiler *cc, Node *func) {
-    fprintf(cc->out, "    call %s\n", func->func_name);
+    if (func && func->func_name[0] == 0)
+        fprintf(cc->out, "    jalr t6\n");
+    else
+        fprintf(cc->out, "    call %s\n", func->func_name);
 }
 
 static void riscv_emit_binary_op(Compiler *cc, int op) {
@@ -99,6 +118,7 @@ static const char *riscv_map_reg(const char *reg) {
     if (strcmp(reg, "rcx") == 0 || strcmp(reg, "ecx") == 0 || strcmp(reg, "cx") == 0 || strcmp(reg, "cl") == 0 || strcmp(reg, "r4") == 0 || strcmp(reg, "x4") == 0) return "a4";
     if (strcmp(reg, "r8") == 0 || strcmp(reg, "r8d") == 0 || strcmp(reg, "r5") == 0 || strcmp(reg, "x5") == 0) return "a5";
     if (strcmp(reg, "r9") == 0 || strcmp(reg, "r9d") == 0 || strcmp(reg, "r6") == 0 || strcmp(reg, "x6") == 0) return "a6";
+    if (strcmp(reg, "x16") == 0) return "t6";
     return reg;
 }
 
@@ -321,11 +341,11 @@ void backend_normalize_asm(char **line_ptrs, int nlines) {
             } else if (strcmp(l, "    uxtb r0, r0\n") == 0) {
                 strcpy(l, "    andi a0, a0, 255\n");
             } else if (strcmp(l, "    sxtb r0, r0\n") == 0) {
-                strcpy(l, "    slli a0, a0, 56\n");
+                strcpy(l, "    slli a0, a0, 56\n    srai a0, a0, 56\n");
             } else if (strcmp(l, "    uxth r0, r0\n") == 0) {
-                strcpy(l, "    slli a0, a0, 48\n");
+                strcpy(l, "    slli a0, a0, 48\n    srli a0, a0, 48\n");
             } else if (strcmp(l, "    sxth r0, r0\n") == 0) {
-                strcpy(l, "    slli a0, a0, 48\n");
+                strcpy(l, "    slli a0, a0, 48\n    srai a0, a0, 48\n");
             } else if (sscanf(l, "    lsl r1, r1, #%d", &v) == 1) {
                 sprintf(l, "    slli a1, a1, %d\n", v);
             } else if (sscanf(l, "    lsl r0, r0, #%d", &v) == 1) {
