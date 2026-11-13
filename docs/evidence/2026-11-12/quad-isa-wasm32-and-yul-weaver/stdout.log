@@ -1,0 +1,41 @@
+=== Gate 1: Self-Host Identity ===
+SELFHOST-MV1.3b PASS
+Bootstrap fixed-point, semantic-canary, and full SystemV ABI constraints satisfied.
+CMP_ZCC2_ZCC3_EXIT=0
+e83ba9d733a724d56866e45787d2eb7b04b91ea810a5817598dfff40c518ce9b  zcc2.s
+e83ba9d733a724d56866e45787d2eb7b04b91ea810a5817598dfff40c518ce9b  zcc3.s
+stage2.bin=5403edaac01ba725c6723a8c10e9178baa0d5a8d2957eb028b5fa138a1e5028e
+stage3.bin=5403edaac01ba725c6723a8c10e9178baa0d5a8d2957eb028b5fa138a1e5028e
+
+=== Gate 2: Cross-Toolchain Interoperability ===
+zcc-lib + gcc-main: G2_INTEROP=60 (exit 0)
+gcc-lib + zcc-main: G2_INTEROP=60 (exit 0)
+
+=== Gate 3: Corpus Test Suite ===
+PASS: 35  FAIL: 0  SKIP: 3
+ALL TESTS PASSED
+
+=== Gate 4A: Quad-ISA Deep Regression + DEEP-01..05 (4-of-4 ISAs: x86_64, arm64, riscv64, wasm32) ===
+[ZCC-QUAD-ISA-GATE] PASS: 7/7 lanes verified across Tiers (1, 2, 3) (x86_64, arm64, riscv64, wasm32).
+[SELF-TEST] PASS: All 3 negative controls killed.
+{"ISA": "zcc_x86_64", "rc": 0, "stdout": "D2=04e2ea19 F4=e05f3717"}
+{"ISA": "zcc_arm64", "rc": 0, "stdout": "D2=04e2ea19 F4=e05f3717"}
+{"ISA": "zcc_riscv64", "rc": 0, "stdout": "D2=04e2ea19 F4=e05f3717"}
+{"ISA": "zcc_wasm32", "rc": 0, "stdout": "D2=04e2ea19 F4=e05f3717"}
+{"ISA": "zcc_x86_64", "rc": 0, "stdout": "M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff", "EF2_missing": []}
+{"ISA": "zcc_arm64", "rc": 0, "stdout": "M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff", "EF2_missing": []}
+{"ISA": "zcc_riscv64", "rc": 0, "stdout": "M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff", "EF2_missing": []}
+{"ISA": "zcc_wasm32", "rc": 0, "stdout": "M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff", "EF2_missing": []}
+[ZCC-PROVE-01] PASS: 25/25 operand & XMM-liveness classes formally proven UNSAT via Z3 + 5000 differential machine states verified + ZCC-PROVE-02 super-peepholes UNSAT
+test_wasm_mv02.py: Ran 30 tests in 100.412s — OK
+
+=== Gate 4B: EVM Yul Two-Pass Assembler & Weaver Settlement ===
+verify_quantum_yul_settlement.py: Ran 6 tests in 0.087s — OK
+[YUL DENSITY] Compiled Pure Yul Contract Size: 248 bytes
+[GAS REPORT] Total Transaction Gas Used: 56,216 gas (< 300,000 gas budget)
+
+=== Native Windows Binary Sync ===
+[1/4] Synchronized zcc.c from 22 PARTS files (1,615,461 bytes).
+[2/4] Compiling 1/88 updated translation units with MSVC cl.exe (/O2 /MP)...
+[3/4] Linked native Windows zcc.exe (1,601,024 bytes) in 3.88s.
+[+] Built native multithreaded zcc_3d_glb_renderer.exe (188,416 bytes).

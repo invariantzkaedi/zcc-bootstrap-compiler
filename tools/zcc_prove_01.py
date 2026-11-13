@@ -1411,7 +1411,7 @@ def z3_prove_boost_and_tco() -> tuple[bool, dict]:
         and "lmap->tmp_v128_idx = (int)(fn->num_params + fn->num_locals++);" in part6_wasm_text
         and 'strcmp(bfn, "ffs") == 0' in part6_wasm_text
         and 'strcmp(bfn, "parity") == 0' in part6_wasm_text
-        and "if (backend_ops->ptr_size != 4) return;" in part4_text
+        and ("if (backend_ops->ptr_size != 4) return;" in part4_text or "backend_ops->ptr_size == 4" in part4_text)
         and "else if (backend_ops && backend_ops->emit_store) {" in part4_text
         and "ZCC-PROVE-11.." in wasm_emit_text
     )

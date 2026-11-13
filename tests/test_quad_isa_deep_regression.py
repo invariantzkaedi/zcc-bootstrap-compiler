@@ -186,6 +186,49 @@ def run_suite() -> int:
             if not ok:
                 failures += 1
 
+        # Lane 4: ZCC WASM32 Node WASI
+        wasm_bin = work / "deep_reg.wasm"
+        runner_js = work / "wasm_runner.js"
+        runner_js.write_text(
+            "const fs = require('fs');\n"
+            "const buf = fs.readFileSync(process.argv[2]);\n"
+            "let mem = null; let out = '';\n"
+            "const wasi = {\n"
+            "  fd_write: (fd, iovs, iovs_len, nwritten) => {\n"
+            "    const v = new DataView(mem.buffer);\n"
+            "    let total = 0;\n"
+            "    for (let i = 0; i < iovs_len; i++) {\n"
+            "      const ptr = v.getUint32(iovs + i * 8, true);\n"
+            "      const len = v.getUint32(iovs + i * 8 + 4, true);\n"
+            "      out += Buffer.from(mem.buffer, ptr, len).toString('utf8');\n"
+            "      total += len;\n"
+            "    }\n"
+            "    if (nwritten) v.setUint32(nwritten, total, true);\n"
+            "    return 0;\n"
+            "  },\n"
+            "  fd_read: () => 0,\n"
+            "  proc_exit: (c) => { process.stdout.write(out); process.exit(c); }\n"
+            "};\n"
+            "WebAssembly.instantiate(buf, { wasi_snapshot_preview1: wasi }).then(({ instance }) => {\n"
+            "  mem = instance.exports.memory;\n"
+            "  if (instance.exports.memory && instance.exports.memory.grow) instance.exports.memory.grow(4);\n"
+            "  if (instance.exports._start) instance.exports._start();\n"
+            "  else if (instance.exports.main) instance.exports.main();\n"
+            "  process.stdout.write(out);\n"
+            "}).catch(e => { console.error(e); process.exit(1); });\n",
+            encoding="utf-8",
+        )
+        cw = run_cmd([str(zcc_bin), "--target=wasm32", str(src), "-o", str(wasm_bin)])
+        if cw.returncode != 0 or not wasm_bin.exists():
+            print(f"  [FAIL] zcc_wasm32 build error: {cw.stderr.strip()}")
+            failures += 1
+        else:
+            qw = run_cmd(["node", str(runner_js), str(wasm_bin)])
+            ok = qw.returncode == 0 and qw.stdout.strip() == oracle_out
+            print(f"  [{'PASS' if ok else 'FAIL'}] zcc_wasm32    : {qw.stdout.strip()}")
+            if not ok:
+                failures += 1
+
         return 1 if failures else 0
 
 

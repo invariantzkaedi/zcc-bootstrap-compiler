@@ -8,7 +8,7 @@ typedef struct {
     char name[64];
     uint32_t offset;
     int size;
-    Type *type;
+    Type *type; Node *init;
 } WasmGlobalVar;
 
 typedef struct {
@@ -113,6 +113,13 @@ static void wasm_emit_type_conversion(WASMBuffer *buf, uint8_t src_vt, Type *src
         ? wasm_type_is_unsigned_or_ptr(dst_type)
         : wasm_type_is_unsigned_or_ptr(src_type);
     wasm_emit_numeric_conversion(buf, src_vt, dst_vt, is_uns);
+}
+static void wasm_emit_subword_trunc(WASMBuffer *buf, Type *t) {
+    if (!t || is_pointer(t) || t->kind == TY_ARRAY || (t->size != 1 && t->size != 2)) return;
+    if (is_unsigned_type(t)) { wasm_buf_append_u8(buf, WASM_OP_I32_CONST); wasm_buf_append_sleb128(buf, t->size == 1 ? 255 : 65535); wasm_buf_append_u8(buf, WASM_OP_I32_AND); return; }
+    int sh = (t->size == 1) ? 24 : 16;
+    wasm_buf_append_u8(buf, WASM_OP_I32_CONST); wasm_buf_append_sleb128(buf, sh); wasm_buf_append_u8(buf, WASM_OP_I32_SHL);
+    wasm_buf_append_u8(buf, WASM_OP_I32_CONST); wasm_buf_append_sleb128(buf, sh); wasm_buf_append_u8(buf, WASM_OP_I32_SHR_S);
 }
 
 static void wasm_emit_to_bool_i32(WASMBuffer *buf, uint8_t vt) {
@@ -481,7 +488,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                 if (entry && !entry->is_memory) {
                     /* Direct local register assignment with numeric conversion */
                     wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-                    wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, entry->val_type, lhs_type);
+                    wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, entry->val_type, lhs_type); wasm_emit_subword_trunc(&fn->body, lhs_type);
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
                     wasm_buf_append_uleb128(&fn->body, entry->local_idx);
                     break;
@@ -491,7 +498,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
             /* Memory Lvalue Store: [addr, val] */
             wasm_lower_addr(cc, mod, fn, lmap, gmap, node->lhs);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->rhs);
-            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, lhs_vt, lhs_type);
+            wasm_emit_type_conversion(&fn->body, rhs_vt, rhs_type, lhs_vt, lhs_type); wasm_emit_subword_trunc(&fn->body, lhs_type);
 
             if (lhs_vt == WASM_TYPE_F32) {
                 if (lmap->tmp_f32_idx >= 0) {
@@ -604,7 +611,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                             default: wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD); break;
                         }
                     }
-                    wasm_emit_type_conversion(&fn->body, common_vt, lhs_type, entry->val_type, lhs_type);
+                    wasm_emit_type_conversion(&fn->body, common_vt, lhs_type, entry->val_type, lhs_type); wasm_emit_subword_trunc(&fn->body, lhs_type);
                     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
                     wasm_buf_append_uleb128(&fn->body, entry->local_idx);
                     break;
@@ -669,7 +676,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     default: wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD); break;
                 }
             }
-            wasm_emit_type_conversion(&fn->body, common_vt, lhs_type, lhs_vt, lhs_type);
+            wasm_emit_type_conversion(&fn->body, common_vt, lhs_type, lhs_vt, lhs_type); wasm_emit_subword_trunc(&fn->body, lhs_type);
 
             if (lhs_vt == WASM_TYPE_F32) {
                 if (lmap->tmp_f32_idx >= 0 && lmap->tmp_addr_idx >= 0) {
@@ -1183,7 +1190,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                     } else {
                         wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
                         wasm_buf_append_sleb128(&fn->body, step);
-                        wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_I32_ADD : WASM_OP_I32_SUB);
+                        wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_I32_ADD : WASM_OP_I32_SUB); wasm_emit_subword_trunc(&fn->body, ltype);
                     }
                     if (is_post) {
                         wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
@@ -1230,7 +1237,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
             } else {
                 wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
                 wasm_buf_append_sleb128(&fn->body, step);
-                wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_I32_ADD : WASM_OP_I32_SUB);
+                wasm_buf_append_u8(&fn->body, is_inc ? WASM_OP_I32_ADD : WASM_OP_I32_SUB); wasm_emit_subword_trunc(&fn->body, ltype);
             }
             if (!is_post && tmp_idx >= 0) {
                 wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
@@ -1294,7 +1301,7 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
             uint8_t src_vt = wasm_node_valtype(node->lhs);
             uint8_t dst_vt = wasm_valtype_from_ctype(dst_type);
             wasm_lower_expr(cc, mod, fn, lmap, gmap, node->lhs);
-            wasm_emit_type_conversion(&fn->body, src_vt, src_type, dst_vt, dst_type);
+            wasm_emit_type_conversion(&fn->body, src_vt, src_type, dst_vt, dst_type); wasm_emit_subword_trunc(&fn->body, dst_type);
             break;
         }
 
@@ -3338,6 +3345,32 @@ static int wasm_ast_has_call_name(Node *node, const char *name) {
     return 0;
 }
 
+static void wasm_fill_ginit(const WasmModule *mod, WasmGlobalMap *gmap, Node *init, Type *t, uint8_t *dst, int max_sz) {
+    if (!init || max_sz <= 0) return;
+    if (init->kind == ND_INIT_LIST) {
+        if (t && t->kind == TY_STRUCT) {
+            StructField *f = t->fields;
+            for (int i = 0; i < init->num_args && f; i++, f = f->next)
+                if (f->type && f->offset + type_size(f->type) <= max_sz) wasm_fill_ginit(mod, gmap, init->args[i], f->type, dst + f->offset, type_size(f->type));
+        } else {
+            Type *et = (t && t->base) ? t->base : t; int esz = (et && type_size(et) > 0) ? type_size(et) : 4;
+            for (int i = 0; i < init->num_args && (i + 1) * esz <= max_sz; i++) wasm_fill_ginit(mod, gmap, init->args[i], et, dst + i * esz, esz);
+        }
+        return;
+    }
+    while (init && (init->kind == ND_CAST || init->kind == ND_ADDR)) init = init->lhs;
+    if (!init) return;
+    if (init->kind == ND_FLIT || (t && (t->kind == TY_FLOAT || t->kind == TY_DOUBLE))) {
+        double dv = (init->kind == ND_NEG && init->lhs) ? -init->lhs->f_val : (init->kind == ND_FLIT ? init->f_val : (double)init->int_val);
+        if (t && t->kind == TY_FLOAT) { float fv = (float)dv; memcpy(dst, &fv, 4); } else if (max_sz >= 8) memcpy(dst, &dv, 8);
+        return;
+    }
+    const char *nm = init->name[0] ? init->name : (init->sym ? init->sym->name : NULL);
+    int fidx = (nm && nm[0]) ? wasm_find_func_idx(mod, nm) : -1, ok = 1;
+    int64_t val = (fidx >= 0) ? (int64_t)fidx : (int64_t)eval_const_expr_p4(init, &ok);
+    if (fidx < 0 && !ok) val = (int64_t)init->int_val;
+    memcpy(dst, &val, max_sz <= 8 ? (size_t)max_sz : 8);
+}
 int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
     if (!prog || !output_file) return -1;
 
@@ -3384,23 +3417,7 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
         gmap.vars[g_idx].type = gvar->type;
 
         if (gvar->sym) gvar->sym->stack_offset = (int)global_static_offset;
-
-        if (gvar->initializer) {
-            if (gvar->initializer->kind == ND_FLIT || (gvar->type && (gvar->type->kind == TY_FLOAT || gvar->type->kind == TY_DOUBLE))) {
-                if (gvar->type && gvar->type->kind == TY_FLOAT) {
-                    float fval = (float)gvar->initializer->f_val;
-                    wasm_module_add_data_segment(&mod, global_static_offset, (const uint8_t *)&fval, sizeof(float));
-                } else {
-                    double dval = (double)gvar->initializer->f_val;
-                    wasm_module_add_data_segment(&mod, global_static_offset, (const uint8_t *)&dval, sizeof(double));
-                }
-            } else {
-                int const_ok = 1;
-                int64_t val = (int64_t)eval_const_expr_p4(gvar->initializer, &const_ok);
-                if (!const_ok) val = (int64_t)gvar->initializer->int_val;
-                wasm_module_add_data_segment(&mod, global_static_offset, (const uint8_t *)&val, sz <= 8 ? (size_t)sz : 8);
-            }
-        }
+        gmap.vars[g_idx].init = gvar->initializer;
         global_static_offset += (uint32_t)sz;
     }
 
@@ -3422,23 +3439,7 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
                 gmap.vars[g_idx].type = curr->type;
 
                 if (curr->sym) curr->sym->stack_offset = (int)global_static_offset;
-
-                if (curr->initializer) {
-                    if (curr->initializer->kind == ND_FLIT || (curr->type && (curr->type->kind == TY_FLOAT || curr->type->kind == TY_DOUBLE))) {
-                        if (curr->type && curr->type->kind == TY_FLOAT) {
-                            float fval = (float)curr->initializer->f_val;
-                            wasm_module_add_data_segment(&mod, global_static_offset, (const uint8_t *)&fval, sizeof(float));
-                        } else {
-                            double dval = (double)curr->initializer->f_val;
-                            wasm_module_add_data_segment(&mod, global_static_offset, (const uint8_t *)&dval, sizeof(double));
-                        }
-                    } else {
-                        int const_ok = 1;
-                        int64_t val = (int64_t)eval_const_expr_p4(curr->initializer, &const_ok);
-                        if (!const_ok) val = (int64_t)curr->initializer->int_val;
-                        wasm_module_add_data_segment(&mod, global_static_offset, (const uint8_t *)&val, sz <= 8 ? (size_t)sz : 8);
-                    }
-                }
+                gmap.vars[g_idx].init = curr->initializer;
                 global_static_offset += (uint32_t)sz;
             }
         }
@@ -3513,6 +3514,7 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
         int exit_tidx = wasm_module_add_type(&mod, exit_params, 1, NULL, 0);
         proc_exit_imp_idx = wasm_module_add_import_func(&mod, "wasi_snapshot_preview1", "proc_exit", exit_tidx);
     }
+    for (g = 0; g < mod.num_imports; g++) wasm_module_add_table_element(&mod, (uint32_t)g);
 
     /* 2. Pre-declare all user function signatures and add to Table 0 and Exports */
     curr = prog;
@@ -3541,6 +3543,11 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
             }
         }
         curr = curr->next;
+    }
+    for (g = 0; g < gmap.count; g++) if (gmap.vars[g].init && gmap.vars[g].size > 0) {
+        uint8_t *gbuf = (uint8_t *)calloc(1, (size_t)gmap.vars[g].size);
+        wasm_fill_ginit(&mod, &gmap, gmap.vars[g].init, gmap.vars[g].type, gbuf, gmap.vars[g].size);
+        wasm_module_add_data_segment(&mod, gmap.vars[g].offset, gbuf, (size_t)gmap.vars[g].size); free(gbuf);
     }
 
     /* 3. Synthesize freestanding runtime functions */

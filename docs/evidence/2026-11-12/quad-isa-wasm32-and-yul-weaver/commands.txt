@@ -1,0 +1,7 @@
+wsl -d Ubuntu-24.04 -- bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && make zcc && make selfhost && cmp zcc2.s zcc3.s && sha256sum zcc2.s zcc3.s"
+wsl -d Ubuntu-24.04 -- bash /mnt/c/Users/zkaed/.gemini/antigravity/brain/b5d242f0-c90f-4887-92ef-6d6737127e24/scratch/run_g2_and_yul.sh
+wsl -d Ubuntu-24.04 -- bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && bash zcc_test_suite.sh --quick"
+wsl -d Ubuntu-24.04 -- bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && make qemu"
+wsl -d Ubuntu-24.04 -- bash -c "cd /mnt/h/__DOWNLOADS/zcc_github_upload && python3 tools/zcc_prove_01.py && python3 -m unittest discover -s tests -p 'test_wasm_mv02.py' -v"
+python tools/build_zcc_win64.py
+python "C:\Users\zkaed\.gemini\config\tools\pre_iterate_verify.py" part6_wasm.c tests/test_quad_isa_deep_regression.py tests/test_quad_isa_deep_01_03_05.py tools/zcc_prove_01.py src/evm/yul_frontend.c src/evm/yul_weaver.c compiler_passes.c spectrogram_waterfall_prime.html zcc_hyperdim_test_harness.html

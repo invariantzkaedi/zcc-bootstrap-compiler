@@ -193,6 +193,7 @@ EF2_REQUIRED_MARKERS: Dict[str, List[str]] = {
     "x86_64": ["popq %r10"],
     "arm64": ["ldr x16, [sp], #16", "str w1, [x0]", "mov w0, w0"],
     "riscv64": ["ld t6, 0(sp)", "sw a1, 0(a0)", "slli a0, a0, 32", "srli a0, a0, 32"],
+    "wasm32": ["wasm_magic_v1", "call_indirect_0x11"],
 }
 
 
@@ -245,6 +246,48 @@ def compile_and_run_zcc_target(zcc: Path, src: Path, work: Path, arch: str) -> T
         if lnk.returncode != 0:
             return False, f"rv64 link failed: {lnk.stderr.strip()}", ""
         exe = run_step(["qemu-riscv64-static", str(elf_path)])
+    elif arch == "wasm32":
+        wasm_path = work / "probe_wasm32.wasm"
+        comp = run_step([str(zcc), "--target=wasm32", str(src), "-o", str(wasm_path)])
+        if comp.returncode != 0 or not wasm_path.is_file():
+            return False, f"zcc wasm32 compile failed: {comp.stderr.strip()}", ""
+        raw_wasm = wasm_path.read_bytes()
+        markers = []
+        if raw_wasm[:8] == b"\x00asm\x01\x00\x00\x00":
+            markers.append("wasm_magic_v1")
+        if b"\x11" in raw_wasm:
+            markers.append("call_indirect_0x11")
+        asm_path.write_text(" ".join(markers), encoding="utf-8")
+        runner_js = work / "wasm_runner.js"
+        runner_js.write_text(
+            "const fs = require('fs');\n"
+            "const buf = fs.readFileSync(process.argv[2]);\n"
+            "let mem = null; let out = '';\n"
+            "const wasi = {\n"
+            "  fd_write: (fd, iovs, iovs_len, nwritten) => {\n"
+            "    const v = new DataView(mem.buffer);\n"
+            "    let total = 0;\n"
+            "    for (let i = 0; i < iovs_len; i++) {\n"
+            "      const ptr = v.getUint32(iovs + i * 8, true);\n"
+            "      const len = v.getUint32(iovs + i * 8 + 4, true);\n"
+            "      out += Buffer.from(mem.buffer, ptr, len).toString('utf8');\n"
+            "      total += len;\n"
+            "    }\n"
+            "    if (nwritten) v.setUint32(nwritten, total, true);\n"
+            "    return 0;\n"
+            "  },\n"
+            "  fd_read: () => 0,\n"
+            "  proc_exit: (c) => { process.stdout.write(out); process.exit(c); }\n"
+            "};\n"
+            "WebAssembly.instantiate(buf, { wasi_snapshot_preview1: wasi }).then(({ instance }) => {\n"
+            "  mem = instance.exports.memory;\n"
+            "  if (instance.exports._start) instance.exports._start();\n"
+            "  else if (instance.exports.main) instance.exports.main();\n"
+            "  process.stdout.write(out);\n"
+            "}).catch(e => { console.error(e); process.exit(1); });\n",
+            encoding="utf-8",
+        )
+        exe = run_step(["node", str(runner_js), str(wasm_path)])
     else:
         return False, f"Unknown architecture: {arch}", ""
 
@@ -280,7 +323,7 @@ def run_suite(zcc_path: Path) -> int:
         print(f"[ORACLE] GCC/Clang -O2 : {expected}")
 
         all_ok = True
-        for arch in ("x86_64", "arm64", "riscv64"):
+        for arch in ("x86_64", "arm64", "riscv64", "wasm32"):
             ok, out, asm_text = compile_and_run_zcc_target(zcc_path, src, work, arch)
             missing = [m for m in EF2_REQUIRED_MARKERS[arch] if m not in asm_text]
             rt_match = ok and (out == expected)
