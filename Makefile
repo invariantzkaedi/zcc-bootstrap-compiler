@@ -1829,5 +1829,37 @@ test-quad-isa:
 	python3 tools/zcc_quad_isa_gate.py --strict-tier 3 --verify-ui
 	python3 tools/zcc_quad_isa_gate.py --self-test
 	python3 tests/test_quad_isa_deep_regression.py
+	python3 tests/test_quad_isa_deep_01_03_05.py
+
+# ─── Gate 4 Target Harnesses (SQLite, QuickJS, MicroPython, DOOM, QEMU, Valgrind) ─
+.PHONY: test-sqlite test-quickjs test-micropython test-doom qemu valgrind
+
+test-sqlite:
+	@if [ ! -x ./zcc ]; then $(MAKE) zcc; fi
+	python3 tools/run_core_03_sqlite_differential.py
+
+test-quickjs:
+	@if [ ! -x ./zcc ]; then $(MAKE) zcc; fi
+	bash scripts/build_quickjs.sh
+	gcc -o /tmp/test_quickjs_runner tests/test_quickjs_native.c tests/zcc_quickjs_runtime.s /tmp/quickjs_objs/quickjs.o /tmp/quickjs_objs/cutils.o /tmp/quickjs_objs/libunicode.o /tmp/quickjs_objs/dtoa.o /tmp/quickjs_objs/libregexp.o -I/tmp/quickjs -lm -lpthread -ldl
+	/tmp/test_quickjs_runner
+
+test-micropython:
+	@if [ ! -x ./zcc ]; then $(MAKE) zcc; fi
+	bash scripts/build_micropython.sh
+
+test-doom:
+	@if [ ! -x ./zcc ]; then $(MAKE) zcc; fi
+	./zcc doom_zcc.c -o /tmp/doom_verify.s
+	gcc -no-pie /tmp/doom_verify.s src/doom_shims.c src/doom_globals_new.c -o /tmp/doom_verify_elf -lm -lX11 -lXext
+	nm /tmp/doom_verify_elf | grep -q "D_DoomMain" && nm /tmp/doom_verify_elf | grep -q "P_Ticker" && nm /tmp/doom_verify_elf | grep -q "R_RenderPlayerView"
+	@echo "[PASS] test-doom: doom_zcc.c compiled & linked cleanly (/tmp/doom_verify_elf)"
+
+qemu: test-quad-isa
+
+valgrind:
+	@if [ ! -x ./zcc ]; then $(MAKE) zcc; fi
+	valgrind --error-exitcode=1 ./zcc tests/zcc_quad_isa_torture.c -o /tmp/zcc_vg_torture.s
+
 
 

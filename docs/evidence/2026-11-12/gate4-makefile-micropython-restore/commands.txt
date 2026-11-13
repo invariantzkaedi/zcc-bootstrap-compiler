@@ -1,0 +1,9 @@
+git diff --numstat HEAD -- part3.c Makefile
+bash gate.sh
+make test-sqlite
+make test-quickjs
+make test-micropython
+make test-doom
+make qemu
+make valgrind
+

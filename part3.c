@@ -266,13 +266,18 @@ static long long parse_const_expr_unary(Compiler *cc) {
             }
         }
         /* sizeof(expr) or sizeof expr — handle identifier with member access (->, .) and [] subscripts */
+        int inner_parens = 0;
+        while (cc->tk == TK_LPAREN) { inner_parens++; next_token(cc); }
         if (cc->tk == TK_IDENT) {
             Symbol *sym = scope_find(cc, cc->tk_text);
             if (sym && sym->type) {
                 Type *t = sym->type;
                 next_token(cc); /* consume identifier */
                 for (;;) {
-                    if (cc->tk == TK_LBRACKET) {
+                    if (cc->tk == TK_RPAREN && inner_parens > 0) {
+                        inner_parens--;
+                        next_token(cc);
+                    } else if (cc->tk == TK_LBRACKET) {
                         next_token(cc); /* consume [ */
                         parse_const_expr(cc); /* consume index expression */
                         expect(cc, TK_RBRACKET); /* consume ] */
@@ -306,6 +311,7 @@ static long long parse_const_expr_unary(Compiler *cc) {
                         break;
                     }
                 }
+                while (cc->tk == TK_RPAREN && inner_parens > 0) { inner_parens--; next_token(cc); }
                 if (has_paren) expect(cc, TK_RPAREN);
                 return type_size(t);
             }
@@ -2799,6 +2805,13 @@ Node *parse_unary(Compiler *cc) {
                             }
                             root_sf = sf;
                         }
+                        int sub_brace = 0;
+                        while (cc->tk == TK_LBRACE && sf && sf->type && (sf->type->kind == TY_STRUCT || sf->type->kind == TY_UNION) && sf->type->fields) {
+                            next_token(cc);
+                            sub_brace++;
+                            sf = sf->type->fields;
+                            member_off += sf->offset;
+                        }
                         Node *var_n = node_new(cc, ND_VAR, line);
                         strncpy(var_n->name, tmp_name, MAX_IDENT - 1);
                         var_n->sym = sym;
@@ -2815,6 +2828,7 @@ Node *parse_unary(Compiler *cc) {
                         mem_n->bit_size = sf->bit_size;
 
                         Node *asgn_v = parse_assign(cc);
+                        while (sub_brace > 0) { if (cc->tk == TK_COMMA) next_token(cc); expect(cc, TK_RBRACE); sub_brace--; }
                         Node *asgn_n = node_new(cc, ND_ASSIGN, line);
                         asgn_n->lhs = mem_n;
                         asgn_n->rhs = ensure_type(cc, asgn_v, mem_n->type);
@@ -3626,6 +3640,20 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
             }
         }
     } else if (curr_type->kind == TY_STRUCT || curr_type->kind == TY_UNION) {
+        if (offset == 0) {
+            for (int z = 0, sz = type_size(curr_type); z < sz; ) {
+                int step = (z + 8 <= sz) ? 8 : ((z + 4 <= sz) ? 4 : 1);
+                Type *zt = (step == 8) ? cc->ty_long : ((step == 4) ? cc->ty_int : cc->ty_char);
+                Node *cb = node_new(cc, ND_CAST, cc->line); cb->lhs = base_var; cb->cast_type = cb->type = type_ptr(cc, cc->ty_char);
+                Node *ad = node_new(cc, ND_ADD, cc->line); ad->lhs = cb; ad->rhs = node_num(cc, z, cc->line); ad->type = cb->type;
+                Node *ck = node_new(cc, ND_CAST, cc->line); ck->lhs = ad; ck->cast_type = ck->type = type_ptr(cc, zt);
+                Node *df = node_new(cc, ND_DEREF, cc->line); df->lhs = ck; df->type = zt;
+                Node *za = node_new(cc, ND_ASSIGN, cc->line); za->lhs = df; za->rhs = ensure_type(cc, node_num(cc, 0, cc->line), zt); za->type = zt;
+                if (*cnt >= *cap) { Node **ns = (Node **)cc_alloc(cc, sizeof(Node *) * (*cap) * 2); for (int j = 0; j < *cnt; j++) ns[j] = block->stmts[j]; block->stmts = ns; *cap *= 2; }
+                block->stmts[(*cnt)++] = za;
+                z += step;
+            }
+        }
         StructField *f = curr_type->fields;
         int i = 0;
         while (i < init_list->num_args) {

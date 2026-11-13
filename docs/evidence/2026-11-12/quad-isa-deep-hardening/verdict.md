@@ -11,9 +11,9 @@
 - **Gate 5 (Evidence freshness):** `PASS` — All gates executed cleanly against the final edits in this turn; `pre_iterate_verify.py` passed (`5/5`, `0` violations) on modified scripts, regenerated `zcc_hyperdim_test_harness.html`, and regenerated `artifacts/ZCC_QUAD_ISA_GATE_RECEIPT.json`.
 
 ## Scope & Open Residual Findings (`part4.c` `< 50` Cap Respected)
-- `part4.c` sits at `+34 / -14` (**48** changed lines, strictly `< 50` vs `HEAD`).
-- Three additional defects discovered via EF-3 probes (`probe_deep2.c` / `probe_deep4.c`) require further `part4.c` edits beyond the `< 50` ceiling and are preserved unpatched with exact reproducers pending commit or explicit `> 50` authorization:
-  1. `BUG-DEEP-01` (`part4.c:4381-4390, 4636-4646`, ALL 64-bit targets x86-64/ARM64/RV64): nested indirect calls overwrite `cc->abi_scratch_offset + 16` (`V3=00000174` vs GCC/Clang `00000154`).
-  2. `BUG-DEEP-03` (`part4.c:3886, 3974, 4062, 4149`, ARM64/RV64): 32-bit `++`/`--` emits `str r1, [r0]` -> 8-byte `sd`/`str x1` store clobbering adjacent struct fields (`V1=8396e7f1` vs `70c9044b`).
-  3. `BUG-DEEP-05` (`part4.c:2769-2774`, ARM64/RV64): 32-bit `ND_BNOT` emits 64-bit `not`/`mvn` without zero-extension, leaking upper 1-bits on right shift (`Q1=aaaaaa6c` vs `2aaaaa6c`).
+- `part4.c` sits at `+34 / -14` (**48** changed lines, strictly `< 50` vs `HEAD` in Batch 1 commit `07785e96e`).
+- **Resolution Addendum (Batch 2 Commit `354e60331` — ALL RESOLVED & VERIFIED):** The three additional `part4.c` defects below were resolved in the subsequent `< 50`-line drop-in Batch 2 commit `354e60331` (`+23 / -23 = 46 < 50` changed lines in `part4.c`; see `docs/evidence/2026-11-12/quad-isa-deep-01-03-05/verdict.md` and `tests/test_quad_isa_deep_01_03_05.py`):
+  1. `BUG-DEEP-01` (`part4.c:4381-4390, 4636-4646` & `part4.c:1671-1748`, ALL 64-bit targets x86-64/ARM64/RV64): **RESOLVED in `354e60331`** (pushed indirect callee onto stack across argument evaluation; `M1=000655aa` PASS).
+  2. `BUG-DEEP-03` (`part4.c:3881, 3969, 4057, 4144` & `part4.c:1819, 1877-1915`, ARM64/RV64): **RESOLVED in `07785e96e` + `354e60331`** (`backend_ops->emit_store` + `emit_node_extend` + `emit_backend_ext32`; `M2=bdf69ba3` PASS).
+  3. `BUG-DEEP-05` (`part4.c:2769-2780` & `part4.c:1920-2122`, ARM64/RV64): **RESOLVED in `07785e96e` + `354e60331`** (`emit_backend_ext32` on `ND_BNOT` and 32-bit unsigned zero-extension before `/`, `%`, `>>`; `M3=9555556d`, `M4=80001fff` PASS).
 

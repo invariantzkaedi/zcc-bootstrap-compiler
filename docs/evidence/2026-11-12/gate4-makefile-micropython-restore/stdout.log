@@ -1,0 +1,55 @@
+=== git diff --numstat HEAD -- part3.c Makefile ===
+32	0	Makefile
+29	1	part3.c
+
+=== bash gate.sh ===
+Run ID: zcc-omega-1794546294-10462 (Staging Arena: /tmp/zcc-tx-zcc-omega-1794546294-10462)
+  [Stage 2/3] Compiling /mnt/h/__DOWNLOADS/zcc_github_upload/zcc.c via /tmp/zcc-tx-zcc-omega-1794546294-10462/zcc... [PASS] (SHA: 4566f347977db700...)
+  [Stage 3/3] Compiling /mnt/h/__DOWNLOADS/zcc_github_upload/zcc.c via /tmp/zcc-tx-zcc-omega-1794546294-10462/stage2.bin... [PASS] (SHA: 4566f347977db700...)
+  ✓ Gate 1 PASS: Assembly byte-identical (cmp stage2.s stage3.s).
+  [Semantic Oracle] Cross-verifying against GCC & Golden Oracle... [PASS: Byte-Identical Semantic Parity]
+  [Cross-TU ABI Oracle] Bidirectional Interop (MV1.2, MV1.3a & MV1.3b)... [PASS: Triple-Corpus Bidirectional Parity]
+=== [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ===
+   ✨ SELFHOST-MV1.3b PASS
+
+=== make test-sqlite ===
+python3 tools/run_core_03_sqlite_differential.py
+  * [Stage 3A] Compiling sqlite3_zcc.c with ./zcc -> sqlite3_zcc.o (2,406,264 bytes) [PASS]
+  * [Stage 3B] CORE-03A Differential Harness: ZCC=ad41bbcb79f1... | GCC=ad41bbcb79f1... | Clang=ad41bbcb79f1... [PASS]
+  * [Stage 3C] CORE-03B Stress Harness: ZCC=2c7ee1ff2040... | GCC=2c7ee1ff2040... | Clang=2c7ee1ff2040... [PASS]
+[VERDICT] CORE-03 SQLITE DIFFERENTIAL ORACLE: PASS
+
+=== make test-quickjs ===
+bash scripts/build_quickjs.sh && ./build/quickjs_zcc/test_quickjs_runner
+  [1/5] Compiling cutils.c with ZCC... OK
+  [2/5] Compiling libunicode.c with ZCC... OK
+  [3/5] Compiling dtoa.c with ZCC... OK
+  [4/5] Compiling libregexp.c with ZCC... OK
+  [5/5] Compiling quickjs.c (55,000+ lines) with ZCC... OK
+  ALL QUICKJS TESTS PASSED CLEANLY! (Failures: 0)
+
+=== make test-micropython ===
+bash scripts/build_micropython.sh && ./build/micropython_native_runner
+  [OK] All 136 MicroPython modules compiled natively with ZCC!
+  PYTHON 3 TEST RESULTS: 26 / 26 PASSED (0 FAILURES)
+
+=== make test-doom ===
+./zcc doom_zcc.c -o /tmp/doom_verify.s
+gcc -no-pie /tmp/doom_verify.s src/doom_shims.c src/doom_globals_new.c -o /tmp/doom_verify_elf -lm -lX11 -lXext
+[PASS] test-doom: doom_zcc.c compiled & linked cleanly (/tmp/doom_verify_elf)
+
+=== make qemu ===
+python3 tools/zcc_quad_isa_gate.py --strict-tier 3 --verify-ui
+=== [ZCC QUAD-ISA GATE] Verdict: PASS (Rounds=64, Stage23=3a57c3f8cf58f107...) ===
+  * tier1_core           | Spec=0x7e07f55a67f3cc08 | 7/7 lanes PASS | Tier Verdict=PASS
+  * tier2_struct_union   | Spec=0xfb986fd4f88819a9 | 7/7 lanes PASS | Tier Verdict=PASS
+  * tier3_edge_abi       | Spec=0x6d4f29801741710f | 7/7 lanes PASS | Tier Verdict=PASS
+=== [ZCC-EF-0] ALL 3 ADVERSARIAL NEGATIVE CONTROLS KILLED (SELF-TEST PASS) ===
+  [PASS] zcc_x86_64    : D2=04e2ea19 F4=e05f3717 | M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff
+  [PASS] zcc_arm64     : D2=04e2ea19 F4=e05f3717 | M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff
+  [PASS] zcc_riscv64   : D2=04e2ea19 F4=e05f3717 | M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff
+
+=== make valgrind ===
+valgrind --error-exitcode=1 --track-origins=yes ./zcc tests/zcc_quad_isa_torture.c -o /tmp/zcc_vg_torture.s
+==12703== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+

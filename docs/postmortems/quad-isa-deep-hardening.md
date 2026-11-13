@@ -15,11 +15,11 @@ Probing beyond `K1..K10` with differential host/cross-target tests (`probe_deep2
    - Fixed a silent verification bypass in `verify_ui_headless` (`tools/zcc_quad_isa_gate.py`) that read undefined `h.embedded.receipt` instead of `h.gateReceipt` (`embedded.quadIsaGateReceipt`).
    - Polished `#bug-ledger-tbody` to render a green `data-empty-ledger="1"` `ALL CLEAR` row at 0 defects and synchronized bridge pill / summary labels across Tier 1–3.
 
-## Open Unpatched Defects Held Outside `< 50` `part4.c` Diff Budget
-Fixing these cleanly requires modifying `part4.c` beyond its current `48/49`-line headroom vs `HEAD`:
-1. **`BUG-DEEP-01` (x86-64, ARM64, RV64): Nested indirect calls corrupt outer callee pointer** (`part4.c:4381-4390, 4636-4646` stores callee into single fixed `cc->abi_scratch_offset + 16` slot; `V3=00000174` vs GCC/Clang `00000154`).
-2. **`BUG-DEEP-03` (ARM64, RV64): 32-bit `++`/`--` clobbers adjacent field** (`part4.c:3886, 3974, 4062, 4149` emits `str r1, [r0]` -> 8-byte `sd`/`str x1`; `V1=8396e7f1` vs `70c9044b`).
-3. **`BUG-DEEP-05` (ARM64, RV64): 32-bit `~` leaks upper 1-bits on right shift** (`part4.c:2769-2774` emits 64-bit `not`/`mvn` without zero-extending 32-bit unsigned expressions; `Q1=aaaaaa6c` vs `2aaaaa6c`).
+## Open Unpatched Defects Held Outside `< 50` `part4.c` Diff Budget (Resolved in Batch 2 Commit `354e60331`)
+All three defects below were subsequently resolved in Batch 2 commit `354e60331` (`+23 / -23 = 46 < 50` changed lines in `part4.c`; see `docs/postmortems/quad-isa-deep-01-03-05.md` and `tests/test_quad_isa_deep_01_03_05.py`):
+1. **`BUG-DEEP-01` (x86-64, ARM64, RV64): RESOLVED in `354e60331`** (`part4.c:4387-4391, 4637-4646` & `part4.c:1671-1748` saves/restores indirect callee on stack; `M1=000655aa` PASS).
+2. **`BUG-DEEP-03` (ARM64, RV64): RESOLVED in `07785e96e` + `354e60331`** (`part4.c:3881, 3969, 4057, 4144` & `part4.c:1819, 1877-1915` routes via `backend_ops->emit_store` + `emit_node_extend` + `emit_backend_ext32`; `M2=bdf69ba3` PASS).
+3. **`BUG-DEEP-05` (ARM64, RV64): RESOLVED in `07785e96e` + `354e60331`** (`part4.c:2779` & `part4.c:1920-2122` applies `emit_backend_ext32` and 32-bit unsigned zero-extension; `M3=9555556d`, `M4=80001fff` PASS).
 
 ## Verification Summary & Rollback
 All gates passed on the rebuilt `./zcc` (`a754e4c9b19cbd5f69c50b98dd9f8447ee10091d50e1535a2b6d809d642860e3`): `make selfhost` (`stage2.s == stage3.s` `c38fc91a16e3836cc1a214636e51de7dd443841520c3aadb600980890171e357`), Gate 2 cross-TU interop (`INTEROP=e7ffff00:c848d15a`), `make test-quad-isa` (`7/7` across Tier 1–3, UI EF-7 PASS, EF-0 self-test PASS, deep regression `D2=04e2ea19 F4=e05f3717`), and `pre_iterate_verify.py` (`5/5`, `0` violations).
