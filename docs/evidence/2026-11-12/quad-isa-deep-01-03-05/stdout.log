@@ -1,0 +1,60 @@
+=== [STEP 1] Batch 1 Commit (07785e96e) ===
+07785e96e codegen(quad-isa): fix 7 RV64/ARM64 ABI, store, shift, pow2 div/mod & large-frame bugs, no spin
+ 24 files changed, 2678 insertions(+), 449 deletions(-)
+
+=== [STEP 2] Pre-Patch Rule EF-3 Baseline (test_quad_isa_deep_01_03_05.py --expect-unpatched) ===
+[ORACLE] GCC/Clang -O2 : M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff
+  [FAIL] zcc_x86_64  : M1=00009be7 M2=bdf69ba3 M3=9555556d M4=80001fff | expected=M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff | EF2_missing=['popq %r10']
+  [FAIL] zcc_arm64   : M1=00009be7 M2=80e9f67d M3=aaaaaa92 M4=00001fff | expected=M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff | EF2_missing=['ldr x16, [sp], #16', 'mov w0, w0']
+  [FAIL] zcc_riscv64 : M1=00009be7 M2=80e9f67d M3=aaaaaa92 M4=00001fff | expected=M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff | EF2_missing=['ld t6, 0(sp)', 'slli a0, a0, 32', 'srli a0, a0, 32']
+UNPATCHED_BASELINE_CONFIRMED=PASS
+
+=== [STEP 3] Live Drop-In Apply + Full Verification (apply_deep_fixes.py --apply --selfhost) ===
+Applied deep_01_03_05.patch cleanly.
+=== Building ./zcc ===
+=== Running test_quad_isa_deep_01_03_05 ===
+[ORACLE] GCC/Clang -O2 : M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff
+  [PASS] zcc_x86_64  : M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff | expected=M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff | EF2_missing=[]
+  [PASS] zcc_arm64   : M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff | expected=M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff | EF2_missing=[]
+  [PASS] zcc_riscv64 : M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff | expected=M1=000655aa M2=bdf69ba3 M3=9555556d M4=80001fff | EF2_missing=[]
+=== Running test_quad_isa_deep_regression ===
+[ORACLE] GCC/Clang -O2 : D2=04e2ea19 F4=e05f3717
+  [PASS] zcc_x86_64    : D2=04e2ea19 F4=e05f3717
+  [PASS] zcc_arm64     : D2=04e2ea19 F4=e05f3717
+  [PASS] zcc_riscv64   : D2=04e2ea19 F4=e05f3717
+=== Running Quad-ISA Tier 1-3 + EF-7 UI ===
+=== [ZCC QUAD-ISA GATE] Verdict: PASS (Rounds=64, Stage23=unverified_run_m...) ===
+  * tier1_core           | Spec=0x7e07f55a67f3cc08 | 7/7 lanes PASS | Tier Verdict=PASS
+  * tier2_struct_union   | Spec=0xfb986fd4f88819a9 | 7/7 lanes PASS | Tier Verdict=PASS
+  * tier3_edge_abi       | Spec=0x6d4f29801741710f | 7/7 lanes PASS | Tier Verdict=PASS
+=== [EF-7 UI VERIFIER] PASS: 1 script(s) AST-clean, 95 DOM IDs bound, WASM=2765B, 8/8 suites PASS, EF-0 self-certify trap killed (main=0 -> FAIL), 0x0 canvas safe, Stop=INCONCLUSIVE ===
+=== Running Quad-ISA Self-Test ===
+=== [ZCC-EF-0] Running Quad-ISA Gate Adversarial Self-Test (3 Negative Controls) ===
+  [PASS] POS-01 Clean 7-Lane Tier-1 Consensus: 0xa25afa3346e84091
+  [PASS] NEG-01 Killed Self-Certifying WASM Mutant [392] (zcc_quad_bitops_mix i32.xor->i32.and): exports.main()==0, observed=0xcbc2547dfb7d5f26 != spec=0xa25afa3346e84091
+  [PASS] NEG-02 Tier-2 RV64 backend now matches spec; testing synthetic wrong-code injection...
+  [PASS] NEG-02 Killed Synthetic RV64 QEMU Divergence (0x2ccab2c6872644e9 != 0xa25afa3346e84091)
+  [PASS] NEG-03 Truncated TU Fail-Closed (ZCC_ZLD_COMPILE_FAIL)
+=== [ZCC-EF-0] ALL 3 ADVERSARIAL NEGATIVE CONTROLS KILLED (SELF-TEST PASS) ===
+=== Running Full Self-Host & ARGON 4 (gate.sh) ===
+  [PASS: Differential & Metamorphic C99 Oracle + UBSan/ASan] (32 seeds, 64 UB-free C99 TUs, 192 executions [ZCC2 + GCC -O0 + GCC UBSan/ASan], 0 divergences in 15.10s, SHA: a597e555c3cdbb9e...)
+=== [ARGON 4] ALL 6 VERIFICATION SUITES PASSED (0 REGRESSIONS) ===
+================================================================================
+   ✨ SELFHOST-MV1.3b PASS
+   Bootstrap fixed-point, semantic-canary, and full SystemV ABI constraints satisfied.
+================================================================================
+Chained Provenance Ledger: /mnt/h/__DOWNLOADS/zcc_github_upload/evidence/zcc-omega-1794543701-4885/provenance.jsonl
+DROPIN_APPLY=PASS
+
+=== [STEP 4] Gate 1, Gate 2, Checksums, and Budget Audit ===
+CMP_ZCC2_ZCC3_EXIT=True
+[Gate2 Oracle GCC+GCC]     INTEROP=e7ffff00:c848d15a
+[Gate2 zcc-lib + gcc-main] INTEROP=e7ffff00:c848d15a
+[Gate2 gcc-lib + zcc-main] INTEROP=e7ffff00:c848d15a
+GATE_2_INTEROP=PASS
+Patch file      : /mnt/h/__DOWNLOADS/zcc_github_upload/patches/quad_isa_deep_01_03_05/deep_01_03_05.patch
+Patch delta     : +23 / -23 = 46 changed lines in part4.c (cap < 50: PASS)
+Working part4.c : +23 / -23 = 46 vs HEAD
+Apply state     : APPLIED
+23	23	part4.c
+

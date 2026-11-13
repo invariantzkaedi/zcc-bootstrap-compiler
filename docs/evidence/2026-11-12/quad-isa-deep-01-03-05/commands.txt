@@ -1,0 +1,19 @@
+# Exact commands executed in order for Batch 1 commit + Batch 2 (DEEP-01 / DEEP-03 / DEEP-05 + compound-assign sub-word extension) drop-in apply & verification
+
+# 1. Stage and commit Batch 1 (< 50 lines per foundational file, Rule EF-5 scope-checked)
+git add Makefile part4.c part6_arm.c part6_riscv.c tests/test_quad_isa_deep_regression.py tests/zcc_quad_isa_torture.c docs/evidence/2026-11-12/quad-isa-deep-bugs/ docs/evidence/2026-11-12/quad-isa-gate-hardening/ docs/postmortems/quad-isa-deep-bugs.md docs/postmortems/quad-isa-gate-hardening.md
+git add -f tools/zcc_quad_isa_gate.py tools/zcc_hyperdim_ui_parts.py zcc_hyperdim_test_harness.html artifacts/ZCC_QUAD_ISA_GATE_RECEIPT.json
+git commit -m "codegen(quad-isa): fix 7 RV64/ARM64 ABI, store, shift, pow2 div/mod & large-frame bugs, no spin"
+
+# 2. Pre-patch EF-3 baseline verification (M1..M4 failing before deep_01_03_05.patch)
+python3 tests/test_quad_isa_deep_01_03_05.py --expect-unpatched
+
+# 3. Apply Batch 2 drop-in patch (+23 / -23 = 46 changed lines in part4.c < 50) + full self-host & ARGON 4 verification
+python3 patches/quad_isa_deep_01_03_05/apply_deep_fixes.py --apply --selfhost
+
+# 4. Gate 1 (cmp zcc2.s zcc3.s), Gate 2 (GCC <-> ZCC cross-toolchain interop), SHA-256 artifact audit, and diff budget check
+cmp -s zcc2.s zcc3.s
+sha256sum part4.c zcc zcc2 zcc2.s zcc3.s artifacts/ZCC_QUAD_ISA_GATE_RECEIPT.json zcc_hyperdim_test_harness.html
+python3 patches/quad_isa_deep_01_03_05/apply_deep_fixes.py --check
+git diff --numstat HEAD -- part4.c
+

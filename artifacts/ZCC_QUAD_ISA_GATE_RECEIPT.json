@@ -3,12 +3,12 @@
   "governing_rule_version": "ZCC-EF-7 v1.0.0",
   "authority_role": "INDEPENDENT_MULTI_ORACLE_GATE (ZCC-EF-0)",
   "evidence_tier": "E2",
-  "evidence_tier_assigned_at": "2026-11-13T02:56:03.357863+00:00",
-  "completed_at": "2026-11-13T02:56:05.299408+00:00",
+  "evidence_tier_assigned_at": "2026-11-13T04:21:30.753829+00:00",
+  "completed_at": "2026-11-13T04:21:32.907316+00:00",
   "source_equivalence_class": "Class I across ZCC Quad-ISA (x86-64, ARM64, RV64, WASM32); Class III vs GCC/Clang on K1-K2 (__builtin_qpauli_* reference C shim), Class I on K3-K10",
   "source_file": "tests/zcc_quad_isa_torture.c",
   "source_sha256": "bb56e978212ce3ca664628a300a9775e21055b4fcfa17f7910524e299aceb140",
-  "zcc_binary_sha256": "a754e4c9b19cbd5f69c50b98dd9f8447ee10091d50e1535a2b6d809d642860e3",
+  "zcc_binary_sha256": "34c19ad05ef5eaeb180e730d776598923ffc44ff69c4fc08de703452d1858215",
   "stage23_fixed_point_sha256": "c38fc91a16e3836cc1a214636e51de7dd443841520c3aadb600980890171e357",
   "rounds": 64,
   "strict_gate_tier": 3,
@@ -30,7 +30,7 @@
           "exit_code": 0,
           "fnv1a64": "0x7e07f55a67f3cc08",
           "stderr": "",
-          "elapsed_ms": 363.39
+          "elapsed_ms": 331.79
         },
         "clang_o2": {
           "verdict": "PASS",
@@ -38,7 +38,7 @@
           "exit_code": 0,
           "fnv1a64": "0x7e07f55a67f3cc08",
           "stderr": "",
-          "elapsed_ms": 393.82
+          "elapsed_ms": 251.37
         },
         "zcc_x86_64": {
           "verdict": "PASS",
@@ -47,7 +47,7 @@
           "zld_exit_code": 0,
           "fnv1a64": "0x7e07f55a67f3cc08",
           "stderr": "",
-          "elapsed_ms": 505.92
+          "elapsed_ms": 463.22
         },
         "zcc_arm64_qemu": {
           "verdict": "PASS",
@@ -55,7 +55,7 @@
           "exit_code": 0,
           "fnv1a64": "0x7e07f55a67f3cc08",
           "stderr": "",
-          "elapsed_ms": 199.18
+          "elapsed_ms": 115.48
         },
         "zcc_riscv64_qemu": {
           "verdict": "PASS",
@@ -63,7 +63,7 @@
           "exit_code": 0,
           "fnv1a64": "0x7e07f55a67f3cc08",
           "stderr": "",
-          "elapsed_ms": 488.57
+          "elapsed_ms": 392.17
         },
         "zcc_wasm32_v8": {
           "verdict": "PASS",
@@ -72,7 +72,7 @@
           "fnv1a64": "0x7e07f55a67f3cc08",
           "wasm_bytes": 2765,
           "stderr": "",
-          "elapsed_ms": 226.26
+          "elapsed_ms": 149.35
         }
       }
     },
@@ -94,7 +94,7 @@
           "exit_code": 0,
           "fnv1a64": "0xfb986fd4f88819a9",
           "stderr": "",
-          "elapsed_ms": 344.34
+          "elapsed_ms": 409.29
         },
         "clang_o2": {
           "verdict": "PASS",
@@ -102,7 +102,7 @@
           "exit_code": 0,
           "fnv1a64": "0xfb986fd4f88819a9",
           "stderr": "",
-          "elapsed_ms": 265.12
+          "elapsed_ms": 293.0
         },
         "zcc_x86_64": {
           "verdict": "PASS",
@@ -111,7 +111,7 @@
           "zld_exit_code": 0,
           "fnv1a64": "0xfb986fd4f88819a9",
           "stderr": "",
-          "elapsed_ms": 481.8
+          "elapsed_ms": 579.13
         },
         "zcc_arm64_qemu": {
           "verdict": "PASS",
@@ -119,7 +119,7 @@
           "exit_code": 0,
           "fnv1a64": "0xfb986fd4f88819a9",
           "stderr": "",
-          "elapsed_ms": 171.05
+          "elapsed_ms": 132.62
         },
         "zcc_riscv64_qemu": {
           "verdict": "PASS",
@@ -127,7 +127,7 @@
           "exit_code": 0,
           "fnv1a64": "0xfb986fd4f88819a9",
           "stderr": "",
-          "elapsed_ms": 417.65
+          "elapsed_ms": 494.25
         },
         "zcc_wasm32_v8": {
           "verdict": "PASS",
@@ -136,7 +136,7 @@
           "fnv1a64": "0xfb986fd4f88819a9",
           "wasm_bytes": 3232,
           "stderr": "",
-          "elapsed_ms": 175.59
+          "elapsed_ms": 146.05
         }
       }
     },
@@ -159,7 +159,7 @@
           "exit_code": 0,
           "fnv1a64": "0x6d4f29801741710f",
           "stderr": "",
-          "elapsed_ms": 308.19
+          "elapsed_ms": 462.69
         },
         "clang_o2": {
           "verdict": "PASS",
@@ -167,7 +167,7 @@
           "exit_code": 0,
           "fnv1a64": "0x6d4f29801741710f",
           "stderr": "",
-          "elapsed_ms": 279.73
+          "elapsed_ms": 379.81
         },
         "zcc_x86_64": {
           "verdict": "PASS",
@@ -176,7 +176,7 @@
           "zld_exit_code": 0,
           "fnv1a64": "0x6d4f29801741710f",
           "stderr": "",
-          "elapsed_ms": 469.21
+          "elapsed_ms": 621.87
         },
         "zcc_arm64_qemu": {
           "verdict": "PASS",
@@ -184,7 +184,7 @@
           "exit_code": 0,
           "fnv1a64": "0x6d4f29801741710f",
           "stderr": "",
-          "elapsed_ms": 106.75
+          "elapsed_ms": 173.57
         },
         "zcc_riscv64_qemu": {
           "verdict": "PASS",
@@ -192,7 +192,7 @@
           "exit_code": 0,
           "fnv1a64": "0x6d4f29801741710f",
           "stderr": "",
-          "elapsed_ms": 350.43
+          "elapsed_ms": 547.85
         },
         "zcc_wasm32_v8": {
           "verdict": "PASS",
@@ -201,7 +201,7 @@
           "fnv1a64": "0x6d4f29801741710f",
           "wasm_bytes": 3956,
           "stderr": "",
-          "elapsed_ms": 112.06
+          "elapsed_ms": 132.02
         }
       }
     }

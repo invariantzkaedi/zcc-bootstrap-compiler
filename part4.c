@@ -233,11 +233,15 @@ static void emit_fp_result_to_rax(Compiler *cc, Type *type) {
         fprintf(cc->out, "    movq %%xmm0, %%rax\n");
 }
 
+static void emit_backend_ext32(Compiler *cc, int u) {
+  if (backend_ops && backend_ops->ptr_size == 8)
+    fprintf(cc->out, (backend_ops->jump_mnemonic && backend_ops->jump_mnemonic[0] == 'j') ? (u ? "    slli a0, a0, 32\n    srli a0, a0, 32\n" : "    addiw a0, a0, 0\n") : (u ? "    mov w0, w0\n" : "    sxtw x0, w0\n"));
+}
 static void emit_node_extend(Compiler *cc, Node *node) {
   if (!node || !node->type || is_pointer(node->type) || is_float_type(node->type)) return;
   int is_unsigned = node_type_unsigned(node);
   if (backend_ops) {
-    if (backend_ops->ptr_size != 4) return;
+    if (backend_ops->ptr_size == 8 && node->type->size == 4) { emit_backend_ext32(cc, is_unsigned); return; }
     if (node->type->size == 1) {
       if (is_unsigned) fprintf(cc->out, "    uxtb r0, r0\n");
       else fprintf(cc->out, "    sxtb r0, r0\n");
@@ -1815,7 +1819,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (node->lhs->is_bitfield) {
       emit_bitfield_store_p4(cc, node->lhs);
     } else if (backend_ops && backend_ops->emit_store) {
-      backend_ops->emit_store(cc, node->lhs->type);
+      backend_ops->emit_store(cc, node->lhs->type); emit_node_extend(cc, node->lhs);
     } else {
     if (node->lhs->kind == ND_MEMBER && node->lhs->member_size > 0) {
       switch (node->lhs->member_size) {
@@ -2005,7 +2009,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     } else {
         fprintf(cc->out, "    addq %%r11, %%rax\n");
     }
-    if (node->type && type_size(node->type) == 4 && !is_pointer(node->type)) {
+    if (node->type && type_size(node->type) == 4 && !is_pointer(node->type)) { emit_backend_ext32(cc, node_type_unsigned(node));
       if (node_type_unsigned(node)) {
         if (!backend_ops) fprintf(cc->out, "    movl %%eax, %%eax\n");
       } else {
@@ -2140,7 +2144,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops && backend_ops->emit_binary_op) backend_ops->emit_binary_op(cc, ND_SUB);
     else if (backend_ops) backend_ops->emit_binary_op(cc, ND_SUB);
       else fprintf(cc->out, "    subq %%r11, %%rax\n");
-    if (node->type && type_size(node->type) == 4 && !is_pointer(node->type)) {
+    if (node->type && type_size(node->type) == 4 && !is_pointer(node->type)) { emit_backend_ext32(cc, node_type_unsigned(node));
       if (node_type_unsigned(node)) {
         if (!backend_ops) fprintf(cc->out, "    movl %%eax, %%eax\n");
       } else {
@@ -2298,7 +2302,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         if (backend_ops) backend_ops->emit_binary_op(cc, ND_MUL);
       else fprintf(cc->out, "    imulq %%r11, %%rax\n");
     }
-    if (node->type && type_size(node->type) == 4 && !is_pointer(node->type)) {
+    if (node->type && type_size(node->type) == 4 && !is_pointer(node->type)) { emit_backend_ext32(cc, node_type_unsigned(node));
       if (node_type_unsigned(node)) {
         if (!backend_ops) fprintf(cc->out, "    movl %%eax, %%eax\n");
       } else {
@@ -2772,6 +2776,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         fprintf(cc->out, "    mvn x0, x0\n");
       else
         fprintf(cc->out, "    mvns r0, r0\n");
+      if (node->type && type_size(node->type) == 4) emit_backend_ext32(cc, node_type_unsigned(node));
     } else if (node->type && type_size(node->type) == 4) {
       if (node_type_unsigned(node)) {
         fprintf(cc->out, "    notl %%eax\n");
@@ -2799,7 +2804,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) { if (backend_ops->emit_prep_rhs) backend_ops->emit_prep_rhs(cc); else fprintf(cc->out, (backend_ops->ptr_size == 8) ? "    mov x1, x0\n" : "    mov r1, r0\n"); }
     else fprintf(cc->out, "    movq %%rax, %%rcx\n");
     pop_reg(cc, "rax");
-    if (backend_ops) backend_ops->emit_binary_op(cc, ND_SHL);
+    if (backend_ops) { backend_ops->emit_binary_op(cc, ND_SHL); if (node->type && type_size(node->type) == 4 && !is_pointer(node->type)) emit_backend_ext32(cc, node_type_unsigned(node)); }
     else {
         if (node->type && node->type->size == 4) fprintf(cc->out, "    shll %%cl, %%eax\n");
         else if (node->type && node->type->size == 1) fprintf(cc->out, "    shlb %%cl, %%al\n");
@@ -2885,6 +2890,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         fprintf(cc->out, "    neg x0, x0\n");
       else
         fprintf(cc->out, "    negs r0, r0\n");
+      if (node->type && type_size(node->type) == 4) emit_backend_ext32(cc, node_type_unsigned(node));
     } else if (node->type && type_size(node->type) == 4) {
       if (node_type_unsigned(node)) {
         fprintf(cc->out, "    negl %%eax\n");
@@ -3681,13 +3687,13 @@ void codegen_expr(Compiler *cc, Node *node) {
             emit_cvtsi2fd(cc, node->lhs->type, 1, "xmm0");
             if (!backend_ops) fprintf(cc->out, "    movd %%xmm0, %%eax\n");
         } else if (node->cast_type->kind == TY_UINT || node->cast_type->kind == TY_ULONG) {
-            if (!backend_ops) fprintf(cc->out, "    movl %%eax, %%eax\n");
+            if (backend_ops) emit_backend_ext32(cc, 1); else fprintf(cc->out, "    movl %%eax, %%eax\n");
         } else if (!is_pointer(node->lhs ? node->lhs->type : 0)
                    && !(node->lhs && node->lhs->type &&
                         (node->lhs->type->kind == TY_ARRAY ||
                          node->lhs->type->kind == TY_STRUCT ||
                          node->lhs->type->kind == TY_UNION))) {
-            if (!backend_ops) fprintf(cc->out, "    cltq\n");
+            if (backend_ops) emit_backend_ext32(cc, 0); else fprintf(cc->out, "    cltq\n");
         }
         break;
       case 8:
@@ -3702,10 +3708,10 @@ void codegen_expr(Compiler *cc, Node *node) {
                          node->lhs->type->kind == TY_STRUCT ||
                          node->lhs->type->kind == TY_UNION))) {
             if (node->lhs && node->lhs->type && is_unsigned_type(node->lhs->type)) {
-                if (!backend_ops) fprintf(cc->out, "    movl %%eax, %%eax\n");
+                if (backend_ops) emit_backend_ext32(cc, 1); else fprintf(cc->out, "    movl %%eax, %%eax\n");
 
             } else {
-                if (!backend_ops) fprintf(cc->out, "    cltq\n");
+                if (backend_ops) emit_backend_ext32(cc, 0); else fprintf(cc->out, "    cltq\n");
 
             }
         }
@@ -3872,7 +3878,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
-    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else {
+    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else if (backend_ops && backend_ops->emit_store) { backend_ops->emit_store(cc, node->lhs->type); emit_node_extend(cc, node->lhs); } else {
     switch (type_size(node->lhs->type)) {
     case 1:
       if (backend_ops) fprintf(cc->out, "    strb r1, [r0]\n");
@@ -3960,7 +3966,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (backend_ops) fprintf(cc->out, "    mov r1, r0\n");
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rax");
-    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else {
+    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else if (backend_ops && backend_ops->emit_store) { backend_ops->emit_store(cc, node->lhs->type); emit_node_extend(cc, node->lhs); } else {
     switch (type_size(node->lhs->type)) {
     case 1:
       if (backend_ops) fprintf(cc->out, "    strb r1, [r0]\n");
@@ -4048,7 +4054,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rdx"); /* rdx = original value */
     pop_reg(cc, "rax"); /* rax = address */
-    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else {
+    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else if (backend_ops && backend_ops->emit_store) { backend_ops->emit_store(cc, node->lhs->type); } else {
     switch (type_size(node->lhs->type)) {
     case 1:
       if (backend_ops) fprintf(cc->out, "    strb r1, [r0]\n");
@@ -4135,7 +4141,7 @@ void codegen_expr(Compiler *cc, Node *node) {
       else fprintf(cc->out, "    movq %%rax, %%r11\n");
     pop_reg(cc, "rdx"); /* rdx = original value */
     pop_reg(cc, "rax"); /* rax = address */
-    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else {
+    if (node->lhs->is_bitfield) { emit_bitfield_store_p4(cc, node->lhs); } else if (backend_ops && backend_ops->emit_store) { backend_ops->emit_store(cc, node->lhs->type); } else {
     switch (type_size(node->lhs->type)) {
     case 1:
       if (backend_ops) fprintf(cc->out, "    strb r1, [r0]\n");
@@ -4381,12 +4387,7 @@ void codegen_expr(Compiler *cc, Node *node) {
     if (node->func_name[0] == 0 && node->lhs) {
       codegen_expr_checked(cc, node->lhs);
       ir_save_result(callee_ir);
-      if (backend_ops) {
-        if (backend_ops->emit_store_stack)
-          backend_ops->emit_store_stack(cc, cc->abi_scratch_offset + 16, (backend_ops->ptr_size == 8) ? "x0" : "r0");
-      } else {
-        fprintf(cc->out, "    movq %%rax, %d(%%rbp)\n", cc->abi_scratch_offset + 16);
-      }
+      push_reg(cc, "rax");
     }
 
     /* push args in reverse order */
@@ -4635,15 +4636,14 @@ void codegen_expr(Compiler *cc, Node *node) {
       }
     if (node->func_name[0] == 0 && node->lhs) {
       if (backend_ops) {
-        if (backend_ops->emit_load_stack)
-          backend_ops->emit_load_stack(cc, cc->abi_scratch_offset + 16, (backend_ops->ptr_size == 8) ? "x16" : "r4");
+        pop_reg(cc, (backend_ops->ptr_size == 8) ? "x16" : "r4");
         if (backend_ops->emit_call)
           backend_ops->emit_call(cc, node);
         else
           fprintf(cc->out, "    blx r4\n");
       } else {
         /* indirect call: restore callee into r10, call *r10 */
-        fprintf(cc->out, "    movq %d(%%rbp), %%r10\n", cc->abi_scratch_offset + 16);
+        pop_reg(cc, "r10");
         int call_lbl = cc->label_count++;
         fprintf(cc->out, "    movq %%rsp, %%r11\n");
         fprintf(cc->out, "    andq $15, %%r11\n");
