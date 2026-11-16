@@ -1504,6 +1504,211 @@ int main(void) {
                 content = f.read()
             self.assertEqual(content, "ZCC_WIN64_STDIO_IO_VERIFIED")
 
+    def _run_win64_exe(self, exe_path):
+        if sys.platform == "win32":
+            return subprocess.run(
+                ["cmd.exe", "/c", exe_path],
+                cwd=REPO_ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        cmd_exe = "/mnt/c/Windows/System32/cmd.exe"
+        if os.path.exists(cmd_exe):
+            rel = os.path.relpath(exe_path, REPO_ROOT).replace("/", "\\")
+            return subprocess.run(
+                [cmd_exe, "/c", rel],
+                cwd=REPO_ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        return None
+
+    def test_35_win64_pe_mixed_float_int_varargs_and_funcptr(self):
+        """Verify Win64 PE mixed float/int varargs (printf bridge) and indirect funcptr ABI parity."""
+        scratch_dir = os.path.join(REPO_ROOT, "scratch")
+        os.makedirs(scratch_dir, exist_ok=True)
+        fp_src = os.path.join(REPO_ROOT, "tests", "abi_funcptr_int_to_double.c")
+        bug_src = os.path.join(REPO_ROOT, "tests", "abi_int_to_double_bug.c")
+        fp_exe = _pjoin(scratch_dir, "test_35_fp.exe")
+        bug_exe = _pjoin(scratch_dir, "test_35_bug.exe")
+
+        try:
+            for src, exe in [(fp_src, fp_exe), (bug_src, bug_exe)]:
+                if os.path.exists(exe):
+                    os.remove(exe)
+                if sys.platform == "win32" and not self.use_native_zcc:
+                    wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                    wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                    wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                    cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c",
+                           f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+                else:
+                    cmd = [self.zcc_bin, src, "-target", "win64", "-o", exe]
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                self.assertEqual(res.returncode, 0, f"Compilation failed for {src}: {res.stderr}\n{res.stdout}")
+                self.assertTrue(os.path.exists(exe), f"Output EXE missing: {exe}")
+
+            fp_run = self._run_win64_exe(fp_exe)
+            if fp_run is not None:
+                self.assertEqual(fp_run.returncode, 0, f"fp_exe failed ({fp_run.returncode}): {fp_run.stderr}")
+                self.assertIn("via_ptr: d=504.000000 x=42", fp_run.stdout)
+                self.assertIn("via_cast: d=504.000000 x=42", fp_run.stdout)
+                self.assertIn("via_field: d=504.000000 x=42", fp_run.stdout)
+
+            bug_run = self._run_win64_exe(bug_exe)
+            if bug_run is not None:
+                self.assertEqual(bug_run.returncode, 0, f"bug_exe failed ({bug_run.returncode}): {bug_run.stderr}")
+                self.assertIn("p=0000000000001234 d=504.000000 x=42", bug_run.stdout)
+        finally:
+            for p in (fp_exe, bug_exe):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_36_win64_pe_ms_abi_mixed_float_int_and_sret(self):
+        """Verify Win64 -mabi=ms unified positional GP/XMM pairing, >16B sret (%rcx), and vararg XMM->GP shadow."""
+        scratch_dir = os.path.join(REPO_ROOT, "scratch")
+        os.makedirs(scratch_dir, exist_ok=True)
+        src = _pjoin(scratch_dir, "test_36_ms_abi.c")
+        exe = _pjoin(scratch_dir, "test_36_ms_abi.exe")
+
+        code = """extern int printf(const char *fmt, ...);
+struct Big {
+    long long a;
+    long long b;
+    long long c;
+};
+double mix(int a, double b, int c, double d) {
+    return (double)a + b + (double)(c * 2) + d;
+}
+struct Big make_big(long long x) {
+    struct Big r;
+    r.a = x + 1;
+    r.b = x + 2;
+    r.c = x + 3;
+    return r;
+}
+int main(void) {
+    double (*fn)(int, double, int, double) = mix;
+    double r1 = mix(10, 1.5, 5, 2.25);
+    double r2 = fn(10, 1.5, 5, 2.25);
+    struct Big big = make_big(100);
+    printf("direct=%.2f ptr=%.2f sret=%d,%d,%d p=%p d=%f x=%d\\n",
+           r1, r2, (int)big.a, (int)big.b, (int)big.c,
+           (void *)0x1234, 504.0, 42);
+    return 0;
+}
+"""
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(code)
+
+        try:
+            if sys.platform == "win32" and not self.use_native_zcc:
+                wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c",
+                       f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -mabi=ms -o '{wsl_exe}'"]
+            else:
+                cmd = [self.zcc_bin, src, "-target", "win64", "-mabi=ms", "-o", exe]
+
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+            self.assertTrue(os.path.exists(exe), "Output EXE does not exist")
+
+            run_res = self._run_win64_exe(exe)
+            if run_res is not None:
+                self.assertEqual(run_res.returncode, 0, f"Execution failed ({run_res.returncode}): {run_res.stderr}")
+                self.assertIn(
+                    "direct=23.75 ptr=23.75 sret=101,102,103 p=0000000000001234 d=504.000000 x=42",
+                    run_res.stdout,
+                )
+        finally:
+            for p in (src, exe):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_37_win64_pe_variadic_callee_va_arg_and_vsnprintf(self):
+        """Verify Win64 user variadic callees (va_start/va_arg/va_copy/va_end), vsnprintf, and snprintf in both ABI modes."""
+        scratch_dir = os.path.join(REPO_ROOT, "scratch")
+        os.makedirs(scratch_dir, exist_ok=True)
+        src = _pjoin(scratch_dir, "test_37_win64_varg.c")
+        exe_ms = _pjoin(scratch_dir, "test_37_win64_varg_ms.exe")
+        exe_def = _pjoin(scratch_dir, "test_37_win64_varg_def.exe")
+
+        code = """#include <stdarg.h>
+#include <stdio.h>
+
+int vsnprintf(char *str, unsigned long size, const char *fmt, va_list ap);
+int snprintf(char *str, unsigned long size, const char *fmt, ...);
+
+static int vfmt_wrap(char *buf, unsigned long sz, const char *fmt, ...) {
+    va_list ap, ap2;
+    va_start(ap, fmt);
+    va_copy(ap2, ap);
+    int n = vsnprintf(buf, sz, fmt, ap);
+    int x = va_arg(ap2, int);
+    double d = va_arg(ap2, double);
+    long long ll = va_arg(ap2, long long);
+    const char *s = va_arg(ap2, const char *);
+    va_end(ap2);
+    va_end(ap);
+    printf("varg: x=%d d=%.2f ll=%lld s=%s\\n", x, d, ll, s);
+    return n;
+}
+
+static double sum_variadic(int n, ...) {
+    va_list ap;
+    va_start(ap, n);
+    double acc = 0.0;
+    for (int i = 0; i < n; i++) {
+        if (i & 1) acc += va_arg(ap, double);
+        else acc += (double)va_arg(ap, int);
+    }
+    va_end(ap);
+    return acc;
+}
+
+int main(void) {
+    char b1[128], b2[128];
+    int n1 = vfmt_wrap(b1, sizeof(b1), "fmt:%d|%.2f|%lld|%s",
+                       42, 3.5, 1234567890123LL, "hi");
+    int n2 = snprintf(b2, sizeof(b2), "sn:%d|%.1f|%s", 7, 2.5, "ok");
+    double s6 = sum_variadic(6, 10, 1.5, 20, 2.5, 30, 3.5);
+    printf("n1=%d b1=[%s] n2=%d b2=[%s] sum=%.2f\\n", n1, b1, n2, b2, s6);
+    return 0;
+}
+"""
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(code)
+
+        try:
+            for extra_flags, exe in ((["-mabi=ms"], exe_ms), ([], exe_def)):
+                if sys.platform == "win32" and not self.use_native_zcc:
+                    wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                    wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                    wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                    flag_str = " ".join(extra_flags)
+                    cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c",
+                           f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 {flag_str} -o '{wsl_exe}'"]
+                else:
+                    cmd = [self.zcc_bin, src, "-target", "win64"] + extra_flags + ["-o", exe]
+
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                self.assertEqual(res.returncode, 0, f"Compilation failed ({extra_flags}): {res.stderr}\n{res.stdout}")
+                self.assertTrue(os.path.exists(exe), f"Output EXE does not exist: {exe}")
+
+                run_res = self._run_win64_exe(exe)
+                if run_res is not None:
+                    self.assertEqual(run_res.returncode, 0, f"Execution failed ({extra_flags}): {run_res.stderr}")
+                    self.assertIn("varg: x=42 d=3.50 ll=1234567890123 s=hi", run_res.stdout)
+                    self.assertIn("n1=28 b1=[fmt:42|3.50|1234567890123|hi] n2=11 b2=[sn:7|2.5|ok] sum=67.50", run_res.stdout)
+        finally:
+            for p in (src, exe_ms, exe_def):
+                if os.path.exists(p):
+                    os.remove(p)
+
 
 if __name__ == "__main__":
     unittest.main()

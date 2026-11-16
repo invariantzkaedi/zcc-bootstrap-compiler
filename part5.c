@@ -3,8 +3,15 @@
 /* COMPILER INITIALIZATION                                           */
 /* ================================================================ */
 
+#ifndef __ZCC__
+#include <time.h>
+#endif
 #ifndef CLOCKS_PER_SEC
+#ifdef _WIN32
+#define CLOCKS_PER_SEC 1000
+#else
 #define CLOCKS_PER_SEC 1000000
+#endif
 #endif
 extern long clock(void);
 extern int rand(void);
@@ -86,6 +93,10 @@ char *g_in_mem_asm_buf = NULL;
 size_t g_in_mem_asm_size = 0;
 int g_use_in_mem_asm = 0;
 int g_ir_primary = 0;
+int zcc_wasm_export_minimal = 0;
+int zcc_wasm_export_runtime = 0;
+uint32_t zcc_wasm_max_pages = 0;
+const char *zcc_wasm_export_list = NULL;
 
 #ifndef PPCONFIG_DEF
 #define PPCONFIG_DEF
@@ -1827,6 +1838,10 @@ int zcc_main(int argc, char **argv) {
   char *g_diff_ir_path_a = NULL;
   char *g_diff_ir_path_b = NULL;
   int g_emit_wasm = 0;
+  zcc_wasm_export_minimal = 0;
+  zcc_wasm_export_runtime = 0;
+  zcc_wasm_max_pages = 0;
+  zcc_wasm_export_list = NULL;
   int g_emit_yul = 0;
   int g_emit_stark_proof = 0;
   int qasm_canonical_mode = 0;
@@ -1851,6 +1866,19 @@ int zcc_main(int argc, char **argv) {
                strcmp(argv[i], "--emit-wasm") == 0 || strcmp(argv[i], "-emit-wasm") == 0) {
       g_emit_wasm = 1;
       ZCC_POINTER_WIDTH = 4;
+    } else if (strcmp(argv[i], "--wasm-export-minimal") == 0) {
+      zcc_wasm_export_minimal = 1;
+    } else if (strcmp(argv[i], "--wasm-export-runtime") == 0) {
+      zcc_wasm_export_runtime = 1;
+    } else if (strncmp(argv[i], "--wasm-export=", 14) == 0) {
+      zcc_wasm_export_list = argv[i] + 14;
+    } else if (strncmp(argv[i], "--wasm-max-pages=", 17) == 0) {
+      long mp = strtol(argv[i] + 17, NULL, 10);
+      if (mp < 0 || mp > 65536) {
+        fprintf(stderr, "zcc: invalid --wasm-max-pages value '%s'\n", argv[i] + 17);
+        return 1;
+      }
+      zcc_wasm_max_pages = (uint32_t)mp;
     } else if (strcmp(argv[i], "-target") == 0 || strcmp(argv[i], "--target") == 0) {
       i++;
       if (i < argc) {
@@ -2233,6 +2261,8 @@ int zcc_main(int argc, char **argv) {
         fprintf(stderr, "zcc: too many object files\n");
         exit(1);
       }
+      if (extra_link_args[0]) strncat(extra_link_args, " ", 4095 - (int)strlen(extra_link_args));
+      strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
     } else if (strncmp(argv[i], "-Wl,", 4) == 0) {
       /* pass through linker flags */
       if (extra_link_args[0]) strncat(extra_link_args, " ", 4095 - (int)strlen(extra_link_args));
@@ -2981,8 +3011,7 @@ int zcc_main(int argc, char **argv) {
   long p1_start = clock();
   next_token(cc);
   long p1_end = clock();
-  int p1_us = (int)((p1_end - p1_start) * 1000000 / 1000000);
-  if (p1_us < 50) p1_us = 50 + rand() % 100;
+  int p1_us = (int)((double)(p1_end - p1_start) * 1000000.0 / CLOCKS_PER_SEC);
   zcc_telem_phase(1, "lexer", "OK", p1_us, "tokens_emitted", 1, "lines_processed", 1, "errors", cc->errors);
   zcc_oracle_log_pass("lexer", "_global", (double)(p1_end - p1_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
 
@@ -2991,8 +3020,7 @@ int zcc_main(int argc, char **argv) {
   long p2_start = clock();
   prog = parse_program(cc);
   long p2_end = clock();
-  int p2_us = (int)((p2_end - p2_start) * 1000000 / 1000000);
-  if (p2_us < 1000) p2_us = 1000 + rand() % 500;
+  int p2_us = (int)((double)(p2_end - p2_start) * 1000000.0 / CLOCKS_PER_SEC);
   extern int g_init_list_nodes;
   extern int g_max_init_depth;
   int remaining_headroom = 65536 - g_init_list_nodes;
@@ -3171,8 +3199,7 @@ int zcc_main(int argc, char **argv) {
   long p3_start = clock();
   /* AST constant folding occurs internally or during next phases */
   long p3_end = clock();
-  int p3_us = (int)((p3_end - p3_start) * 1000000 / 1000000);
-  if (p3_us < 200) p3_us = 200 + rand() % 100;
+  int p3_us = (int)((double)(p3_end - p3_start) * 1000000.0 / CLOCKS_PER_SEC);
   zcc_telem_phase(3, "constant_folding", "OK", p3_us, "nodes_folded", 0, "dce_eliminated", 0, "errors", 0);
   zcc_oracle_log_pass("constant_folding", "_global", (double)(p3_end - p3_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
   if (!enable_telemetry_stdout) printf("[Phase 4] SystemV ABI X86-64 Codegen... OK\n");
@@ -3216,8 +3243,7 @@ int zcc_main(int argc, char **argv) {
   }
   fclose(cc->out);
   long p4_end = clock();
-  int p4_us = (int)((p4_end - p4_start) * 1000000 / 1000000);
-  if (p4_us < 2000) p4_us = 2000 + rand() % 1000;
+  int p4_us = (int)((double)(p4_end - p4_start) * 1000000.0 / CLOCKS_PER_SEC);
   extern unsigned long long next_alloc_id;
   zcc_telem_phase(4, "codegen", (cc->errors > 0) ? "FAILED" : "OK", p4_us, "bytes_emitted", next_alloc_id * 8, "stack_size_max", 512, "errors", cc->errors);
   zcc_oracle_log_pass("codegen", "_global", (double)(p4_end - p4_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
@@ -3319,8 +3345,7 @@ int zcc_main(int argc, char **argv) {
     (void)oneiro_ret;
   }
   long p5_end = clock();
-  int p5_us = (int)((p5_end - p5_start) * 1000000 / 1000000);
-  if (p5_us < 500) p5_us = 500 + rand() % 300;
+  int p5_us = (int)((double)(p5_end - p5_start) * 1000000.0 / CLOCKS_PER_SEC);
   zcc_telem_phase(5, "peephole", "OK", p5_us, "instructions_before", 400, "instructions_after", 350, "reduction_pct", 12);
   zcc_oracle_log_pass("peephole", "_global", (double)(p5_end - p5_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
 
@@ -3364,8 +3389,7 @@ link_phase:
     fflush(NULL);
     ret = system(cmd);
     long p6_end = clock();
-    int p6_us = (int)((p6_end - p6_start) * 1000000 / 1000000);
-    if (p6_us < 15000) p6_us = 15000 + rand() % 5000;
+    int p6_us = (int)((double)(p6_end - p6_start) * 1000000.0 / CLOCKS_PER_SEC);
     zcc_telem_phase(6, "linking", (ret == 0) ? "OK" : "FAILED", p6_us, "exit_code", ret, "output_size", 100000, "errors", (ret == 0) ? 0 : 1);
 
     if (ret != 0) {

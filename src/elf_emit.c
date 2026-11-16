@@ -101,13 +101,26 @@ static size_t write_padding(FILE *f, size_t current_offset, size_t alignment) {
     return aligned_offset;
 }
 
-/* Linear search for symbol in compiled table */
-static size_t find_sym_in_final(const char *name, const zcc_elf_sym_t *final_syms, size_t final_count, size_t start_idx) {
-    size_t i;
-    for (i = start_idx; i < final_count; i++) {
-        if (final_syms[i].name && name && strcmp(final_syms[i].name, name) == 0) {
-            return i;
+/* FNV-1a hash and O(1) open-addressing lookup for symbol table */
+static zcc_u64 elf_fnv1a(const char *s) {
+    zcc_u64 h = 1469598103934665603ULL;
+    while (s && *s) {
+        h ^= (unsigned char)(*s++);
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+static size_t find_sym_ht(const char *name, const zcc_elf_sym_t *final_syms, const size_t *sym_ht, size_t ht_cap) {
+    if (!name || !name[0] || !sym_ht || ht_cap == 0) return 0;
+    size_t mask = ht_cap - 1;
+    size_t slot = (size_t)elf_fnv1a(name) & mask;
+    while (sym_ht[slot] != 0) {
+        size_t idx = sym_ht[slot];
+        if (final_syms[idx].name && strcmp(final_syms[idx].name, name) == 0) {
+            return idx;
         }
+        slot = (slot + 1) & mask;
     }
     return 0;
 }
@@ -312,10 +325,34 @@ int elf_emit_obj(const char *out_filename,
         }
     }
 
+    /* Build O(1) symbol hash table for relocation resolution */
+    size_t ht_cap = 1;
+    while (ht_cap < final_sym_count * 2 + 64) ht_cap *= 2;
+    size_t *sym_ht = (size_t *)calloc(ht_cap, sizeof(size_t));
+    if (!sym_ht) {
+        free(sym_entries);
+        free(strtab);
+        free(final_syms);
+        fclose(f);
+        return -5;
+    }
+    for (i = sec_sym_count; i < final_sym_count; i++) {
+        if (final_syms[i].name && final_syms[i].name[0]) {
+            size_t mask = ht_cap - 1;
+            size_t slot = (size_t)elf_fnv1a(final_syms[i].name) & mask;
+            while (sym_ht[slot] != 0) {
+                if (strcmp(final_syms[sym_ht[slot]].name, final_syms[i].name) == 0) break;
+                slot = (slot + 1) & mask;
+            }
+            if (sym_ht[slot] == 0) sym_ht[slot] = i;
+        }
+    }
+
     /* 3. Build relocation entries (.rela.text) */
     if (rela_count > 0) {
         rela_entries = (zcc_elf_rela_entry_t *)malloc(sizeof(zcc_elf_rela_entry_t) * rela_count);
         if (!rela_entries) {
+            free(sym_ht);
             free(sym_entries);
             free(strtab);
             free(final_syms);
@@ -324,7 +361,7 @@ int elf_emit_obj(const char *out_filename,
         }
 
         for (i = 0; i < rela_count; i++) {
-            size_t sym_idx = find_sym_in_final(relas[i].sym_name, final_syms, final_sym_count, sec_sym_count);
+            size_t sym_idx = find_sym_ht(relas[i].sym_name, final_syms, sym_ht, ht_cap);
             rela_entries[i].r_offset = relas[i].offset;
             rela_entries[i].r_info = ELF64_R_INFO(sym_idx, relas[i].type);
             rela_entries[i].r_addend = relas[i].addend;
@@ -336,7 +373,17 @@ int elf_emit_obj(const char *out_filename,
     DbgBuffer abbrev_buf;
     DbgBuffer info_sec_buf;
     DbgBuffer str_buf;
-    DbgRela dbg_relas[2048];
+    size_t max_dbg_relas = final_sym_count * 3 + 32;
+    DbgRela *dbg_relas = (DbgRela *)calloc(max_dbg_relas, sizeof(DbgRela));
+    if (!dbg_relas) {
+        if (rela_entries) free(rela_entries);
+        free(sym_ht);
+        free(sym_entries);
+        free(strtab);
+        free(final_syms);
+        fclose(f);
+        return -6;
+    }
     size_t dbg_rela_count = 0;
     zcc_elf_rela_entry_t *debug_rela_entries = NULL;
 
@@ -643,7 +690,7 @@ int elf_emit_obj(const char *out_filename,
                     else if (dbg_relas[i].sec_idx == idx_debug_abbrev) sym_idx = 3;
                     else if (dbg_relas[i].sec_idx == idx_debug_str) sym_idx = 4;
                 } else {
-                    sym_idx = find_sym_in_final(dbg_relas[i].sym_name, final_syms, final_sym_count, sec_sym_count);
+                    sym_idx = find_sym_ht(dbg_relas[i].sym_name, final_syms, sym_ht, ht_cap);
                 }
                 debug_rela_entries[i].r_offset = dbg_relas[i].offset;
                 debug_rela_entries[i].r_info = ELF64_R_INFO(sym_idx, dbg_relas[i].type);
@@ -946,6 +993,8 @@ int elf_emit_obj(const char *out_filename,
     dbg_buf_free(&info_sec_buf);
     dbg_buf_free(&str_buf);
     if (debug_rela_entries) free(debug_rela_entries);
+    free(dbg_relas);
+    free(sym_ht);
 
     if (rela_entries) {
         free(rela_entries);

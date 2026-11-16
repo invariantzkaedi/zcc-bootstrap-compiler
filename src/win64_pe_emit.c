@@ -199,10 +199,12 @@ const char *zcc_win64_pe_resolve_dll_for_symbol(const char *sym) {
         strcmp(sym, "fprintf") == 0 ||
         strcmp(sym, "sprintf") == 0 ||
         strcmp(sym, "snprintf") == 0 ||
+        strcmp(sym, "_snprintf") == 0 ||
         strcmp(sym, "vprintf") == 0 ||
         strcmp(sym, "vfprintf") == 0 ||
         strcmp(sym, "vsprintf") == 0 ||
         strcmp(sym, "vsnprintf") == 0 ||
+        strcmp(sym, "_vsnprintf") == 0 ||
         strcmp(sym, "puts") == 0 ||
         strcmp(sym, "putchar") == 0 ||
         strcmp(sym, "getchar") == 0 ||

@@ -9,7 +9,7 @@
 /* ================================================================ */
 
 int g_zsan_mode = 0;
-static unsigned long long next_alloc_id = 1;
+unsigned long long next_alloc_id = 1;
 
 /* Cap total arena blocks to avoid OOM from unbounded allocation (e.g. corrupt AST / infinite loop). Use literal 64 so compiler without preprocessor still works. */
 void *cc_alloc(Compiler *cc, int size) {
@@ -118,7 +118,7 @@ Type *type_new(Compiler *cc, int kind) {
     Type *t;
     t = (Type *)cc_alloc(cc, sizeof(Type));
     t->magic = 0xDEADBEEF87654321ULL;
-    t->alloc_id = next_alloc_id - 1;
+    t->alloc_id = next_alloc_id++;
     t->kind = kind;
     if (kind == TY_VOID) { t->size = 0; t->align = 1; }
     else if (kind == TY_CHAR || kind == TY_UCHAR) { t->size = 1; t->align = 1; }
@@ -257,7 +257,7 @@ Node *node_new(Compiler *cc, int kind, int line) {
     Node *n;
     n = (Node *)cc_alloc(cc, sizeof(Node));
     n->magic = 0xC0FFEEBAD1234567ULL;
-    n->alloc_id = next_alloc_id - 1;
+    n->alloc_id = next_alloc_id++;
     n->kind = kind;
     n->line = line;
     validate_node(cc, n, "node_new", line);
@@ -1265,6 +1265,7 @@ void next_token(Compiler *cc) {
     if (cc->has_peek) {
         cc->tk = cc->peek_tk;
         cc->tk_val = cc->peek_val;
+        cc->tk_fval = cc->peek_fval;
         strncpy(cc->tk_text, cc->peek_text, MAX_IDENT - 1);
         memcpy(cc->tk_str, cc->peek_str, MAX_STR);
         cc->tk_str_len = cc->peek_str_len;
@@ -1436,6 +1437,7 @@ void expect(Compiler *cc, int tk) {
 int peek_token(Compiler *cc) {
     int s_tk;
     long long s_val;
+    double s_fval;
     char s_text[MAX_IDENT];
     char s_str[MAX_STR];
     int s_slen;
@@ -1447,6 +1449,7 @@ int peek_token(Compiler *cc) {
     /* save current token */
     s_tk = cc->tk;
     s_val = cc->tk_val;
+    s_fval = cc->tk_fval;
     strncpy(s_text, cc->tk_text, MAX_IDENT - 1);
     memcpy(s_str, cc->tk_str, MAX_STR);
     s_slen = cc->tk_str_len;
@@ -1459,6 +1462,7 @@ int peek_token(Compiler *cc) {
     /* store peeked */
     cc->peek_tk = cc->tk;
     cc->peek_val = cc->tk_val;
+    cc->peek_fval = cc->tk_fval;
     strncpy(cc->peek_text, cc->tk_text, MAX_IDENT - 1);
     memcpy(cc->peek_str, cc->tk_str, MAX_STR);
     cc->peek_str_len = cc->tk_str_len;
@@ -1469,6 +1473,7 @@ int peek_token(Compiler *cc) {
     /* restore current */
     cc->tk = s_tk;
     cc->tk_val = s_val;
+    cc->tk_fval = s_fval;
     strncpy(cc->tk_text, s_text, MAX_IDENT - 1);
     memcpy(cc->tk_str, s_str, MAX_STR);
     cc->tk_str_len = s_slen;

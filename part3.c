@@ -638,6 +638,7 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
             }
 
             base_ftype = parse_type(cc);
+            int decl_requested_align = cc->current_requested_align;
 
             if (cc->tk == TK_OPERATOR) {
                 next_token(cc); /* consume operator */
@@ -691,7 +692,7 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
             field = (StructField *)cc_alloc(cc, sizeof(StructField));
             strncpy(field->name, fname, MAX_IDENT - 1);
             field->type = ftype;
-            field->requested_align = cc->current_requested_align;
+            field->requested_align = decl_requested_align;
             field->is_bitfield = 0;
             field->bit_offset = 0;
             field->bit_size = 0;
@@ -789,16 +790,18 @@ static Type *parse_struct_or_union_body(Compiler *cc, Type *stype, int is_union)
                 field2 = (StructField *)cc_alloc(cc, sizeof(StructField));
                 strncpy(field2->name, fname2, MAX_IDENT - 1);
                 field2->type = ftype2;
+                field2->requested_align = decl_requested_align;
                 field2->is_bitfield = 0;
                 field2->bit_offset = 0;
                 field2->bit_size = 0;
 
                 falign2 = type_align(ftype2);
+                if (field2->requested_align > falign2) falign2 = field2->requested_align;
                 if (stype) {
                     if (stype->pragma_pack > 0 && falign2 > stype->pragma_pack) {
                         falign2 = stype->pragma_pack;
                     }
-                    if (stype->is_packed && ftype2->explicit_align == 0) falign2 = 1;
+                    if (stype->is_packed && ftype2->explicit_align == 0 && field2->requested_align == 0) falign2 = 1;
                 }
                 if (falign2 > max_align) max_align = falign2;
 
@@ -1520,10 +1523,11 @@ static void recompute_struct_layout(Type *stype) {
     while (field) {
         Type *ftype = field->type;
         int falign = type_align(ftype);
+        if (field->requested_align > falign) falign = field->requested_align;
         if (stype->pragma_pack > 0 && falign > stype->pragma_pack) {
             falign = stype->pragma_pack;
         }
-        if (stype->is_packed && ftype && ftype->explicit_align == 0) falign = 1;
+        if (stype->is_packed && ftype && ftype->explicit_align == 0 && field->requested_align == 0) falign = 1;
         if (falign > max_align) max_align = falign;
         
         if (is_union) {
@@ -3435,14 +3439,23 @@ static Node *parse_initializer_list(Compiler *cc, int *out_count) {
         return list;
     }
     
+    int cur_idx = 0;
     while (cc->tk != TK_EOF) {
         Node *item = NULL;
         char desig_names[8][MAX_IDENT];
         int desig_count = 0;
         int has_desig = 0;
+        int desig_idx = -1;
         if (cc->tk == TK_LBRACE) {
             item = parse_initializer_list(cc, NULL);
-        } else if (cc->tk == TK_DOT) {
+        } else if (cc->tk == TK_DOT || cc->tk == TK_LBRACKET) {
+            if (cc->tk == TK_LBRACKET) {
+                /* C99 array designated initializer: [index] = value */
+                next_token(cc); /* consume '[' */
+                long long idx_val = parse_const_expr(cc);
+                cur_idx = desig_idx = (idx_val < 0) ? 0 : (int)idx_val;
+                expect(cc, TK_RBRACKET);
+            }
             /* C99 designated initializer: .field = value
              * Consume the designator and parse the value. */
             while (cc->tk == TK_DOT) {
@@ -3465,26 +3478,13 @@ static Node *parse_initializer_list(Compiler *cc, int *out_count) {
             } else {
                 item = parse_assign(cc);
             }
-        } else if (cc->tk == TK_LBRACKET) {
-            /* C99 array designated initializer: [index] = value */
-            next_token(cc); /* consume '[' */
-            parse_assign(cc); /* consume index expr */
-            expect(cc, TK_RBRACKET);
-            if (cc->tk == TK_ASSIGN) {
-                next_token(cc); /* consume '=' */
-            }
-            if (cc->tk == TK_LBRACE) {
-                item = parse_initializer_list(cc, NULL);
-            } else {
-                item = parse_assign(cc);
-            }
         } else {
             item = parse_assign(cc);
         }
         
-        if (list->num_args >= cap) {
+        if (cur_idx >= cap) {
             Node **old_args = list->args;
-            cap *= 2;
+            while (cur_idx >= cap) cap *= 2;
             list->args = (Node **)cc_alloc(cc, sizeof(Node *) * cap);
             for (int i = 0; i < list->num_args; i++) {
                 list->args[i] = old_args[i];
@@ -3502,8 +3502,19 @@ static Node *parse_initializer_list(Compiler *cc, int *out_count) {
                 wrapper->member_name[MAX_IDENT - 1] = '\0';
                 item = wrapper;
             }
+            if (desig_idx >= 0) {
+                Node *outer = node_new(cc, ND_INIT_LIST, cc->line);
+                outer->args = (Node **)cc_alloc(cc, sizeof(Node *));
+                outer->args[0] = item;
+                outer->num_args = 1;
+                item = outer;
+            }
         }
-        list->args[list->num_args++] = item;
+        for (int i = list->num_args; i < cur_idx; i++) {
+            list->args[i] = node_num(cc, 0, cc->line);
+        }
+        list->args[cur_idx++] = item;
+        if (cur_idx > list->num_args) list->num_args = cur_idx;
         
         if (cc->tk == TK_COMMA) {
             next_token(cc);
@@ -3603,6 +3614,12 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
             Node *item = init_list->args[i];
             if (item->kind == ND_INIT_LIST) {
                 emit_local_initializer(cc, block, cnt, cap, base_var, elem_type, item, offset + i * elem_sz);
+            } else if (elem_type->kind == TY_ARRAY || elem_type->kind == TY_STRUCT || elem_type->kind == TY_UNION) {
+                Node dummy_list;
+                memset(&dummy_list, 0, sizeof(Node));
+                dummy_list.kind = ND_INIT_LIST;
+                dummy_list.num_args = 0;
+                emit_local_initializer(cc, block, cnt, cap, base_var, elem_type, &dummy_list, offset + i * elem_sz);
             } else {
                 /* Cast base to char* so byte offset is not double-scaled */
                 Node *cast_base = node_new(cc, ND_CAST, cc->line);
@@ -4709,6 +4726,7 @@ typedef struct {
     int col;
     int tk;
     long long tk_val;
+    double tk_fval;
     char tk_text[MAX_IDENT];
     char tk_str[MAX_STR];
     int tk_str_len;
@@ -4717,6 +4735,7 @@ typedef struct {
     int has_peek;
     int peek_tk;
     long long peek_val;
+    double peek_fval;
     char peek_text[MAX_IDENT];
     char peek_str[MAX_STR];
     int peek_str_len;
@@ -4730,6 +4749,7 @@ static void save_token_state(Compiler *cc, TokenState *ts) {
     ts->col = cc->col;
     ts->tk = cc->tk;
     ts->tk_val = cc->tk_val;
+    ts->tk_fval = cc->tk_fval;
     memcpy(ts->tk_text, cc->tk_text, MAX_IDENT);
     memcpy(ts->tk_str, cc->tk_str, MAX_STR);
     ts->tk_str_len = cc->tk_str_len;
@@ -4738,6 +4758,7 @@ static void save_token_state(Compiler *cc, TokenState *ts) {
     ts->has_peek = cc->has_peek;
     ts->peek_tk = cc->peek_tk;
     ts->peek_val = cc->peek_val;
+    ts->peek_fval = cc->peek_fval;
     memcpy(ts->peek_text, cc->peek_text, MAX_IDENT);
     memcpy(ts->peek_str, cc->peek_str, MAX_STR);
     ts->peek_str_len = cc->peek_str_len;
@@ -4751,6 +4772,7 @@ static void restore_token_state(Compiler *cc, TokenState *ts) {
     cc->col = ts->col;
     cc->tk = ts->tk;
     cc->tk_val = ts->tk_val;
+    cc->tk_fval = ts->tk_fval;
     memcpy(cc->tk_text, ts->tk_text, MAX_IDENT);
     memcpy(cc->tk_str, ts->tk_str, MAX_STR);
     cc->tk_str_len = ts->tk_str_len;
@@ -4759,6 +4781,7 @@ static void restore_token_state(Compiler *cc, TokenState *ts) {
     cc->has_peek = ts->has_peek;
     cc->peek_tk = ts->peek_tk;
     cc->peek_val = ts->peek_val;
+    cc->peek_fval = ts->peek_fval;
     memcpy(cc->peek_text, ts->peek_text, MAX_IDENT);
     memcpy(cc->peek_str, ts->peek_str, MAX_STR);
     cc->peek_str_len = ts->peek_str_len;

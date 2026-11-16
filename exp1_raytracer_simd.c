@@ -249,22 +249,23 @@ static vec3f trace_ray(Scene *scene, Ray ray, int depth) {
 
 /* Setup test scene */
 static void setup_scene(Scene *scene) {
+    memset(scene, 0, sizeof(Scene));
     scene->num_spheres = 5;
     
     /* Ground sphere */
-    Sphere s0; s0.center = vec3_create(0.0f, -100.5f, -1.0f); s0.radius=100.0f; s0.mat.r=128; s0.mat.g=128; s0.mat.b=128; s0.mat.reflective=0; s0.mat.metallic=0; scene->spheres[0]=s0;
+    Sphere s0; memset(&s0, 0, sizeof(s0)); s0.center = vec3_create(0.0f, -100.5f, -1.0f); s0.radius=100.0f; s0.mat.r=128; s0.mat.g=128; s0.mat.b=128; s0.mat.reflective=0; s0.mat.metallic=0; scene->spheres[0]=s0;
     
     /* Center sphere - reflective metal */
-    Sphere s1; s1.center = vec3_create(0.0f, 0.0f, -1.0f); s1.radius=0.5f; s1.mat.r=255; s1.mat.g=215; s1.mat.b=0; s1.mat.reflective=1; s1.mat.metallic=1; scene->spheres[1]=s1;
+    Sphere s1; memset(&s1, 0, sizeof(s1)); s1.center = vec3_create(0.0f, 0.0f, -1.0f); s1.radius=0.5f; s1.mat.r=255; s1.mat.g=215; s1.mat.b=0; s1.mat.reflective=1; s1.mat.metallic=1; scene->spheres[1]=s1;
     
     /* Left sphere - cyan matte */
-    Sphere s2; s2.center = vec3_create(-1.0f, 0.0f, -1.0f); s2.radius=0.5f; s2.mat.r=0; s2.mat.g=255; s2.mat.b=255; s2.mat.reflective=0; s2.mat.metallic=0; scene->spheres[2]=s2;
+    Sphere s2; memset(&s2, 0, sizeof(s2)); s2.center = vec3_create(-1.0f, 0.0f, -1.0f); s2.radius=0.5f; s2.mat.r=0; s2.mat.g=255; s2.mat.b=255; s2.mat.reflective=0; s2.mat.metallic=0; scene->spheres[2]=s2;
     
     /* Right sphere - magenta reflective */
-    Sphere s3; s3.center = vec3_create(1.0f, 0.0f, -1.0f); s3.radius=0.5f; s3.mat.r=255; s3.mat.g=0; s3.mat.b=255; s3.mat.reflective=1; s3.mat.metallic=0; scene->spheres[3]=s3;
+    Sphere s3; memset(&s3, 0, sizeof(s3)); s3.center = vec3_create(1.0f, 0.0f, -1.0f); s3.radius=0.5f; s3.mat.r=255; s3.mat.g=0; s3.mat.b=255; s3.mat.reflective=1; s3.mat.metallic=0; scene->spheres[3]=s3;
     
     /* Light sphere - emissive */
-    Sphere s4; s4.center = vec3_create(0.0f, 2.0f, 0.0f); s4.radius=0.3f; s4.mat.r=255; s4.mat.g=255; s4.mat.b=255; s4.mat.emissive=1; scene->spheres[4]=s4;
+    Sphere s4; memset(&s4, 0, sizeof(s4)); s4.center = vec3_create(0.0f, 2.0f, 0.0f); s4.radius=0.3f; s4.mat.r=255; s4.mat.g=255; s4.mat.b=255; s4.mat.emissive=1; scene->spheres[4]=s4;
     
     scene->light_pos = vec3_create(2.0f, 3.0f, 1.0f);
 }

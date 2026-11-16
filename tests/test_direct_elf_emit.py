@@ -226,5 +226,120 @@ int main(void) {
         self.assertEqual(res_sys.returncode, 0)
         self.assertIn("[Phase 6] GCC Assembly/Linker Binding", res_sys.stdout)
 
+    def test_11_freestanding_stdio_math_and_exp_suite(self):
+        """Verify freestanding FILE* I/O, vsnprintf/snprintf, SSE2 rt_math, and exp1..exp5 with zero binutils."""
+        src_path = os.path.join(self.temp_dir.name, "test_rt_full.c")
+        exe_path = os.path.join(self.temp_dir.name, "test_rt_full_exe")
+        data_file = os.path.join(self.temp_dir.name, "io_test.bin")
+
+        code = f"""#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <math.h>
+
+int remove(const char *path);
+int vsnprintf(char *str, unsigned long size, const char *fmt, va_list ap);
+int snprintf(char *str, unsigned long size, const char *fmt, ...);
+double fmin(double a, double b);
+double fmax(double a, double b);
+float fminf(float a, float b);
+float fmaxf(float a, float b);
+float floorf(float x);
+float fmodf(float x, float y);
+float sinf(float x);
+float cosf(float x);
+float tanf(float x);
+float expf(float x);
+float fabsf(float x);
+
+static int my_vsn(char *buf, unsigned long sz, const char *fmt, ...) {{
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, sz, fmt, ap);
+    va_end(ap);
+    return n;
+}}
+
+int main(void) {{
+    char b1[64], b2[64];
+    int n1 = my_vsn(b1, sizeof(b1), "v=%d|%.2f|%s", 17, 2.75, "rt");
+    int n2 = snprintf(b2, sizeof(b2), "s=%x|%.1e", 0xAB, 125.0);
+    if (n1 != 12 || n2 <= 0) return 10;
+
+    const char *path = "{data_file.replace(chr(92), "/")}";
+    FILE *wf = fopen(path, "wb");
+    if (!wf) return 11;
+    if (fwrite(b1, 1, (size_t)n1, wf) != (size_t)n1) return 12;
+    fputc('!', wf);
+    fflush(wf);
+    fclose(wf);
+
+    FILE *rf = fopen(path, "rb");
+    if (!rf) return 13;
+    fseek(rf, 0, SEEK_END);
+    long fsz = ftell(rf);
+    if (fsz != n1 + 1) return 14;
+    fseek(rf, 0, SEEK_SET);
+    char rbuf[64];
+    if (fread(rbuf, 1, (size_t)fsz, rf) != (size_t)fsz) return 15;
+    rbuf[fsz] = 0;
+    fclose(rf);
+    if (remove(path) != 0) return 16;
+
+    srand(42);
+    int rval = rand();
+    if (rval <= 0) return 17;
+
+    if (fabsf(sqrtf(9.0f) - 3.0f) > 1e-4f) return 18;
+    if (fabs(sqrt(16.0) - 4.0) > 1e-9) return 19;
+    if (fabs(floor(-1.25) - (-2.0)) > 1e-9) return 20;
+    if (fabsf(floorf(-1.25f) - (-2.0f)) > 1e-5f) return 21;
+    if (fabsf(fmodf(5.5f, 2.0f) - 1.5f) > 1e-5f) return 22;
+    if (fabsf(fminf(3.0f, -2.0f) - (-2.0f)) > 1e-5f) return 23;
+    if (fabsf(fmaxf(3.0f, -2.0f) - 3.0f) > 1e-5f) return 24;
+    if (fabs(fmin(5.0, 2.0) - 2.0) > 1e-9) return 25;
+    if (fabs(fmax(5.0, 2.0) - 5.0) > 1e-9) return 26;
+    if (fabsf(sinf(0.5f) - 0.4794255f) > 1e-4f) return 27;
+    if (fabsf(cosf(0.5f) - 0.8775826f) > 1e-4f) return 28;
+    if (fabsf(tanf(0.5f) - 0.5463025f) > 2e-4f) return 29;
+    if (fabsf(expf(1.0f) - 2.7182818f) > 2e-4f) return 30;
+
+    fprintf(stderr, "FS_ERR:%s|%s\\n", b2, rbuf);
+    printf("FREESTANDING_STDIO_MATH_OK:%s\\n", rbuf);
+    return 0;
+}}
+"""
+        with open(src_path, "w") as f:
+            f.write(code)
+
+        res = subprocess.run([ZCC_BIN, src_path, "-o", exe_path], capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, f"Freestanding unit compile failed: {res.stderr}\n{res.stdout}")
+        self.assertNotIn("[Phase 6] GCC Assembly/Linker Binding", res.stdout)
+
+        run_res = subprocess.run([exe_path], capture_output=True, text=True)
+        self.assertEqual(run_res.returncode, 0, f"Freestanding unit run failed ({run_res.returncode}): {run_res.stderr}")
+        self.assertIn("FREESTANDING_STDIO_MATH_OK:v=17|2.75|rt!", run_res.stdout)
+        self.assertIn("FS_ERR:s=ab|125.0|", run_res.stderr)
+
+        exps = [
+            ("exp1_raytracer_simd.c", b"P6\n640 480\n255\n", 921615, None),
+            ("exp2_voxel_engine.c", b"P6\n640 480\n255\n", 921615, b"16\xc3\x9732\xc3\x9716 voxels"),
+            ("exp3_audio_visualizer.c", b"P6\n640 480\n255\n", 921615, None),
+            ("exp4_vr_stereo.c", b"P6\n1280 480\n255\n", 1843216, None),
+            ("exp5_physics_engine.c", b"P6\n640 480\n255\n", 921615, None),
+        ]
+        for fname, exp_hdr, exp_sz, exp_err in exps:
+            c_path = os.path.join(REPO_ROOT, fname)
+            bin_path = os.path.join(self.temp_dir.name, fname[:-2])
+            cres = subprocess.run([ZCC_BIN, c_path, "-o", bin_path], capture_output=True, text=True)
+            self.assertEqual(cres.returncode, 0, f"{fname} compile failed: {cres.stderr}\n{cres.stdout}")
+            self.assertNotIn("[Phase 6] GCC Assembly/Linker Binding", cres.stdout)
+            rres = subprocess.run([bin_path], capture_output=True)
+            self.assertEqual(rres.returncode, 0, f"{fname} run failed ({rres.returncode}): {rres.stderr!r}")
+            self.assertEqual(len(rres.stdout), exp_sz, f"{fname} unexpected PPM size")
+            self.assertTrue(rres.stdout.startswith(exp_hdr), f"{fname} unexpected PPM header: {rres.stdout[:24]!r}")
+            if exp_err is not None:
+                self.assertIn(exp_err, rres.stderr)
+
 if __name__ == "__main__":
     unittest.main()

@@ -4320,14 +4320,14 @@ void codegen_expr(Compiler *cc, Node *node) {
             if (!is_fp && pre_ftype && pre_ftype->params && i < pre_ftype->num_params &&
                 pre_ftype->params[i] && is_float_type(pre_ftype->params[i])) is_fp = 1;
             
-            if (is_fp) {
+            if (is_fp && !g_win64_abi_mode) {
                 if (temp_fp < 8) temp_fp++; else is_stack = 1;
             } else {
                 if (temp_gp < max_gp_args) temp_gp++; else is_stack = 1;
             }
         }
         arg_is_stack[i] = is_stack;
-        if (is_stack) stack_slots += (at ? (type_size(at) + 7) / 8 : 1);
+        if (is_stack) stack_slots += (at && at->kind != TY_ARRAY ? (type_size(at) + 7) / 8 : 1);
       }
       args_on_stack = stack_slots;
     }
@@ -4376,7 +4376,7 @@ void codegen_expr(Compiler *cc, Node *node) {
           int slot_sz = backend_ops ? backend_ops->ptr_size : 8;
           arg_stack_offset[i] = current_stack_slot * slot_sz;
           Type *at = (node->args[i] && !is_bad_ptr(node->args[i]) && node->args[i]->type) ? node->args[i]->type : 0;
-          current_stack_slot += (at ? (type_size(at) + slot_sz - 1) / slot_sz : 1);
+          current_stack_slot += (at && at->kind != TY_ARRAY ? (type_size(at) + slot_sz - 1) / slot_sz : 1);
         }
       }
     }
@@ -4493,7 +4493,7 @@ void codegen_expr(Compiler *cc, Node *node) {
         if (is_agg) classify_aggregate(atype, eb);
 
         if (!backend_ops && atype && is_float_type(atype)) {
-            if (fp_idx < 8) target_fp[i] = fp_idx++;
+            if (g_win64_abi_mode) { if (gp_idx < max_gp_args) { target_fp[i] = gp_idx++; fp_idx++; } } else if (fp_idx < 8) target_fp[i] = fp_idx++;
         } else if (!backend_ops && atype && is_complex_type(atype)) {
             if (fp_idx < 8) {
                 target_fp[i] = fp_idx++;
@@ -4501,7 +4501,7 @@ void codegen_expr(Compiler *cc, Node *node) {
             }
         } else if (!backend_ops && callee_ftype && callee_ftype->params && i < callee_ftype->num_params &&
                    callee_ftype->params[i] && is_float_type(callee_ftype->params[i])) {
-            if (fp_idx < 8) target_fp[i] = fp_idx++;
+            if (g_win64_abi_mode) { if (gp_idx < max_gp_args) { target_fp[i] = gp_idx++; fp_idx++; } } else if (fp_idx < 8) target_fp[i] = fp_idx++;
         } else if (is_agg) {
             if (eb[0] == CLASS_SSE) {
                 if (fp_idx < 8) {
@@ -4601,6 +4601,8 @@ void codegen_expr(Compiler *cc, Node *node) {
                     sprintf(xmm_name, "xmm%d", fpid);
                     emit_cvtsi2fd(cc, atype, callee_ftype->params[i]->kind == TY_FLOAT, xmm_name);
                 }
+                if (g_win64_abi_mode && fpid < 4)
+                    fprintf(cc->out, "    movq %%xmm%d, %%%s\n", fpid, argregs[fpid]);
             }
         } else if (target_gp[i] >= 0) {
             if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION) && type_size(atype) > 8) {
@@ -4627,7 +4629,7 @@ void codegen_expr(Compiler *cc, Node *node) {
               else
                   fprintf(cc->out, "    add x8, x29, #%d\n", sret_frame_offset);
           } else {
-              fprintf(cc->out, "    leaq %d(%%rbp), %%rdi\n", sret_frame_offset);
+              fprintf(cc->out, "    leaq %d(%%rbp), %%%s\n", sret_frame_offset, argregs[0]);
           }
       }
 
@@ -4702,16 +4704,16 @@ void codegen_expr(Compiler *cc, Node *node) {
                   }
               }
           }
-          int gp_offset = gp_idx * 8;
-          int fp_offset = 48 + f_idx * 16;
+          int gp_offset = g_win64_abi_mode ? 48 : gp_idx * 8;
+          int fp_offset = g_win64_abi_mode ? 176 : 48 + f_idx * 16;
           fprintf(cc->out, "    # arg0 = ap, arg1 ignored\n");
-          fprintf(cc->out, "    movl $%d, 0(%%rdi)\n", gp_offset);
-          fprintf(cc->out, "    movl $%d, 4(%%rdi)\n", fp_offset);
+          fprintf(cc->out, "    movl $%d, 0(%%%s)\n    movl $%d, 4(%%%s)\n", gp_offset, argregs[0], fp_offset, argregs[0]);
+          if (g_win64_abi_mode) stack_arg_off = 16 + ((fsym && fsym->type) ? fsym->type->num_params * 8 : 8);
           fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", stack_arg_off);
-          fprintf(cc->out, "    movq %%rax, 8(%%rdi)\n");
+          fprintf(cc->out, "    movq %%rax, 8(%%%s)\n", argregs[0]);
           /* The reg_save_area is dynamically stored at stack bottom. */
           fprintf(cc->out, "    leaq %d(%%rbp), %%rax\n", fsym ? fsym->stack_offset : -176);
-          fprintf(cc->out, "    movq %%rax, 16(%%rdi)\n");
+          fprintf(cc->out, "    movq %%rax, 16(%%%s)\n", argregs[0]);
       }
     } else if (strcmp(node->func_name, "__builtin_va_end") == 0) {
       /* va_end is a no-op on x86-64 SysV ABI */
@@ -4723,12 +4725,7 @@ void codegen_expr(Compiler *cc, Node *node) {
           fprintf(cc->out, "    str r2, [r0]\n");
       } else {
           fprintf(cc->out, "    # __builtin_va_copy (SysV 24-byte struct copy)\n");
-          fprintf(cc->out, "    movq 0(%%rsi), %%rax\n");
-          fprintf(cc->out, "    movq %%rax, 0(%%rdi)\n");
-          fprintf(cc->out, "    movq 8(%%rsi), %%rax\n");
-          fprintf(cc->out, "    movq %%rax, 8(%%rdi)\n");
-          fprintf(cc->out, "    movq 16(%%rsi), %%rax\n");
-          fprintf(cc->out, "    movq %%rax, 16(%%rdi)\n");
+          for (int vi = 0; vi < 24; vi += 8) fprintf(cc->out, "    movq %d(%%%s), %%rax\n    movq %%rax, %d(%%%s)\n", vi, argregs[1], vi, argregs[0]);
       }
     } else if (zcc_emit_bit_builtin_call(cc, node)) {
       /* Emitted by zcc_emit_bit_builtin_call */
@@ -5874,7 +5871,6 @@ static void compute_liveness(Node *n) {
 }
 
 static int allocate_registers(Node *func) {
-  return 0;
   if (getenv("ZCC_DISABLE_REGALLOC")) return 0;
   int count = 0;
   int i, j, r;
@@ -6405,7 +6401,7 @@ void codegen_func(Compiler *cc, Node *func) {
       abi_class_t eb[2];
       classify_aggregate(ret_type, eb);
       if (eb[0] == CLASS_MEMORY) {
-          fprintf(cc->out, "    movq %%rdi, %d(%%rbp)\n", cc->sret_offset);
+          fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[0], cc->sret_offset);
           gp_idx = 1; /* %rdi is consumed by the hidden pointer */
           param_offset -= 8;
       }
@@ -6449,9 +6445,9 @@ void codegen_func(Compiler *cc, Node *func) {
         }
     } else {
         int is_fp = is_float_type(ptype);
-        if (is_fp && f_idx < 8) {
-            if (ptype->kind == TY_FLOAT) fprintf(cc->out, "    movss %%xmm%d, %d(%%rbp)\n", f_idx++, param_offset);
-            else fprintf(cc->out, "    movsd %%xmm%d, %d(%%rbp)\n", f_idx++, param_offset);
+        if (is_fp && (g_win64_abi_mode ? gp_idx < max_gp_args : f_idx < 8)) {
+            int fpid = g_win64_abi_mode ? gp_idx++ : f_idx++;
+            fprintf(cc->out, ptype->kind == TY_FLOAT ? "    movss %%xmm%d, %d(%%rbp)\n" : "    movsd %%xmm%d, %d(%%rbp)\n", fpid, param_offset);
         } else if (!is_fp && gp_idx < max_gp_args) {
             fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[gp_idx++], param_offset);
         } else {
@@ -6472,8 +6468,8 @@ void codegen_func(Compiler *cc, Node *func) {
   if (func->func_type && func->func_type->is_variadic) {
     int save_base = -stack_size;
     /* Save GP regs at offsets 0-47 */
-    for (i = 0; i < 6; i++) {
-        fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[i], save_base + i*8);
+    for (i = 0; i < (g_win64_abi_mode ? 4 : 6); i++) {
+        fprintf(cc->out, "    movq %%%s, %d(%%rbp)\n", argregs[i], (g_win64_abi_mode ? 16 : save_base) + i*8);
     }
     /* Save XMM regs at offsets 48-175 */
     for (i = 0; i < 8; i++) {

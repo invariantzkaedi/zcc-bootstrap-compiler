@@ -368,6 +368,26 @@ fuse-all-gauntlet: zcc zcc-opt test-prime-omega test-quantum-unified test-py-qua
 	@echo "========================================================================"
 	@echo "  💎 ALL SOVEREIGN PIPELINES FUSED & 100% VERIFIED ACROSS ALL GATES!  "
 	@echo "========================================================================"
+.PHONY: selfhost-sovereign
+
+selfhost-sovereign: zcc
+	@echo "=== ZCC Sovereign Zero-Binutils Self-Host Gate ==="
+	@if [ ! -f ./zcc2 ] || [ ! -f ./zcc3 ] || [ ! -f zcc2.s ] || [ ! -f zcc3.s ]; then \
+	  $(MAKE) selfhost; \
+	fi
+	./zcc2 -emit-obj zcc2.s -o /tmp/zcc2_sov.o
+	./zcc3 -emit-obj zcc3.s -o /tmp/zcc3_sov.o
+	cmp /tmp/zcc2_sov.o /tmp/zcc3_sov.o
+	./zcc2 tests/abi_funcptr_int_to_double.c -o /tmp/sov_fp2
+	./zcc3 tests/abi_funcptr_int_to_double.c -o /tmp/sov_fp3
+	cmp /tmp/sov_fp2 /tmp/sov_fp3
+	/tmp/sov_fp3
+	./zcc2 tests/abi_int_to_double_bug.c -o /tmp/sov_abi2
+	./zcc3 tests/abi_int_to_double_bug.c -o /tmp/sov_abi3
+	cmp /tmp/sov_abi2 /tmp/sov_abi3
+	/tmp/sov_abi3
+	@echo "[PASS] selfhost-sovereign: byte-identical zero-binutils object & ELF emission verified."
+
 verify-lexicon:
 	@echo "=== Checking Workspace Lexicons ==="
 	@if [ ! -f docs/lexicon/actionable-lexicon.md ] || \
