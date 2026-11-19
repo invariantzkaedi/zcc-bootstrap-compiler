@@ -353,6 +353,35 @@ char *strndup(const char *s, size_t n) {
     return d;
 }
 
+int strcasecmp(const char *a, const char *b) {
+    if (!a && !b) return 0;
+    if (!a) return -1;
+    if (!b) return 1;
+    while (*a || *b) {
+        int ca = (unsigned char)*a++;
+        int cb = (unsigned char)*b++;
+        if (ca >= 'A' && ca <= 'Z') ca += 32;
+        if (cb >= 'A' && cb <= 'Z') cb += 32;
+        if (ca != cb) return ca - cb;
+    }
+    return 0;
+}
+
+int strncasecmp(const char *a, const char *b, size_t n) {
+    if (n == 0) return 0;
+    if (!a && !b) return 0;
+    if (!a) return -1;
+    if (!b) return 1;
+    while (n-- > 0) {
+        int ca = (unsigned char)*a++;
+        int cb = (unsigned char)*b++;
+        if (ca >= 'A' && ca <= 'Z') ca += 32;
+        if (cb >= 'A' && cb <= 'Z') cb += 32;
+        if (ca != cb || ca == 0) return ca - cb;
+    }
+    return 0;
+}
+
 char *strerror(int errnum) {
     static char _wasi_rt_errbuf[32];
     int pos = 0;
@@ -662,7 +691,43 @@ static FILE *_wasi_rt_alloc_file(void) {
     return NULL;
 }
 
+static int _wasi_rt_inited = 0;
+
+void _wasi_rt_ensure_init(void) {
+    if (_wasi_rt_inited) return;
+    _wasi_rt_inited = 1;
+    memset(_wasi_rt_files, 0, sizeof(_wasi_rt_files));
+    stdin = &_wasi_rt_files[0];
+    stdout = &_wasi_rt_files[1];
+    stderr = &_wasi_rt_files[2];
+
+    stdin->in_use = 1; stdin->fd = 0; stdin->can_read = 1; stdin->is_std = 1; stdin->rbuf = _wasi_rt_rbufs[0];
+    stdout->in_use = 1; stdout->fd = 1; stdout->can_write = 1; stdout->is_std = 1; stdout->wbuf = _wasi_rt_wbufs[1];
+    stderr->in_use = 1; stderr->fd = 2; stderr->can_write = 1; stderr->is_std = 1; stderr->wbuf = _wasi_rt_wbufs[2];
+
+    _wasi_rt_discover_preopen();
+
+    uint32_t raw_envc = 0, raw_env_sz = 0;
+    if (__wasi_environ_sizes_get(&raw_envc, &raw_env_sz) == 0 && raw_envc > 0) {
+        uint32_t *e32 = (uint32_t *)malloc((size_t)(raw_envc + 1U) * 4U);
+        uint8_t *ebuf = (uint8_t *)malloc((size_t)(raw_env_sz + 1U));
+        if (e32 && ebuf && __wasi_environ_get(e32, ebuf) == 0) {
+            _wasi_rt_environ = (char **)malloc((size_t)(raw_envc + 1U) * sizeof(char *));
+            if (_wasi_rt_environ) {
+                uint32_t ei;
+                for (ei = 0; ei < raw_envc; ei++) {
+                    _wasi_rt_environ[ei] = (char *)(uintptr_t)e32[ei];
+                }
+                _wasi_rt_environ[raw_envc] = NULL;
+                _wasi_rt_envc = (int)raw_envc;
+            }
+        }
+        free(e32);
+    }
+}
+
 FILE *fopen(const char *path, const char *mode) {
+    _wasi_rt_ensure_init();
     if (!path || !mode) return NULL;
     int r = 0, w = 0, ap = 0, plus = 0;
     const char *m = mode;
@@ -923,7 +988,7 @@ int fputc(int c, FILE *stream) {
 }
 
 int putc(int c, FILE *stream) { return fputc(c, stream); }
-int putchar(int c) { return fputc(c, stdout); }
+int putchar(int c) { _wasi_rt_ensure_init(); return fputc(c, stdout); }
 
 int fputs(const char *s, FILE *stream) {
     if (!s || !stream) return -1;
@@ -933,6 +998,7 @@ int fputs(const char *s, FILE *stream) {
 }
 
 int puts(const char *s) {
+    _wasi_rt_ensure_init();
     if (fputs(s ? s : "(null)", stdout) < 0) return -1;
     if (fputc('\n', stdout) < 0) return -1;
     return 0;
@@ -1285,6 +1351,7 @@ int sprintf(char *str, const char *format, ...) {
 }
 
 int vfprintf(FILE *stream, const char *format, va_list ap) {
+    _wasi_rt_ensure_init();
     _wasi_rt_fmt_sink sk;
     sk.buf = NULL;
     sk.cap = 0;
@@ -1302,10 +1369,12 @@ int fprintf(FILE *stream, const char *format, ...) {
 }
 
 int vprintf(const char *format, va_list ap) {
+    _wasi_rt_ensure_init();
     return vfprintf(stdout, format, ap);
 }
 
 int printf(const char *format, ...) {
+    _wasi_rt_ensure_init();
     va_list ap;
     va_start(ap, format);
     int r = vfprintf(stdout, format, ap);
@@ -1313,13 +1382,13 @@ int printf(const char *format, ...) {
     return r;
 }
 
-int sscanf(const char *str, const char *format, ...) {
+static int _wasi_rt_vsscanf(const char *str, const char *format, va_list ap_in) {
     if (!str || !format) return -1;
     const char *s = str;
     const char *f = format;
     int assigned = 0;
     va_list ap;
-    va_start(ap, format);
+    va_copy(ap, ap_in);
 
     while (*f) {
         if (isspace((unsigned char)*f)) {
@@ -1467,6 +1536,29 @@ int sscanf(const char *str, const char *format, ...) {
     }
     va_end(ap);
     return assigned;
+}
+
+int vsscanf(const char *str, const char *format, va_list ap) {
+    return _wasi_rt_vsscanf(str, format, ap);
+}
+
+int sscanf(const char *str, const char *format, ...) {
+    va_list ap;
+    va_start(ap, format);
+    int r = _wasi_rt_vsscanf(str, format, ap);
+    va_end(ap);
+    return r;
+}
+
+int fscanf(FILE *stream, const char *format, ...) {
+    char linebuf[1024];
+    if (!stream || !format) return -1;
+    if (!fgets(linebuf, sizeof(linebuf), stream)) return -1;
+    va_list ap;
+    va_start(ap, format);
+    int r = _wasi_rt_vsscanf(linebuf, format, ap);
+    va_end(ap);
+    return r;
 }
 
 /* -------------------------------------------------------------------------
@@ -1988,9 +2080,100 @@ int unlink(const char *path) {
 
 int access(const char *path, int mode) {
     (void)mode;
+    _wasi_rt_ensure_init();
     FILE *f = fopen(path, "rb");
     if (!f) return -1;
     fclose(f);
+    return 0;
+}
+
+#ifndef ZCC_WASI_STAT_DEFINED
+#define ZCC_WASI_STAT_DEFINED
+struct stat {
+    int st_size;
+    int st_mode;
+};
+#endif
+
+#ifndef O_RDONLY
+#define O_RDONLY 0
+#endif
+#ifndef O_WRONLY
+#define O_WRONLY 1
+#endif
+#ifndef O_RDWR
+#define O_RDWR 2
+#endif
+#ifndef O_CREAT
+#define O_CREAT 0x40
+#endif
+#ifndef O_TRUNC
+#define O_TRUNC 0x200
+#endif
+#ifndef O_APPEND
+#define O_APPEND 0x400
+#endif
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+#ifndef R_OK
+#define R_OK 4
+#endif
+#ifndef W_OK
+#define W_OK 2
+#endif
+#ifndef F_OK
+#define F_OK 0
+#endif
+
+int open(const char *path, int flags, ...) {
+    _wasi_rt_ensure_init();
+    if (!path) return -1;
+    const char *rel = _wasi_rt_relpath(path);
+    uint32_t oflags = 0U;
+    uint32_t fdflags = 0U;
+    if (flags & O_CREAT) oflags |= _WASI_RT_O_CREAT;
+    if (flags & O_TRUNC) oflags |= _WASI_RT_O_TRUNC;
+    if (flags & O_APPEND) fdflags |= _WASI_RT_FDFLAG_APP;
+    int need_w = ((flags & 3) == O_WRONLY) || ((flags & 3) == O_RDWR) || (flags & (O_CREAT | O_TRUNC | O_APPEND));
+    uint64_t want_rights = need_w ? _WASI_RT_RIGHTS_WRITE : _WASI_RT_RIGHTS_READ;
+    uint64_t base_rights = want_rights & _wasi_rt_preopen_rights_inh;
+    if (base_rights == 0ULL) base_rights = want_rights;
+    int new_fd = -1;
+    int rc = __wasi_path_open(_wasi_rt_preopen_fd, 0U, rel, (uint32_t)strlen(rel),
+                              oflags, base_rights, base_rights, fdflags, &new_fd);
+    if (rc != 0 || new_fd < 0) {
+        _wasi_rt_errno_val = rc;
+        return -1;
+    }
+    return new_fd;
+}
+
+long lseek(int fd, long offset, int whence) {
+    if (fd < 0) return -1L;
+    uint64_t newoff = 0;
+    int rc = __wasi_fd_seek(fd, (int64_t)offset, (uint32_t)whence, &newoff);
+    if (rc != 0) {
+        _wasi_rt_errno_val = rc;
+        return -1L;
+    }
+    return (long)newoff;
+}
+
+int fstat(int fd, struct stat *buf) {
+    if (fd < 0 || !buf) return -1;
+    uint64_t cur = 0, end = 0;
+    if (__wasi_fd_seek(fd, 0LL, 1U, &cur) != 0) return -1;
+    if (__wasi_fd_seek(fd, 0LL, 2U, &end) != 0) return -1;
+    __wasi_fd_seek(fd, (int64_t)cur, 0U, &cur);
+    buf->st_size = (int)end;
+    buf->st_mode = 0100644;
+    return 0;
+}
+
+int mkdir(const char *path, unsigned int mode) {
+    (void)path;
+    (void)mode;
     return 0;
 }
 
@@ -1998,34 +2181,7 @@ int access(const char *path, int mode) {
  * 9. WASI Entry Point (`_start`) with LP64 8-Byte Pointer Unpacking
  * ------------------------------------------------------------------------- */
 void _start(void) {
-    memset(_wasi_rt_files, 0, sizeof(_wasi_rt_files));
-    stdin = &_wasi_rt_files[0];
-    stdout = &_wasi_rt_files[1];
-    stderr = &_wasi_rt_files[2];
-
-    stdin->in_use = 1; stdin->fd = 0; stdin->can_read = 1; stdin->is_std = 1; stdin->rbuf = _wasi_rt_rbufs[0];
-    stdout->in_use = 1; stdout->fd = 1; stdout->can_write = 1; stdout->is_std = 1; stdout->wbuf = _wasi_rt_wbufs[1];
-    stderr->in_use = 1; stderr->fd = 2; stderr->can_write = 1; stderr->is_std = 1; stderr->wbuf = _wasi_rt_wbufs[2];
-
-    _wasi_rt_discover_preopen();
-
-    uint32_t raw_envc = 0, raw_env_sz = 0;
-    if (__wasi_environ_sizes_get(&raw_envc, &raw_env_sz) == 0 && raw_envc > 0) {
-        uint32_t *e32 = (uint32_t *)malloc((size_t)(raw_envc + 1U) * 4U);
-        uint8_t *ebuf = (uint8_t *)malloc((size_t)(raw_env_sz + 1U));
-        if (e32 && ebuf && __wasi_environ_get(e32, ebuf) == 0) {
-            _wasi_rt_environ = (char **)malloc((size_t)(raw_envc + 1U) * sizeof(char *));
-            if (_wasi_rt_environ) {
-                uint32_t ei;
-                for (ei = 0; ei < raw_envc; ei++) {
-                    _wasi_rt_environ[ei] = (char *)(uintptr_t)e32[ei];
-                }
-                _wasi_rt_environ[raw_envc] = NULL;
-                _wasi_rt_envc = (int)raw_envc;
-            }
-        }
-        free(e32);
-    }
+    _wasi_rt_ensure_init();
 
     uint32_t raw_argc = 0, raw_argv_sz = 0;
     int argc = 1;

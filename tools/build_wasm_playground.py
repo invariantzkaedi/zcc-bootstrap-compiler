@@ -293,13 +293,23 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     font-size: 12.5px;
     color: var(--muted);
   }
-  canvas#wasmMapCanvas {
+  canvas#wasmMapCanvas, canvas#fbCanvas {
+    position: relative;
+    z-index: 1000;
+    pointer-events: auto;
     width: 100%;
     height: auto;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 8px;
     display: block;
+  }
+  canvas#fbCanvas {
+    max-width: 640px;
+    aspect-ratio: 16 / 10;
+    image-rendering: pixelated;
+    background: #000000;
+    outline: none;
   }
   .vfs-list {
     background: var(--bg);
@@ -336,6 +346,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <button id="tabBtnC" class="tab-btn active" type="button" data-action="switchTab:c" onclick="zccUiAction('switchTab:c', event)">C99 Compiler (zcc.wasm)</button>
     <button id="tabBtnLua" class="tab-btn" type="button" data-action="switchTab:lua" onclick="zccUiAction('switchTab:lua', event)">Lua 5.4.6 WASI VM (lua.wasm)</button>
     <button id="tabBtnExt" class="tab-btn" type="button" data-action="switchTab:ext" onclick="zccUiAction('switchTab:ext', event)">External WASI Runner (sqlite3.wasm / .wasm)</button>
+    <button id="tabBtnFb" class="tab-btn" type="button" data-action="switchTab:fb" onclick="zccUiAction('switchTab:fb', event)">Live Canvas / DOOM (Framebuffer)</button>
   </nav>
 
   <div class="main-grid">
@@ -405,6 +416,41 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <div class="actions">
           <button id="btnRunExt" class="primary" type="button" data-action="runExternalLoaded" onclick="zccUiAction('runExternalLoaded', event)">Run External WASI Module</button>
         </div>
+      </section>
+
+      <!-- TAB 4: LIVE CANVAS / DOOM (FRAMEBUFFER) -->
+      <section id="panel-fb" class="panel hidden">
+        <div class="toolbar">
+          <label>Live C99 Graphics Preset:
+            <select id="fbPresetSelect" data-action="loadFbPreset" onchange="zccUiAction('loadFbPreset', event)">
+              <option value="live_raytracer">Interactive C99 Raytracer (160x100 WASD/Fire)</option>
+              <option value="plasma_shader">Interactive C99 Plasma Interference (160x100)</option>
+            </select>
+          </label>
+        </div>
+        <textarea id="fbSourceInput" rows="12" spellcheck="false"></textarea>
+        <div class="actions">
+          <button id="btnFbCompileRun" class="primary" type="button" data-action="compileAndRunFbC" onclick="zccUiAction('compileAndRunFbC', event)">Compile &amp; Run Live C99 (zcc.wasm)</button>
+          <button id="btnFbPause" type="button" data-action="toggleFbPause" onclick="zccUiAction('toggleFbPause', event)">Pause</button>
+          <button id="btnFbStep" type="button" data-action="stepFbOnce" onclick="zccUiAction('stepFbOnce', event)">Step Frame</button>
+          <button id="btnFbStop" type="button" data-action="stopFbSession" onclick="zccUiAction('stopFbSession', event)">Stop</button>
+        </div>
+
+        <div id="fbDropZone" class="dropzone">
+          Load Local Framebuffer WASI Binary (e.g. <code>build_wasm/doom.wasm</code>) + Optional WAD Asset (<code>doom1.wad</code>):
+          <div class="controls" style="justify-content:center; margin-top:8px;">
+            <label>WASM: <input id="fbWasmFile" type="file" accept=".wasm" data-action="loadFbWasmFile" onchange="zccUiAction('loadFbWasmFile', event)"></label>
+            <label>WAD/Asset: <input id="fbWadFile" type="file" accept=".wad,.WAD" data-action="loadFbWadFile" onchange="zccUiAction('loadFbWadFile', event)"></label>
+          </div>
+          <div id="fbLoadedLabel" style="margin-top:6px; color:#93c5fd;">No external framebuffer .wasm / .wad loaded yet.</div>
+          <div class="actions" style="justify-content:center; margin-top:8px;">
+            <button id="btnFbRunTitle" class="good" type="button" data-action="bootExternalFbTitle" onclick="zccUiAction('bootExternalFbTitle', event)">Boot Title / Attract</button>
+            <button id="btnFbRunE1M1" class="primary" type="button" data-action="bootExternalFbE1M1" onclick="zccUiAction('bootExternalFbE1M1', event)">Warp E1M1 (DOOM 3D)</button>
+          </div>
+        </div>
+
+        <canvas id="fbCanvas" width="320" height="200" tabindex="0"></canvas>
+        <div id="fbStatusText" class="sub" style="font-family:var(--mono); font-size:11.5px; color:var(--muted);">Framebuffer idle • Controls: WASD / Arrows (Move/Turn), Ctrl/F (Fire), Space/E (Use), Shift (Run), 1-7 (Weapons)</div>
       </section>
 
       <!-- VFS MANAGER -->
@@ -599,12 +645,241 @@ __EMBEDDED_SHIM_JS__
     ].join("\n"),
   };
 
+  const FB_PRESETS = {
+    live_raytracer: {
+      code: [
+        "#define FB_W 160",
+        "#define FB_H 100",
+        "static unsigned int g_fb[160 * 100];",
+        "static float g_cam_x;",
+        "static float g_cam_y;",
+        "static float g_cam_z;",
+        "static float g_yaw;",
+        "static float g_time;",
+        "static int g_frame;",
+        "static int g_inited;",
+        "",
+        "static float clamp01(float v) {",
+        "    if (v < 0.0f) return 0.0f;",
+        "    if (v > 1.0f) return 1.0f;",
+        "    return v;",
+        "}",
+        "",
+        "static float sqrtf_fast(float x) {",
+        "    if (x <= 0.0f) return 0.0f;",
+        "    float s = 1.0f;",
+        "    while (x > 4.0f) { x *= 0.25f; s *= 2.0f; }",
+        "    while (x < 0.25f) { x *= 4.0f; s *= 0.5f; }",
+        "    float r = 0.5f * (1.0f + x);",
+        "    for (int i = 0; i < 6; i++) r = 0.5f * (r + x / r);",
+        "    return r * s;",
+        "}",
+        "",
+        "static float sinf_fast(float x) {",
+        "    float pi = 3.14159265f;",
+        "    float two_pi = 6.28318530f;",
+        "    while (x > pi) x -= two_pi;",
+        "    while (x < -pi) x += two_pi;",
+        "    float x2 = x * x;",
+        "    return x * (1.0f - x2 * (0.16666667f - x2 * (0.00833333f - x2 * 0.00019841f)));",
+        "}",
+        "",
+        "static float cosf_fast(float x) {",
+        "    return sinf_fast(x + 1.57079632f);",
+        "}",
+        "",
+        "static float sphere_hit(float ox, float oy, float oz, float dx, float dy, float dz,",
+        "                        float cx, float cy, float cz, float rad) {",
+        "    float rx = ox - cx;",
+        "    float ry = oy - cy;",
+        "    float rz = oz - cz;",
+        "    float b = rx * dx + ry * dy + rz * dz;",
+        "    float c = rx * rx + ry * ry + rz * rz - rad * rad;",
+        "    float disc = b * b - c;",
+        "    if (disc <= 0.0f) return -1.0f;",
+        "    float t = -b - sqrtf_fast(disc);",
+        "    return (t > 0.01f) ? t : -1.0f;",
+        "}",
+        "",
+        "int fb_width(void) { return FB_W; }",
+        "int fb_height(void) { return FB_H; }",
+        "unsigned int fb_ptr(void) { return (unsigned int)g_fb; }",
+        "",
+        "int fb_init(int ep, int map) {",
+        "    (void)ep; (void)map;",
+        "    g_cam_x = 0.0f;",
+        "    g_cam_y = 0.55f;",
+        "    g_cam_z = -3.4f;",
+        "    g_yaw = 0.0f;",
+        "    g_time = 0.0f;",
+        "    g_frame = 0;",
+        "    g_inited = 1;",
+        "    return 0;",
+        "}",
+        "",
+        "int fb_tick(int dt_ms, int key_mask, int mouse_x, int mouse_y) {",
+        "    if (!g_inited) fb_init(0, 0);",
+        "    float dt = (dt_ms > 0) ? ((float)dt_ms * 0.001f) : 0.033f;",
+        "    g_time += dt;",
+        "    if (key_mask & 4) g_yaw -= 1.8f * dt;",
+        "    if (key_mask & 8) g_yaw += 1.8f * dt;",
+        "    float sy = sinf_fast(g_yaw);",
+        "    float cy = cosf_fast(g_yaw);",
+        "    float spd = ((key_mask & 256) ? 3.8f : 2.2f) * dt;",
+        "    if (key_mask & 1) { g_cam_x += sy * spd; g_cam_z += cy * spd; }",
+        "    if (key_mask & 2) { g_cam_x -= sy * spd; g_cam_z -= cy * spd; }",
+        "    if (key_mask & 512) { g_cam_x -= cy * spd; g_cam_z += sy * spd; }",
+        "    if (key_mask & 1024) { g_cam_x += cy * spd; g_cam_z -= sy * spd; }",
+        "",
+        "    float s0x = cosf_fast(g_time * 1.1f) * 1.15f;",
+        "    float s0y = 0.15f + 0.28f * sinf_fast(g_time * 2.0f);",
+        "    float s0z = 0.6f + sinf_fast(g_time * 1.1f) * 0.7f;",
+        "    float s1x = -cosf_fast(g_time * 0.8f) * 1.05f;",
+        "    float s1y = -0.15f;",
+        "    float s1z = 1.4f;",
+        "    float pulse = (key_mask & 16) ? 1.55f : 1.0f;",
+        "    float mshift = (float)(mouse_x - 80) * 0.004f;",
+        "    float lx = 0.45f + mshift;",
+        "    float ly = 0.78f;",
+        "    float lz = -0.42f;",
+        "    float linv = 1.0f / sqrtf_fast(lx * lx + ly * ly + lz * lz);",
+        "    lx *= linv; ly *= linv; lz *= linv;",
+        "    (void)mouse_y;",
+        "",
+        "    for (int py = 0; py < FB_H; py++) {",
+        "        float v = (0.5f - ((float)py + 0.5f) / (float)FB_H) * 1.15f;",
+        "        for (int px = 0; px < FB_W; px++) {",
+        "            float u = (((float)px + 0.5f) / (float)FB_W - 0.5f) * 1.84f;",
+        "            float rx = u * cy + sy;",
+        "            float ry = v - 0.12f;",
+        "            float rz = cy - u * sy;",
+        "            float rinv = 1.0f / sqrtf_fast(rx * rx + ry * ry + rz * rz);",
+        "            rx *= rinv; ry *= rinv; rz *= rinv;",
+        "",
+        "            float best_t = 1e9f;",
+        "            int hit_kind = 0;",
+        "            float t0 = sphere_hit(g_cam_x, g_cam_y, g_cam_z, rx, ry, rz, s0x, s0y, s0z, 0.62f);",
+        "            if (t0 > 0.0f && t0 < best_t) { best_t = t0; hit_kind = 1; }",
+        "            float t1 = sphere_hit(g_cam_x, g_cam_y, g_cam_z, rx, ry, rz, s1x, s1y, s1z, 0.50f);",
+        "            if (t1 > 0.0f && t1 < best_t) { best_t = t1; hit_kind = 2; }",
+        "            if (ry < -0.002f) {",
+        "                float tf = (-0.85f - g_cam_y) / ry;",
+        "                if (tf > 0.02f && tf < best_t) { best_t = tf; hit_kind = 3; }",
+        "            }",
+        "",
+        "            float cr, cg, cb;",
+        "            if (hit_kind == 0) {",
+        "                float sky = clamp01(0.5f * (ry + 1.0f));",
+        "                cr = 0.05f + 0.12f * (1.0f - sky);",
+        "                cg = 0.10f + 0.35f * sky;",
+        "                cb = 0.22f + 0.65f * sky;",
+        "            } else {",
+        "                float hx = g_cam_x + rx * best_t;",
+        "                float hy = g_cam_y + ry * best_t;",
+        "                float hz = g_cam_z + rz * best_t;",
+        "                float nx = 0.0f, ny = 1.0f, nz = 0.0f;",
+        "                float ar = 0.2f, ag = 0.8f, ab = 0.9f;",
+        "                if (hit_kind == 1) {",
+        "                    nx = (hx - s0x) / 0.62f; ny = (hy - s0y) / 0.62f; nz = (hz - s0z) / 0.62f;",
+        "                    ar = 0.96f; ag = 0.36f; ab = 0.24f;",
+        "                } else if (hit_kind == 2) {",
+        "                    nx = (hx - s1x) / 0.50f; ny = (hy - s1y) / 0.50f; nz = (hz - s1z) / 0.50f;",
+        "                    ar = 0.22f; ag = 0.85f; ab = 0.96f;",
+        "                } else {",
+        "                    int cx = (int)(hx * 2.0f + 1000.0f);",
+        "                    int cz = (int)(hz * 2.0f + 1000.0f);",
+        "                    int chk = (cx + cz) & 1;",
+        "                    ar = chk ? 0.78f : 0.16f;",
+        "                    ag = chk ? 0.82f : 0.20f;",
+        "                    ab = chk ? 0.86f : 0.28f;",
+        "                }",
+        "                float sh0 = sphere_hit(hx + nx * 0.01f, hy + ny * 0.01f, hz + nz * 0.01f, lx, ly, lz, s0x, s0y, s0z, 0.62f);",
+        "                float sh1 = sphere_hit(hx + nx * 0.01f, hy + ny * 0.01f, hz + nz * 0.01f, lx, ly, lz, s1x, s1y, s1z, 0.50f);",
+        "                float shade = (sh0 > 0.0f || sh1 > 0.0f) ? 0.22f : 1.0f;",
+        "                float diff = clamp01(nx * lx + ny * ly + nz * lz) * shade * pulse;",
+        "                cr = clamp01(ar * (0.18f + 0.95f * diff));",
+        "                cg = clamp01(ag * (0.18f + 0.95f * diff));",
+        "                cb = clamp01(ab * (0.20f + 0.95f * diff));",
+        "            }",
+        "            unsigned int ir = (unsigned int)(cr * 255.0f);",
+        "            unsigned int ig = (unsigned int)(cg * 255.0f);",
+        "            unsigned int ib = (unsigned int)(cb * 255.0f);",
+        "            g_fb[py * FB_W + px] = 0xFF000000U | (ib << 16) | (ig << 8) | ir;",
+        "        }",
+        "    }",
+        "    g_frame++;",
+        "    return g_frame;",
+        "}",
+        ""
+      ].join("\n"),
+    },
+    plasma_shader: {
+      code: [
+        "#define FB_W 160",
+        "#define FB_H 100",
+        "static unsigned int g_fb[160 * 100];",
+        "static int g_frame;",
+        "static int g_ox;",
+        "static int g_oy;",
+        "",
+        "static int wave256(int x) {",
+        "    int p = x & 255;",
+        "    int q = (p < 128) ? p : (255 - p);",
+        "    return (q - 64) * 2;",
+        "}",
+        "",
+        "int fb_width(void) { return FB_W; }",
+        "int fb_height(void) { return FB_H; }",
+        "unsigned int fb_ptr(void) { return (unsigned int)g_fb; }",
+        "",
+        "int fb_init(int ep, int map) {",
+        "    (void)ep; (void)map;",
+        "    g_frame = 0;",
+        "    g_ox = 0;",
+        "    g_oy = 0;",
+        "    return 0;",
+        "}",
+        "",
+        "int fb_tick(int dt_ms, int key_mask, int mouse_x, int mouse_y) {",
+        "    (void)dt_ms;",
+        "    if (key_mask & 1) g_oy -= 4;",
+        "    if (key_mask & 2) g_oy += 4;",
+        "    if (key_mask & 4) g_ox -= 4;",
+        "    if (key_mask & 8) g_ox += 4;",
+        "    int t = g_frame * 3 + ((key_mask & 16) ? 19 : 0) + (mouse_x >> 2);",
+        "    int ym = (mouse_y >> 2);",
+        "    for (int y = 0; y < FB_H; y++) {",
+        "        int yy = y + g_oy;",
+        "        for (int x = 0; x < FB_W; x++) {",
+        "            int xx = x + g_ox;",
+        "            int v = wave256(xx * 3 + t) + wave256(yy * 4 - t * 2) + wave256((xx + yy) * 2 + ym);",
+        "            unsigned int r = (unsigned int)((wave256(v + 64) + 128) & 255);",
+        "            unsigned int g = (unsigned int)((wave256(v + 128 + t) + 128) & 255);",
+        "            unsigned int b = (unsigned int)((wave256(v + 192 - t) + 128) & 255);",
+        "            g_fb[y * FB_W + x] = 0xFF000000U | (b << 16) | (g << 8) | r;",
+        "        }",
+        "    }",
+        "    g_frame++;",
+        "    return g_frame;",
+        "}",
+        ""
+      ].join("\n"),
+    },
+  };
+
   const state = {
     zccBytes: null,
     wasiRtText: null,
     luaBytes: null,
     extBytes: null,
     extName: "",
+    fbWasmBytes: null,
+    fbWasmName: "",
+    fbWadBytes: null,
+    fbWadName: "doom1.wad",
+    fbSession: null,
+    fbKeysDown: new Set(),
+    activeTab: "c",
     userVfs: new Map([["vfs_snippet.lua", new TextEncoder().encode("return 7 * 6\n")]]),
     lastArtifactBytes: null,
     lastArtifactName: "out.wasm",
@@ -802,10 +1077,279 @@ __EMBEDDED_SHIM_JS__
     }
   }
 
+  function renderFramebufferCanvas(canvasOpt, rgbaBytes, srcW, srcH) {
+    const canvas = canvasOpt || el("fbCanvas");
+    if (!canvas || canvas.width < 50 || canvas.height < 50) return false;
+    if (typeof canvas.getContext !== "function") return false;
+    const w = Math.max(1, srcW | 0);
+    const h = Math.max(1, srcH | 0);
+    const needBytes = w * h * 4;
+    if (!rgbaBytes || rgbaBytes.length < needBytes) return false;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return false;
+    const targetW = Math.max(50, w);
+    const targetH = Math.max(50, h);
+    if (canvas.width !== targetW) canvas.width = targetW;
+    if (canvas.height !== targetH) canvas.height = targetH;
+    const img = (typeof ctx.createImageData === "function")
+      ? ctx.createImageData(w, h)
+      : { data: new Uint8ClampedArray(needBytes), width: w, height: h };
+    if (img.data && typeof img.data.set === "function") {
+      img.data.set(rgbaBytes.subarray(0, needBytes));
+    }
+    if (typeof ctx.putImageData === "function") {
+      ctx.putImageData(img, 0, 0);
+    }
+    return true;
+  }
+
+  function hashRgba(u8) {
+    let h1 = 0x811c9dc5 >>> 0;
+    let h2 = 0x9e3779b9 >>> 0;
+    for (let i = 0; i < u8.length; i += 4) {
+      const px = (u8[i] | (u8[i + 1] << 8) | (u8[i + 2] << 16) | (u8[i + 3] << 24)) >>> 0;
+      h1 = Math.imul(h1 ^ px, 0x01000193) >>> 0;
+      h2 = Math.imul(h2 ^ (px + i), 0x85ebca6b) >>> 0;
+    }
+    return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
+  }
+
+  function countUniqueRgbAndAlpha(u8) {
+    const uniq = new Set();
+    let allOpaque = true;
+    for (let i = 0; i < u8.length; i += 4) {
+      if (u8[i + 3] !== 255) allOpaque = false;
+      uniq.add((u8[i] << 16) | (u8[i + 1] << 8) | u8[i + 2]);
+    }
+    return { uniqueColors: uniq.size, allOpaque };
+  }
+
+  function computeFbKeyMask() {
+    let mask = 0;
+    const down = state.fbKeysDown;
+    if (down.has("ArrowUp") || down.has("KeyW")) mask |= 1;
+    if (down.has("ArrowDown") || down.has("KeyS")) mask |= 2;
+    if (down.has("ArrowLeft") || down.has("KeyA")) mask |= 4;
+    if (down.has("ArrowRight") || down.has("KeyD")) mask |= 8;
+    if (down.has("ControlLeft") || down.has("ControlRight") || down.has("KeyF")) mask |= 16;
+    if (down.has("Space") || down.has("KeyE")) mask |= 32;
+    if (down.has("Enter")) mask |= 64;
+    if (down.has("Escape")) mask |= 128;
+    if (down.has("ShiftLeft") || down.has("ShiftRight")) mask |= 256;
+    if (down.has("KeyQ") || down.has("Comma")) mask |= 512;
+    if (down.has("KeyC") || down.has("Period")) mask |= 1024;
+    return mask;
+  }
+
+  function mapEventToDoomKey(ev) {
+    const k = ev.key || "";
+    const c = ev.code || "";
+    if (c.startsWith("Digit") && c.length === 6) {
+      const ch = c.charCodeAt(5);
+      if (ch >= 49 && ch <= 55) return ch;
+    }
+    if (k === "y" || k === "Y") return 121;
+    if (k === "n" || k === "N") return 110;
+    return 0;
+  }
+
+  function stopFbSession() {
+    if (state.fbSession) {
+      state.fbSession.running = false;
+    }
+    state.fbSession = null;
+    if (el("btnFbPause")) el("btnFbPause").textContent = "Pause";
+    if (el("fbStatusText")) {
+      el("fbStatusText").textContent = "Framebuffer stopped • Controls: WASD / Arrows, Ctrl/F Fire, Space/E Use, Shift Run, 1-7 Weapons";
+    }
+  }
+
+  function stepActiveFramebuffer(keyMaskOverride) {
+    const sess = state.fbSession;
+    if (!sess || !sess.running) return null;
+    const ex = sess.exports;
+    const mask = (typeof keyMaskOverride === "number") ? (keyMaskOverride | 0) : computeFbKeyMask();
+    ex.fb_tick(28, mask, sess.mouseX | 0, sess.mouseY | 0);
+    const w = Math.max(1, ex.fb_width() | 0);
+    const h = Math.max(1, ex.fb_height() | 0);
+    const ptr = ex.fb_ptr() >>> 0;
+    const memU8 = new Uint8Array(ex.memory.buffer);
+    const need = w * h * 4;
+    const rgbaSlice = memU8.slice(ptr, ptr + need);
+    renderFramebufferCanvas(el("fbCanvas"), rgbaSlice, w, h);
+    sess.width = w;
+    sess.height = h;
+    sess.frames++;
+    const diag = {
+      width: w,
+      height: h,
+      frames: sess.frames,
+      rgba: rgbaSlice,
+      gamestate: typeof ex.fb_gamestate === "function" ? (ex.fb_gamestate() | 0) : null,
+      gametic: typeof ex.fb_gametic === "function" ? (ex.fb_gametic() | 0) : null,
+      playerX: typeof ex.fb_player_x === "function" ? (ex.fb_player_x() | 0) : null,
+      playerY: typeof ex.fb_player_y === "function" ? (ex.fb_player_y() | 0) : null,
+      playerAngle: typeof ex.fb_player_angle === "function" ? (ex.fb_player_angle() >>> 0) : null,
+    };
+    if (el("fbStatusText")) {
+      const gsPart = diag.gamestate !== null ? ` • gs=${diag.gamestate} tic=${diag.gametic}` : "";
+      el("fbStatusText").textContent = `${sess.label} • ${w}x${h} • frame=${sess.frames}${gsPart} • ${sess.paused ? "PAUSED" : "LIVE"}`;
+    }
+    return diag;
+  }
+
+  async function startFbSession(wasmBytes, opts) {
+    const o = opts || {};
+    stopFbSession();
+    const inspection = inspectWasmModule(wasmBytes);
+    if (!inspection.valid) {
+      throw new Error("Invalid WebAssembly framebuffer module");
+    }
+    const expSet = new Set(inspection.exports.map((e) => e.split(":")[0]));
+    for (const req of ["memory", "fb_width", "fb_height", "fb_ptr", "fb_init", "fb_tick"]) {
+      if (!expSet.has(req)) {
+        throw new Error(`Framebuffer WASM module missing required export: ${req}`);
+      }
+    }
+    const files = makeMergedVfs({});
+    const shim = new globalThis.BrowserWasiShim({
+      args: [o.name || "fb.wasm"],
+      files,
+      stdin: "",
+      preopenDir: ".",
+    });
+    if (o.binaryFiles) {
+      for (const [k, v] of Object.entries(o.binaryFiles)) {
+        if (v) {
+          shim.vfs.set(k.replace(/^\.?\//, ""), v instanceof Uint8Array ? v : new Uint8Array(v));
+        }
+      }
+    }
+    const { instance } = await shim.instantiate(wasmBytes);
+    const ex = instance.exports;
+    ex.fb_init((o.ep || 0) | 0, (o.map || 0) | 0);
+    const w = Math.max(1, ex.fb_width() | 0);
+    const h = Math.max(1, ex.fb_height() | 0);
+    state.fbSession = {
+      shim,
+      instance,
+      exports: ex,
+      inspection,
+      width: w,
+      height: h,
+      paused: Boolean(o.paused),
+      running: true,
+      frames: 0,
+      lastTickMs: 0,
+      mouseX: Math.floor(w / 2),
+      mouseY: Math.floor(h / 2),
+      label: o.name || "fb.wasm",
+    };
+    if (el("btnFbPause")) el("btnFbPause").textContent = state.fbSession.paused ? "Resume" : "Pause";
+    const first = stepActiveFramebuffer(typeof o.initialKeyMask === "number" ? o.initialKeyMask : undefined);
+    return { first, inspection, shim };
+  }
+
+  async function compileAndStepLiveFramebuffer(sourceText, steps, keyMaskSeq) {
+    const comp = await compileCSource(sourceText, { linkWasiRt: false, mode: "wasm" });
+    if (!comp.ok) {
+      return {
+        compileOk: false,
+        compileMs: comp.compileMs,
+        exitCode: comp.exitCode || 1,
+        stderr: comp.compileStderr || "Compile failed",
+        artifactBytes: null,
+        frameHashes: [],
+        uniqueColors: 0,
+        allOpaque: false,
+      };
+    }
+    const nSteps = Math.max(1, steps | 0);
+    const k0 = (keyMaskSeq && keyMaskSeq.length > 0) ? (keyMaskSeq[0] | 0) : 0;
+    const { first, inspection } = await startFbSession(comp.artifactBytes, {
+      name: "fb_c99.wasm",
+      ep: 0,
+      map: 0,
+      paused: true,
+      initialKeyMask: k0,
+    });
+    const hashes = [hashRgba(first.rgba)];
+    let last = first;
+    for (let s = 1; s < nSteps; s++) {
+      const km = (keyMaskSeq && s < keyMaskSeq.length) ? (keyMaskSeq[s] | 0) : 0;
+      last = stepActiveFramebuffer(km);
+      hashes.push(hashRgba(last.rgba));
+    }
+    const stats = countUniqueRgbAndAlpha(last.rgba);
+    stopFbSession();
+    return {
+      compileOk: true,
+      compileMs: comp.compileMs,
+      artifactBytes: comp.artifactBytes,
+      inspection,
+      width: last.width,
+      height: last.height,
+      frames: last.frames,
+      frameHashes: hashes,
+      uniqueColors: stats.uniqueColors,
+      allOpaque: stats.allOpaque,
+    };
+  }
+
+  async function loadAndStepExternalFramebuffer(wasmBytes, vfsFiles, warpEp, warpMap, steps, keyMaskSeq) {
+    const nSteps = Math.max(1, steps | 0);
+    const k0 = (keyMaskSeq && keyMaskSeq.length > 0) ? (keyMaskSeq[0] | 0) : 0;
+    const { first, inspection } = await startFbSession(wasmBytes, {
+      name: "external_fb.wasm",
+      binaryFiles: vfsFiles || {},
+      ep: warpEp | 0,
+      map: warpMap | 0,
+      paused: true,
+      initialKeyMask: k0,
+    });
+    const hashes = [hashRgba(first.rgba)];
+    let last = first;
+    for (let s = 1; s < nSteps; s++) {
+      const km = (keyMaskSeq && s < keyMaskSeq.length) ? (keyMaskSeq[s] | 0) : 0;
+      last = stepActiveFramebuffer(km);
+      hashes.push(hashRgba(last.rgba));
+    }
+    const stats = countUniqueRgbAndAlpha(last.rgba);
+    stopFbSession();
+    return {
+      inspection,
+      width: last.width,
+      height: last.height,
+      frames: last.frames,
+      gamestate: last.gamestate,
+      gametic: last.gametic,
+      playerX: last.playerX,
+      playerY: last.playerY,
+      playerAngle: last.playerAngle,
+      frameHashes: hashes,
+      uniqueColors: stats.uniqueColors,
+      allOpaque: stats.allOpaque,
+    };
+  }
+
   function animationLoop() {
     try {
       state.animPhase = (state.animPhase + 0.08) % (Math.PI * 2);
       renderWasmMapCanvas(el("wasmMapCanvas"), state.lastSections, state.animPhase);
+      if (state.fbSession && state.fbSession.running && !state.fbSession.paused) {
+        const t = nowMs();
+        if (t - state.fbSession.lastTickMs >= 28) {
+          state.fbSession.lastTickMs = t;
+          try {
+            stepActiveFramebuffer();
+          } catch (fbErr) {
+            state.fbSession.running = false;
+            if (el("fbStatusText")) {
+              el("fbStatusText").textContent = "Framebuffer trap: " + String(fbErr && fbErr.message ? fbErr.message : fbErr);
+            }
+          }
+        }
+      }
     } catch (err) {
       if (typeof console !== "undefined" && console.error) {
         console.error("Frame render error:", err);
@@ -1011,9 +1555,16 @@ __EMBEDDED_SHIM_JS__
   }
 
   function switchTab(tab) {
-    for (const k of ["c", "lua", "ext"]) {
+    state.activeTab = tab;
+    const btnMap = {
+      c: el("tabBtnC"),
+      lua: el("tabBtnLua"),
+      ext: el("tabBtnExt"),
+      fb: el("tabBtnFb"),
+    };
+    for (const k of ["c", "lua", "ext", "fb"]) {
       const p = el("panel-" + k);
-      const b = el("tabBtn" + (k === "c" ? "C" : (k === "lua" ? "Lua" : "Ext")));
+      const b = btnMap[k];
       if (p) p.classList.toggle("hidden", k !== tab);
       if (b) b.classList.toggle("active", k === tab);
     }
@@ -1031,6 +1582,53 @@ __EMBEDDED_SHIM_JS__
     if (el("luaSourceInput")) el("luaSourceInput").value = LUA_PRESETS[key] || LUA_PRESETS.lua_fib_closures;
   }
 
+  function loadFbPreset() {
+    const key = el("fbPresetSelect") ? el("fbPresetSelect").value : "live_raytracer";
+    const p = FB_PRESETS[key] || FB_PRESETS.live_raytracer;
+    if (el("fbSourceInput")) el("fbSourceInput").value = p.code;
+  }
+
+  function updateFbLoadedLabel() {
+    const lbl = el("fbLoadedLabel");
+    if (!lbl) return;
+    const wPart = state.fbWasmBytes ? `${state.fbWasmName} (${state.fbWasmBytes.length}B)` : "no .wasm";
+    const wadPart = state.fbWadBytes ? `${state.fbWadName} (${state.fbWadBytes.length}B)` : "no .wad";
+    lbl.textContent = `Framebuffer assets: ${wPart} | ${wadPart}`;
+  }
+
+  async function bootExternalFb(ep, map) {
+    if (!state.fbWasmBytes) {
+      setStatus("LOAD FRAMEBUFFER .WASM FIRST", "err");
+      if (el("fbStatusText")) el("fbStatusText").textContent = "Please choose build_wasm/doom.wasm (and doom1.wad) first.";
+      return;
+    }
+    setStatus(`BOOTING ${state.fbWasmName} (${ep > 0 ? ("E" + ep + "M" + map) : "Title"})...`, "busy");
+    const binaryFiles = {};
+    if (state.fbWadBytes) {
+      binaryFiles[state.fbWadName || "doom1.wad"] = state.fbWadBytes;
+    }
+    const t0 = nowMs();
+    const { first, inspection, shim } = await startFbSession(state.fbWasmBytes, {
+      name: state.fbWasmName || "doom.wasm",
+      binaryFiles,
+      ep: ep | 0,
+      map: map | 0,
+      paused: false,
+    });
+    const runMs = Math.round(nowMs() - t0);
+    applyResultToDom({
+      compileMs: 0,
+      runMs,
+      sizeBytes: state.fbWasmBytes.length,
+      exitCode: 0,
+      stdout: shim.getStdout(),
+      stderr: shim.getStderr(),
+      infoText: `Framebuffer Binary: ${state.fbWasmName} (${first.width}x${first.height})\nExports (${inspection.exports.length}): fb_init, fb_tick, fb_ptr, fb_key...`,
+      sections: inspection.sections,
+      statusText: `${state.fbWasmName} LIVE (${first.width}x${first.height})`,
+    });
+  }
+
   async function zccUiAction(action, ev) {
     if (ev) {
       if (ev.__zccDispatched) return;
@@ -1044,6 +1642,7 @@ __EMBEDDED_SHIM_JS__
       }
       if (action === "loadCPreset") { loadCPreset(); return; }
       if (action === "loadLuaPreset") { loadLuaPreset(); return; }
+      if (action === "loadFbPreset") { loadFbPreset(); return; }
       if (action === "toggleWasiRt") { return; }
       if (action === "clearUserVfs") { state.userVfs.clear(); refreshVfsView(); return; }
       if (action === "addVfsFile") {
@@ -1053,6 +1652,90 @@ __EMBEDDED_SHIM_JS__
           state.userVfs.set(name, new TextEncoder().encode(body));
           refreshVfsView();
         }
+        return;
+      }
+      if (action === "compileAndRunFbC") {
+        setStatus("COMPILING LIVE FRAMEBUFFER C99...", "busy");
+        const src = el("fbSourceInput") ? el("fbSourceInput").value : "";
+        const comp = await compileCSource(src, { linkWasiRt: false, mode: "wasm" });
+        if (!comp.ok) {
+          applyResultToDom({
+            compileMs: comp.compileMs,
+            runMs: 0,
+            sizeBytes: 0,
+            exitCode: comp.exitCode || 1,
+            stdout: comp.compileStdout,
+            stderr: comp.compileStderr || "Compilation failed",
+            infoText: "",
+            sections: [],
+            statusText: "FRAMEBUFFER COMPILE ERROR",
+          });
+          return;
+        }
+        state.lastArtifactBytes = comp.artifactBytes;
+        state.lastArtifactName = "fb_prog.wasm";
+        const t0 = nowMs();
+        const { first, inspection, shim } = await startFbSession(comp.artifactBytes, {
+          name: "fb_c99.wasm",
+          ep: 0,
+          map: 0,
+          paused: false,
+        });
+        const runMs = Math.round(nowMs() - t0);
+        applyResultToDom({
+          compileMs: comp.compileMs,
+          runMs,
+          sizeBytes: comp.artifactBytes.length,
+          exitCode: 0,
+          stdout: shim.getStdout(),
+          stderr: comp.compileStderr || "",
+          infoText: `Live C99 Framebuffer (${first.width}x${first.height})\nExports: ${inspection.exports.join(", ")}`,
+          sections: inspection.sections,
+          statusText: `LIVE C99 FRAMEBUFFER (${first.width}x${first.height})`,
+        });
+        return;
+      }
+      if (action === "toggleFbPause") {
+        if (!state.fbSession || !state.fbSession.running) return;
+        state.fbSession.paused = !state.fbSession.paused;
+        if (el("btnFbPause")) el("btnFbPause").textContent = state.fbSession.paused ? "Resume" : "Pause";
+        if (el("fbStatusText")) {
+          el("fbStatusText").textContent = `${state.fbSession.label} • frame=${state.fbSession.frames} • ${state.fbSession.paused ? "PAUSED" : "LIVE"}`;
+        }
+        return;
+      }
+      if (action === "stepFbOnce") {
+        stepActiveFramebuffer();
+        return;
+      }
+      if (action === "stopFbSession") {
+        stopFbSession();
+        return;
+      }
+      if (action === "loadFbWasmFile") {
+        const inp = el("fbWasmFile");
+        const file = inp && inp.files && inp.files[0];
+        if (!file) return;
+        state.fbWasmBytes = new Uint8Array(await file.arrayBuffer());
+        state.fbWasmName = file.name;
+        updateFbLoadedLabel();
+        return;
+      }
+      if (action === "loadFbWadFile") {
+        const inp = el("fbWadFile");
+        const file = inp && inp.files && inp.files[0];
+        if (!file) return;
+        state.fbWadBytes = new Uint8Array(await file.arrayBuffer());
+        state.fbWadName = file.name;
+        updateFbLoadedLabel();
+        return;
+      }
+      if (action === "bootExternalFbTitle") {
+        await bootExternalFb(0, 0);
+        return;
+      }
+      if (action === "bootExternalFbE1M1") {
+        await bootExternalFb(1, 1);
         return;
       }
       if (action === "compileAndRunC") {
@@ -1196,11 +1879,73 @@ __EMBEDDED_SHIM_JS__
       });
       if (dz.dataset) dz.dataset.dropBound = "1";
     }
+    const fbDz = el("fbDropZone");
+    if (fbDz && (!fbDz.dataset || fbDz.dataset.dropBound !== "1")) {
+      fbDz.addEventListener("dragover", (e) => { e.preventDefault(); });
+      fbDz.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        const fl = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+        for (const f of fl) {
+          const buf = new Uint8Array(await f.arrayBuffer());
+          if (f.name.toLowerCase().endsWith(".wad")) {
+            state.fbWadBytes = buf;
+            state.fbWadName = f.name;
+          } else {
+            state.fbWasmBytes = buf;
+            state.fbWasmName = f.name;
+          }
+        }
+        updateFbLoadedLabel();
+      });
+      if (fbDz.dataset) fbDz.dataset.dropBound = "1";
+    }
+    const fbCanv = el("fbCanvas");
+    if (fbCanv && (!fbCanv.dataset || fbCanv.dataset.mouseBound !== "1")) {
+      fbCanv.addEventListener("mousemove", (e) => {
+        if (!state.fbSession || typeof fbCanv.getBoundingClientRect !== "function") return;
+        const r = fbCanv.getBoundingClientRect();
+        if (r && r.width > 0 && r.height > 0) {
+          state.fbSession.mouseX = Math.max(0, Math.min(state.fbSession.width - 1, Math.round(((e.clientX - r.left) / r.width) * state.fbSession.width)));
+          state.fbSession.mouseY = Math.max(0, Math.min(state.fbSession.height - 1, Math.round(((e.clientY - r.top) / r.height) * state.fbSession.height)));
+        }
+      });
+      fbCanv.addEventListener("click", () => {
+        if (typeof fbCanv.focus === "function") fbCanv.focus();
+      });
+      if (fbCanv.dataset) fbCanv.dataset.mouseBound = "1";
+    }
+    if (typeof document.addEventListener === "function" && !state._fbKeysBound) {
+      state._fbKeysBound = true;
+      document.addEventListener("keydown", (ev) => {
+        const tag = ev.target && ev.target.tagName ? String(ev.target.tagName).toUpperCase() : "";
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (ev.code) state.fbKeysDown.add(ev.code);
+        if (state.fbSession && state.fbSession.running) {
+          if ((ev.code && ev.code.startsWith("Arrow")) || ev.code === "Space") {
+            if (typeof ev.preventDefault === "function") ev.preventDefault();
+          }
+          const dk = mapEventToDoomKey(ev);
+          if (dk && typeof state.fbSession.exports.fb_key === "function") {
+            state.fbSession.exports.fb_key(dk, 1);
+          }
+        }
+      });
+      document.addEventListener("keyup", (ev) => {
+        if (ev.code) state.fbKeysDown.delete(ev.code);
+        if (state.fbSession && state.fbSession.running) {
+          const dk = mapEventToDoomKey(ev);
+          if (dk && typeof state.fbSession.exports.fb_key === "function") {
+            state.fbSession.exports.fb_key(dk, 0);
+          }
+        }
+      });
+    }
   }
 
   function bootPlayground() {
     loadCPreset();
     loadLuaPreset();
+    loadFbPreset();
     refreshVfsView();
     bindControls();
     if (el("metaBanner")) {
@@ -1217,6 +1962,7 @@ __EMBEDDED_SHIM_JS__
     state,
     C_PRESETS,
     LUA_PRESETS,
+    FB_PRESETS,
     BUILD_META,
     initAssets,
     gunzipBase64,
@@ -1229,6 +1975,11 @@ __EMBEDDED_SHIM_JS__
     runLua,
     runExternalWasm,
     renderWasmMapCanvas,
+    renderFramebufferCanvas,
+    compileAndStepLiveFramebuffer,
+    loadAndStepExternalFramebuffer,
+    stepActiveFramebuffer,
+    stopFbSession,
     animationLoop,
     zccUiAction,
     bindControls,

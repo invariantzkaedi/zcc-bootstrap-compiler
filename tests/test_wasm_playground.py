@@ -26,6 +26,8 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLAYGROUND_HTML = os.path.join(REPO_ROOT, "tools", "zcc_wasm_playground.html")
 BUILD_PG_PY = os.path.join(REPO_ROOT, "tools", "build_wasm_playground.py")
 SQLITE_WASM = os.path.join(REPO_ROOT, "build_wasm", "sqlite3.wasm")
+DOOM_WASM = os.path.join(REPO_ROOT, "build_wasm", "doom.wasm")
+DOOM_WAD = os.path.join(REPO_ROOT, "doom1.wad")
 
 
 def find_node_bin() -> str:
@@ -120,11 +122,14 @@ console.log(`AST_SYNTAX_OK blocks=${blocks.length} errors=0`);
         self.assertNotIn("izkaedi-ui", self.html_text)
 
         # Canvas zero-dimension guard & fallback attributes (EF-7 Gate 2 & 3)
-        self.assertGreaterEqual(len(self.inspector.canvases), 1)
+        self.assertGreaterEqual(len(self.inspector.canvases), 2)
         cmap = {c.get("id"): c for c in self.inspector.canvases}
         self.assertIn("wasmMapCanvas", cmap)
         self.assertGreaterEqual(int(cmap["wasmMapCanvas"].get("width", "0")), 50)
         self.assertGreaterEqual(int(cmap["wasmMapCanvas"].get("height", "0")), 50)
+        self.assertIn("fbCanvas", cmap)
+        self.assertGreaterEqual(int(cmap["fbCanvas"].get("width", "0")), 50)
+        self.assertGreaterEqual(int(cmap["fbCanvas"].get("height", "0")), 50)
         self.assertIn("canvas.width < 50 || canvas.height < 50", self.html_text)
         self.assertIn("Math.max(1,", self.html_text)
         self.assertRegex(self.html_text, r"function\s+animationLoop\s*\(\)\s*\{\s*try\s*\{")
@@ -156,8 +161,10 @@ console.log(`AST_SYNTAX_OK blocks=${blocks.length} errors=0`);
             self.assertIn(f"globalThis.{fn_name} =", app_js, f"Handler {fn_name} not exported to globalThis")
 
     def test_03_headless_node_end_to_end_evaluation(self):
-        # Clear any stale sqlite probe binary check: assert build_wasm/sqlite3.wasm exists
+        # Clear any stale binary check: assert build_wasm/sqlite3.wasm, doom.wasm & doom1.wad exist
         self.assertTrue(os.path.isfile(SQLITE_WASM), f"Missing {SQLITE_WASM}")
+        self.assertTrue(os.path.isfile(DOOM_WASM), f"Missing {DOOM_WASM}")
+        self.assertTrue(os.path.isfile(DOOM_WAD), f"Missing {DOOM_WAD}")
         js = r"""
 const fs = require('fs');
 const vm = require('vm');
@@ -166,6 +173,8 @@ const crypto = require('crypto');
 
 const blocks = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
 const sqlitePath = process.argv[2];
+const doomWasmPath = process.argv[3];
+const doomWadPath = process.argv[4];
 
 class MockElem {
   constructor(id) {
@@ -206,6 +215,7 @@ class MockCanvas extends MockElem {
     this.width = w;
     this.height = h;
     this.drawOps = 0;
+    this.lastImage = null;
   }
   getContext(kind) {
     if (kind !== '2d') return null;
@@ -222,16 +232,26 @@ class MockCanvas extends MockElem {
       },
       fill() { self.drawOps++; },
       fillText() { self.drawOps++; },
+      createImageData(w, h) {
+        return { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) };
+      },
+      putImageData(img) {
+        self.drawOps++;
+        self.lastImage = img;
+      },
     };
   }
 }
 
 const domMap = new Map();
 const needIds = [
-  'metaBanner', 'statusBadge', 'tabBtnC', 'tabBtnLua', 'tabBtnExt',
-  'panel-c', 'panel-lua', 'panel-ext', 'cPresetSelect', 'linkWasiRtChk',
+  'metaBanner', 'statusBadge', 'tabBtnC', 'tabBtnLua', 'tabBtnExt', 'tabBtnFb',
+  'panel-c', 'panel-lua', 'panel-ext', 'panel-fb', 'cPresetSelect', 'linkWasiRtChk',
   'cSourceInput', 'cArgsInput', 'cStdinInput', 'luaPresetSelect', 'luaSourceInput',
   'extDropZone', 'extWasmFile', 'extLoadedLabel', 'extArgsInput', 'extStdinInput',
+  'fbPresetSelect', 'fbSourceInput', 'btnFbCompileRun', 'btnFbPause', 'btnFbStep',
+  'btnFbStop', 'fbDropZone', 'fbWasmFile', 'fbWadFile', 'fbLoadedLabel',
+  'btnFbRunTitle', 'btnFbRunE1M1', 'fbStatusText',
   'vfsFileNameInput', 'vfsFileContentInput', 'vfsListOutput',
   'metricCompileMs', 'metricRunMs', 'metricSizeBytes', 'metricExitCode',
   'stdoutOutput', 'stderrOutput', 'asmOrInfoOutput',
@@ -239,8 +259,11 @@ const needIds = [
 for (const id of needIds) domMap.set(id, new MockElem(id));
 domMap.get('cPresetSelect').value = 'bare_fib';
 domMap.get('luaPresetSelect').value = 'lua_fib_closures';
+domMap.get('fbPresetSelect').value = 'live_raytracer';
 const canvas = new MockCanvas('wasmMapCanvas', 480, 150);
 domMap.set('wasmMapCanvas', canvas);
+const fbCanvas = new MockCanvas('fbCanvas', 320, 200);
+domMap.set('fbCanvas', fbCanvas);
 
 const actionElem = domMap.get('tabBtnC');
 actionElem.attributes['data-action'] = 'switchTab:c';
@@ -252,6 +275,7 @@ const ctx = {
   TextEncoder,
   TextDecoder,
   Uint8Array,
+  Uint8ClampedArray,
   Int8Array,
   Uint16Array,
   Uint32Array,
@@ -291,10 +315,12 @@ for (let i = 0; i < blocks.length; i++) {
   const eng = ctx.ZccPlaygroundEngine;
   eng.bootPlayground();
 
-  // Check zero-dimension canvas guard throws 0 errors & performs 0 draw ops
+  // Check zero-dimension canvas guard throws 0 errors & performs 0 draw ops on BOTH canvases
   const zeroCanvas = new MockCanvas('zero', 0, 0);
   eng.renderWasmMapCanvas(zeroCanvas, [{ id: 1, name: 'Type', size: 10 }], 0.1);
-  if (zeroCanvas.drawOps !== 0) throw new Error('Zero-dimension canvas guard failed to short-circuit');
+  if (zeroCanvas.drawOps !== 0) throw new Error('Zero-dimension canvas guard failed on wasmMapCanvas');
+  eng.renderFramebufferCanvas(zeroCanvas, new Uint8Array(320 * 200 * 4), 320, 200);
+  if (zeroCanvas.drawOps !== 0) throw new Error('Zero-dimension canvas guard failed on fbCanvas');
 
   // Check dual-layer single-fire click invariant (onclick + addEventListener must dispatch once!)
   actionElem.onclick = (ev) => ctx.zccUiAction('switchTab:c', ev);
@@ -365,7 +391,25 @@ for (let i = 0; i < blocks.length; i++) {
     throw new Error('External sqlite3.wasm run failed: ' + JSON.stringify({ rc: rSq.exitCode, out: rSq.stdout, err: rSq.stderr }));
   }
 
-  // 6. EF-0 Negative control: invalid C must fail cleanly without throwing
+  // 6. Live C99 Raytracer & Plasma compiled in-browser via zcc.wasm -> fbCanvas
+  const rRay = await eng.compileAndStepLiveFramebuffer(eng.FB_PRESETS.live_raytracer.code, 4, [0, 0, 1, 9]);
+  if (!rRay.compileOk || rRay.width !== 160 || rRay.height !== 100 || rRay.frames !== 4 || rRay.uniqueColors < 24 || !rRay.allOpaque || new Set(rRay.frameHashes).size < 2 || fbCanvas.drawOps < 4) {
+    throw new Error('Live raytracer failed: ' + JSON.stringify(rRay));
+  }
+  const rPlas = await eng.compileAndStepLiveFramebuffer(eng.FB_PRESETS.plasma_shader.code, 3, [0, 4, 8]);
+  if (!rPlas.compileOk || rPlas.width !== 160 || rPlas.height !== 100 || rPlas.uniqueColors < 24 || !rPlas.allOpaque || new Set(rPlas.frameHashes).size < 2) {
+    throw new Error('Live plasma failed: ' + JSON.stringify(rPlas));
+  }
+
+  // 7. External DOOM + doom1.wad inside Live Canvas Playground engine (E1M1 + key input)
+  const doomBytes = new Uint8Array(fs.readFileSync(doomWasmPath));
+  const wadBytes = new Uint8Array(fs.readFileSync(doomWadPath));
+  const rDoom = await eng.loadAndStepExternalFramebuffer(doomBytes, { 'doom1.wad': wadBytes }, 1, 1, 12, [0,0,0,0, 9,9,9,9, 25,25,25,25]);
+  if (rDoom.width !== 320 || rDoom.height !== 200 || rDoom.gamestate !== 0 || rDoom.uniqueColors < 32 || !rDoom.allOpaque || new Set(rDoom.frameHashes).size < 2) {
+    throw new Error('Playground DOOM E1M1 failed: ' + JSON.stringify(rDoom));
+  }
+
+  // 8. EF-0 Negative control: invalid C must fail cleanly without throwing
   const rBad = await eng.compileAndRunC("int main( { return ; }\n", { linkWasiRt: false });
   if (rBad.compileOk || rBad.exitCode === 0) {
     throw new Error('Negative control unexpected pass: ' + JSON.stringify(rBad));
@@ -380,6 +424,10 @@ for (let i = 0; i < blocks.length; i++) {
     asmBytes: rAsm.asmText.length,
     luaOut: rLua1.stdout.trim(),
     sqliteOut: rSq.stdout.trim(),
+    rayColors: rRay.uniqueColors,
+    plasmaColors: rPlas.uniqueColors,
+    doomE1M1Colors: rDoom.uniqueColors,
+    doomHashes: new Set(rDoom.frameHashes).size,
     negRc: rBad.exitCode,
   }));
 })().catch((e) => {
@@ -392,7 +440,7 @@ for (let i = 0; i < blocks.length; i++) {
             json.dump(self.inspector.scripts, tf)
             cfg = tf.name
         try:
-            res = subprocess.run([self.node_bin, "-e", js, cfg, SQLITE_WASM], cwd=REPO_ROOT, capture_output=True, text=True)
+            res = subprocess.run([self.node_bin, "-e", js, cfg, SQLITE_WASM, DOOM_WASM, DOOM_WAD], cwd=REPO_ROOT, capture_output=True, text=True)
             self.assertEqual(res.returncode, 0, res.stdout + "\n" + res.stderr)
             self.assertIn('"HEADLESS_EVAL_ERRORS":0', res.stdout)
             print(f"[PLAYGROUND EF-7 PASS] {res.stdout.strip()}", flush=True)

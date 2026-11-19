@@ -364,7 +364,7 @@ static long long parse_const_expr_primary(Compiler *cc) {
         expect(cc, TK_RPAREN);
         return val;
     }
-    if (cc->tk == TK_NUM) {
+    if (cc->tk == TK_NUM || cc->tk == TK_CHAR_LIT) {
         long long val = cc->tk_val;
         next_token(cc);
         return val;

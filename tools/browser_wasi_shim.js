@@ -133,7 +133,7 @@ class BrowserWasiShim {
   }
 
   _syncFdToVfs(entry) {
-    if (entry && entry.kind === "file") {
+    if (entry && entry.kind === "file" && !entry.sharedReadOnly) {
       this.vfs.set(entry.path, entry.data.slice(0, entry.len));
     }
   }
@@ -303,6 +303,12 @@ class BrowserWasiShim {
             } else if (entry.kind === "stderr") {
               self.stderrChunks.push(slice);
             } else if (entry.kind === "file") {
+              if (entry.sharedReadOnly) {
+                const copy = new Uint8Array(Math.max(256, entry.len));
+                copy.set(entry.data.subarray(0, entry.len), 0);
+                entry.data = copy;
+                entry.sharedReadOnly = false;
+              }
               if (entry.append) entry.pos = entry.len;
               const endPos = entry.pos + slice.length;
               if (endPos > entry.data.length) {
@@ -344,15 +350,17 @@ class BrowserWasiShim {
           }
 
           let initBytes;
+          let initLen;
+          let sharedReadOnly = false;
           if (!exists || (oflags & O_TRUNC) !== 0) {
             initBytes = new Uint8Array(256);
+            initLen = 0;
             self.vfs.set(key, new Uint8Array(0));
           } else {
-            const cur = self.vfs.get(key);
-            initBytes = new Uint8Array(Math.max(256, cur.length));
-            initBytes.set(cur, 0);
+            initBytes = self.vfs.get(key);
+            initLen = initBytes.length;
+            sharedReadOnly = true;
           }
-          const initLen = (!exists || (oflags & O_TRUNC) !== 0) ? 0 : self.vfs.get(key).length;
           const fd = self.nextFd++;
           const isAppend = (fdflags & FDFLAG_APPEND) !== 0;
           self.fds.set(fd, {
@@ -362,6 +370,7 @@ class BrowserWasiShim {
             len: initLen,
             pos: isAppend ? initLen : 0,
             append: isAppend,
+            sharedReadOnly,
           });
           self._view().setInt32(outFdPtr >>> 0, fd, true);
           return 0;
@@ -386,7 +395,7 @@ class BrowserWasiShim {
     };
   }
 
-  async run(wasmBytes) {
+  async instantiate(wasmBytes) {
     if (!WebAssembly.validate(wasmBytes)) {
       throw new Error("WebAssembly.validate() failed");
     }
@@ -394,6 +403,11 @@ class BrowserWasiShim {
     if (instance.exports.memory) {
       this.setMemory(instance.exports.memory);
     }
+    return { instance, shim: this };
+  }
+
+  async run(wasmBytes) {
+    const { instance } = await this.instantiate(wasmBytes);
     let exitCode = 0;
     try {
       if (instance.exports._start) {
