@@ -731,16 +731,11 @@ void codegen_store(Compiler *cc, Type *type) {
       fprintf(cc->out, "    mov r0, r1\n");
       return;
     }
-    fprintf(cc->out, "    pushq %%rsi\n");
-    fprintf(cc->out, "    pushq %%rdi\n");
-    fprintf(cc->out, "    pushq %%rcx\n");
-    fprintf(cc->out, "    movq %%r11, %%rsi\n");
-    fprintf(cc->out, "    movq %%rax, %%rdi\n");
-    fprintf(cc->out, "    movq $%d, %%rcx\n", type->size);
-    fprintf(cc->out, "    rep movsb\n");
-    fprintf(cc->out, "    popq %%rcx\n");
-    fprintf(cc->out, "    popq %%rdi\n");
-    fprintf(cc->out, "    popq %%rsi\n");
+    int lbl_z = cc->label_count++;
+    fprintf(cc->out, "    pushq %%rsi\n    pushq %%rdi\n    pushq %%rcx\n");
+    fprintf(cc->out, "    movq %%rax, %%rdi\n    movq $%d, %%rcx\n    testq %%r11, %%r11\n    jz .Lstore_z_%d\n", type->size, lbl_z);
+    fprintf(cc->out, "    movq %%r11, %%rsi\n    rep movsb\n    jmp .Lstore_d_%d\n.Lstore_z_%d:\n    xorl %%eax, %%eax\n    rep stosb\n.Lstore_d_%d:\n", lbl_z, lbl_z, lbl_z);
+    fprintf(cc->out, "    popq %%rcx\n    popq %%rdi\n    popq %%rsi\n");
     if (backend_ops) fprintf(cc->out, "    mov r0, r1\n");
       else fprintf(cc->out, "    movq %%r11, %%rax\n");
     return;
@@ -5872,6 +5867,7 @@ static void compute_liveness(Node *n) {
 
 static int allocate_registers(Node *func) {
   if (getenv("ZCC_DISABLE_REGALLOC")) return 0;
+  if (backend_ops) return 0;
   int count = 0;
   int i, j, r;
   int param_limit = 0;

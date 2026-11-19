@@ -341,5 +341,165 @@ int main(void) {{
             if exp_err is not None:
                 self.assertIn(exp_err, rres.stderr)
 
+    def test_12_freestanding_argc_env_stdlib_str_and_nested_zero_init(self):
+        """Verify nested Struct s = {0}; init, _start(argc,argv,envp), getenv, calloc/realloc, qsort/bsearch, strtol, str* ext, and sscanf."""
+        src_path = os.path.join(self.temp_dir.name, "test_rt12.c")
+        exe_path = os.path.join(self.temp_dir.name, "test_rt12_exe")
+
+        code = """#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+char *getenv(const char *name);
+void *calloc(unsigned long nmemb, unsigned long size);
+void *realloc(void *ptr, unsigned long size);
+int atoi(const char *nptr);
+long atol(const char *nptr);
+long strtol(const char *nptr, char **endptr, int base);
+unsigned long strtoul(const char *nptr, char **endptr, int base);
+int abs(int j);
+long labs(long j);
+void qsort(void *base, unsigned long nmemb, unsigned long size, int (*compar)(const void *, const void *));
+void *bsearch(const void *key, const void *base, unsigned long nmemb, unsigned long size, int (*compar)(const void *, const void *));
+char *strchr(const char *s, int c);
+char *strrchr(const char *s, int c);
+char *strstr(const char *haystack, const char *needle);
+void *memchr(const void *s, int c, unsigned long n);
+char *strdup(const char *s);
+char *strcat(char *dst, const char *src);
+char *strncat(char *dst, const char *src, unsigned long n);
+int isspace(int c);
+int isdigit(int c);
+int isalpha(int c);
+int tolower(int c);
+int toupper(int c);
+int sscanf(const char *str, const char *fmt, ...);
+
+struct Inner {
+    int a;
+    long long b;
+};
+
+union ValU {
+    int i;
+    double d;
+};
+
+struct Outer {
+    struct Inner in;
+    int arr[4];
+    union ValU u;
+    int tail;
+};
+
+struct Item {
+    int key;
+    long long val;
+};
+
+static int cmp_int(const void *a, const void *b) {
+    int x = *(const int *)a;
+    int y = *(const int *)b;
+    return (x > y) - (x < y);
+}
+
+static int cmp_item(const void *a, const void *b) {
+    const struct Item *ia = (const struct Item *)a;
+    const struct Item *ib = (const struct Item *)b;
+    return (ia->key > ib->key) - (ia->key < ib->key);
+}
+
+int main(int argc, char **argv, char **envp) {
+    struct Outer x = {0};
+    if (x.in.a != 0 || x.in.b != 0 || x.arr[0] != 0 || x.arr[3] != 0 || x.u.i != 0 || x.tail != 0)
+        return 10;
+
+    struct Outer y = { 77 };
+    if (y.in.a != 77 || y.in.b != 0 || y.arr[2] != 0 || y.tail != 0)
+        return 11;
+
+    struct Outer w = { { 11, 22 }, { 1, 2, 3, 4 }, { 99 }, 55 };
+    if (w.in.a != 11 || w.in.b != 22 || w.arr[0] != 1 || w.arr[3] != 4 || w.u.i != 99 || w.tail != 55)
+        return 12;
+
+    if (argc != 4) return 13;
+    if (strcmp(argv[1], "alpha") != 0 || strcmp(argv[2], "beta") != 0 || strcmp(argv[3], "gamma") != 0)
+        return 14;
+    if (!envp || !envp[0]) return 15;
+    char *tok = getenv("ZCC_SOVEREIGN_TOKEN");
+    if (!tok || strcmp(tok, "OMEGA_42") != 0) return 16;
+
+    int *z = (int *)calloc(16, sizeof(int));
+    if (!z) return 17;
+    for (int i = 0; i < 16; i++) {
+        if (z[i] != 0) return 18;
+        z[i] = 100 + i;
+    }
+    int *z2 = (int *)realloc(z, 32 * sizeof(int));
+    if (!z2 || z2[0] != 100 || z2[15] != 115) return 19;
+
+    if (atoi(" -123") != -123) return 20;
+    if (atol("9876543210") != 9876543210L) return 21;
+    char *ep = 0;
+    if (strtol("  -0x2a_ok", &ep, 0) != -42 || !ep || strcmp(ep, "_ok") != 0) return 22;
+    if (strtoul("ffZ", &ep, 16) != 255 || *ep != 'Z') return 23;
+    if (abs(-77) != 77 || labs(-9876543210L) != 9876543210L) return 24;
+
+    int nums[6] = { 42, -5, 19, 0, 7, 19 };
+    qsort(nums, 6, sizeof(int), cmp_int);
+    if (nums[0] != -5 || nums[1] != 0 || nums[2] != 7 || nums[3] != 19 || nums[4] != 19 || nums[5] != 42)
+        return 25;
+    int sk = 7;
+    int *found_i = (int *)bsearch(&sk, nums, 6, sizeof(int), cmp_int);
+    if (!found_i || *found_i != 7) return 26;
+
+    struct Item items[4] = { {30, 300}, {10, 100}, {40, 400}, {20, 200} };
+    qsort(items, 4, sizeof(struct Item), cmp_item);
+    if (items[0].key != 10 || items[1].val != 200 || items[3].key != 40) return 27;
+    struct Item ik = { 20, 0 };
+    struct Item *found_it = (struct Item *)bsearch(&ik, items, 4, sizeof(struct Item), cmp_item);
+    if (!found_it || found_it->val != 200) return 28;
+
+    const char *hay = "zcc_sovereign_runtime_zcc";
+    if (!strchr(hay, 'v') || strchr(hay, 'v') - hay != 6) return 29;
+    if (!strchr(hay, 0) || *strchr(hay, 0) != 0) return 30;
+    if (!strrchr(hay, 'z') || strrchr(hay, 'z') - hay != 22) return 31;
+    if (!strstr(hay, "sovereign") || strstr(hay, "sovereign") - hay != 4) return 32;
+    if (memchr("ab\\0xy", 'x', 5) == 0) return 33;
+
+    char *dup = strdup("hello");
+    if (!dup || strcmp(dup, "hello") != 0) return 34;
+    char sbuf[32] = "foo";
+    strcat(sbuf, "_bar");
+    strncat(sbuf, "_baz123", 4);
+    if (strcmp(sbuf, "foo_bar_baz") != 0) return 35;
+
+    if (!isspace(' ') || !isdigit('9') || !isalpha('Q') || tolower('Z') != 'z' || toupper('a') != 'A')
+        return 36;
+
+    int sa = 0, sc = 0;
+    long sb = 0;
+    char sstr[32] = {0};
+    int sn = sscanf("42 -17 0x2a hello!", "%d %ld %x %31s", &sa, &sb, &sc, sstr);
+    if (sn != 4 || sa != 42 || sb != -17 || sc != 42 || strcmp(sstr, "hello!") != 0)
+        return 37;
+
+    printf("RT12_PASS:%s|%s|%d\\n", tok, sbuf, sc);
+    return 0;
+}
+"""
+        with open(src_path, "w") as f:
+            f.write(code)
+
+        res = subprocess.run([ZCC_BIN, src_path, "-o", exe_path], capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, f"Compile failed: {res.stderr}\n{res.stdout}")
+        self.assertNotIn("[Phase 6] GCC Assembly/Linker Binding", res.stdout)
+
+        env = os.environ.copy()
+        env["ZCC_SOVEREIGN_TOKEN"] = "OMEGA_42"
+        run_res = subprocess.run([exe_path, "alpha", "beta", "gamma"], env=env, capture_output=True, text=True)
+        self.assertEqual(run_res.returncode, 0, f"Runtime failed (rc={run_res.returncode}): stdout={run_res.stdout!r} stderr={run_res.stderr!r}")
+        self.assertIn("RT12_PASS:OMEGA_42|foo_bar_baz|42", run_res.stdout)
+
 if __name__ == "__main__":
     unittest.main()

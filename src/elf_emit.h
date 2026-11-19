@@ -59,6 +59,17 @@ typedef struct {
     zcc_i64 r_addend;
 } zcc_elf_rela_entry_t;
 
+typedef struct {
+    zcc_u32 p_type;
+    zcc_u32 p_flags;
+    zcc_u64 p_offset;
+    zcc_u64 p_vaddr;
+    zcc_u64 p_paddr;
+    zcc_u64 p_filesz;
+    zcc_u64 p_memsz;
+    zcc_u64 p_align;
+} zcc_elf_phdr_t;
+
 /* Symbol representation collected during codegen */
 typedef struct {
     const char *name;
@@ -85,13 +96,24 @@ typedef struct {
 #define ELFOSABI_NONE   0
 
 #define ET_REL          1
+#define ET_EXEC         2
 #define EM_X86_64       62
+#define EM_AARCH64      183
+#define EM_RISCV        243
+
+#define EF_RISCV_FLOAT_ABI_DOUBLE 0x0004
+
+#define PT_LOAD         1
+#define PF_X            1
+#define PF_W            2
+#define PF_R            4
 
 #define SHT_NULL        0
 #define SHT_PROGBITS    1
 #define SHT_SYMTAB      2
 #define SHT_STRTAB      3
 #define SHT_RELA        4
+#define SHT_NOBITS      8
 
 #define SHF_WRITE       (1 << 0)
 #define SHF_ALLOC       (1 << 1)
@@ -118,6 +140,19 @@ typedef struct {
 #define R_X86_64_32      10
 #define R_X86_64_32S     11
 #define R_X86_64_TPOFF32 23
+
+#define R_AARCH64_ABS64             257
+#define R_AARCH64_ADR_PREL_PG_HI21  275
+#define R_AARCH64_ADD_ABS_LO12_NC   277
+#define R_AARCH64_JUMP26            282
+#define R_AARCH64_CALL26            283
+
+#define R_RISCV_64                  2
+#define R_RISCV_BRANCH              16
+#define R_RISCV_JAL                 17
+#define R_RISCV_CALL_PLT            19
+#define R_RISCV_PCREL_HI20          23
+#define R_RISCV_PCREL_LO12_I        24
 
 
 /* DWARF-4 Constants */
@@ -174,5 +209,40 @@ int elf_emit_obj(const char *out_filename,
                  size_t sym_count,
                  const zcc_elf_rela_t *relas,
                  size_t rela_count);
+
+int elf_emit_obj_arch(const char *out_filename,
+                      zcc_u16 e_machine,
+                      zcc_u32 e_flags,
+                      const unsigned char *code_bytes,
+                      size_t code_size,
+                      const zcc_elf_sym_t *syms,
+                      size_t sym_count,
+                      const zcc_elf_rela_t *relas,
+                      size_t rela_count);
+
+int elf_emit_obj_full(const char *out_filename,
+                      zcc_u16 e_machine,
+                      zcc_u32 e_flags,
+                      const unsigned char *code_bytes,
+                      size_t code_size,
+                      const unsigned char *data_bytes,
+                      size_t data_size,
+                      size_t bss_size,
+                      const zcc_elf_sym_t *syms,
+                      size_t sym_count,
+                      const zcc_elf_rela_t *relas,
+                      size_t rela_count);
+
+int elf_emit_exec_arch(const char *out_filename,
+                       zcc_u16 e_machine,
+                       zcc_u32 e_flags,
+                       zcc_u64 entry_vaddr,
+                       zcc_u64 text_vaddr,
+                       const unsigned char *text_bytes,
+                       size_t text_size,
+                       zcc_u64 data_vaddr,
+                       const unsigned char *data_bytes,
+                       size_t data_size,
+                       size_t bss_size);
 
 #endif /* ZCC_ELF_EMIT_H */

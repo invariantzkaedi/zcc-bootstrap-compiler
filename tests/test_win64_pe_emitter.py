@@ -1709,6 +1709,149 @@ int main(void) {
                 if os.path.exists(p):
                     os.remove(p)
 
+    def test_38_win64_pe_large_stack_probe_pdata_wx(self):
+        """Verify Win64 >4KB multi-page stack probing, W^X (.text RX / .data RW), .pdata, and >=16MB stack reserve."""
+        scratch_dir = os.path.join(REPO_ROOT, "scratch")
+        os.makedirs(scratch_dir, exist_ok=True)
+        src = _pjoin(scratch_dir, "test_38_win64_stack_wx.c")
+        exe = _pjoin(scratch_dir, "test_38_win64_stack_wx.exe")
+
+        code = """#include <stdio.h>
+static int g_bias = 1000;
+static unsigned int touch_pages(volatile char *buf, int n) {
+    buf[0] = 11;
+    buf[4096] = 22;
+    buf[8192] = 33;
+    buf[n - 1] = 44;
+    return (unsigned int)g_bias
+         + (unsigned int)(unsigned char)buf[0] * 100u
+         + (unsigned int)(unsigned char)buf[4096] * 10u
+         + (unsigned int)(unsigned char)buf[8192]
+         + (unsigned int)(unsigned char)buf[n - 1];
+}
+int main(void) {
+    volatile char big[12288];
+    unsigned int chk = touch_pages(big, 12288);
+    printf("STACK_WX=%u\\n", chk);
+    return (chk == 2397u) ? 0 : 1;
+}
+"""
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(code)
+
+        try:
+            if sys.platform == "win32" and not self.use_native_zcc:
+                wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c",
+                       f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+            else:
+                cmd = [self.zcc_bin, src, "-target", "win64", "-o", exe]
+
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+            self.assertTrue(os.path.exists(exe), "Output EXE missing")
+
+            with open(exe, "rb") as f:
+                data = f.read()
+            e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
+            coff_off = e_lfanew + 4
+            _, num_sec, _, _, _, opt_sz, _ = struct.unpack_from("<HHIIIHH", data, coff_off)
+            opt_off = coff_off + 20
+            stack_reserve = struct.unpack_from("<Q", data, opt_off + 72)[0]
+            self.assertGreaterEqual(stack_reserve, 0x1000000)
+            ddir_off = opt_off + 112
+            _, exc_sz = struct.unpack_from("<II", data, ddir_off + 8 * 3)
+            self.assertGreater(exc_sz, 0, "Expected non-empty .pdata EXCEPTION directory")
+
+            sec_off = opt_off + opt_sz
+            sec_chars = {}
+            for i in range(num_sec):
+                s_off = sec_off + i * 40
+                name = data[s_off:s_off + 8].split(b"\x00", 1)[0].decode("ascii", errors="replace")
+                sec_chars[name] = struct.unpack_from("<I", data, s_off + 36)[0]
+            self.assertEqual(sec_chars.get(".text"), 0x60000020)
+            self.assertEqual(sec_chars.get(".data"), 0xC0000040)
+
+            run_res = self._run_win64_exe(exe)
+            if run_res is not None:
+                self.assertEqual(run_res.returncode, 0, f"Execution failed ({run_res.returncode}): {run_res.stderr}")
+                self.assertIn("STACK_WX=2397", run_res.stdout)
+        finally:
+            for p in (src, exe):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_39_win64_pe_stdio_fgets_getenv_and_funcptr_data(self):
+        """Verify Win64 fopen/fputs/fgets/fclose/getenv plus .data static function-pointer table."""
+        scratch_dir = os.path.join(REPO_ROOT, "scratch")
+        os.makedirs(scratch_dir, exist_ok=True)
+        src = _pjoin(scratch_dir, "test_39_win64_io_fp.c")
+        exe = _pjoin(scratch_dir, "test_39_win64_io_fp.exe")
+        out_txt = _pjoin(scratch_dir, "test_39_io.txt")
+
+        if os.path.exists(out_txt):
+            os.remove(out_txt)
+
+        code = """#include <stdio.h>
+#include <stdlib.h>
+
+static int fn_add1(int x) { return x + 1; }
+static int fn_mul2(int x) { return x * 2; }
+static int (*ops[2])(int) = { fn_add1, fn_mul2 };
+
+int main(void) {
+    FILE *fw = fopen("scratch/test_39_io.txt", "w");
+    if (!fw) return 2;
+    fputs("WIN64_FGETS_LINE\\n", fw);
+    fclose(fw);
+
+    FILE *fr = fopen("scratch/test_39_io.txt", "r");
+    if (!fr) return 3;
+    char buf[128];
+    if (!fgets(buf, sizeof(buf), fr)) {
+        fclose(fr);
+        return 4;
+    }
+    fclose(fr);
+
+    const char *envv = getenv("SystemRoot");
+    if (!envv) envv = getenv("PATH");
+    if (!envv || !envv[0]) return 5;
+
+    int v = ops[0](20) + ops[1](13);
+    printf("IO_FP=%sV=%d\\n", buf, v);
+    return (v == 47) ? 0 : 6;
+}
+"""
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(code)
+
+        try:
+            if sys.platform == "win32" and not self.use_native_zcc:
+                wsl_repo = REPO_ROOT.replace("\\", "/").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                wsl_src = src.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                wsl_exe = exe.replace("\\", "/").replace("C:", "/mnt/c").replace("c:", "/mnt/c").replace("H:", "/mnt/h").replace("h:", "/mnt/h")
+                cmd = ["wsl", "-d", WSL_DISTRO, "-e", "bash", "-c",
+                       f"cd '{wsl_repo}' && ./zcc '{wsl_src}' -target win64 -o '{wsl_exe}'"]
+            else:
+                cmd = [self.zcc_bin, src, "-target", "win64", "-o", exe]
+
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.assertEqual(res.returncode, 0, f"Compilation failed: {res.stderr}\n{res.stdout}")
+            self.assertTrue(os.path.exists(exe), "Output EXE missing")
+
+            run_res = self._run_win64_exe(exe)
+            if run_res is not None:
+                self.assertEqual(run_res.returncode, 0, f"Execution failed ({run_res.returncode}): {run_res.stderr}")
+                self.assertIn("WIN64_FGETS_LINE", run_res.stdout)
+                self.assertIn("V=47", run_res.stdout)
+        finally:
+            for p in (src, exe, out_txt):
+                if os.path.exists(p):
+                    os.remove(p)
+
 
 if __name__ == "__main__":
     unittest.main()

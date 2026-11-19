@@ -62,6 +62,7 @@ typedef enum {
     WASM_OP_END          = 0x0B,
     WASM_OP_BR           = 0x0C,
     WASM_OP_BR_IF        = 0x0D,
+    WASM_OP_BR_TABLE     = 0x0E,
     WASM_OP_RETURN       = 0x0F,
     WASM_OP_CALL         = 0x10,
     WASM_OP_CALL_INDIRECT= 0x11,
@@ -95,6 +96,8 @@ typedef enum {
     WASM_OP_I64_STORE8   = 0x3C,
     WASM_OP_I64_STORE16  = 0x3D,
     WASM_OP_I64_STORE32  = 0x3E,
+    WASM_OP_MEMORY_SIZE  = 0x3F,
+    WASM_OP_MEMORY_GROW  = 0x40,
     WASM_OP_I32_CONST    = 0x41,
     WASM_OP_I64_CONST    = 0x42,
     WASM_OP_F32_CONST    = 0x43,
@@ -272,8 +275,9 @@ typedef struct {
 
 /* Function Signature Type */
 typedef struct {
-    uint8_t params[16];
+    uint8_t *params;
     int num_params;
+    int cap_params;
     uint8_t results[8];
     int num_results;
 } WasmFuncType;
@@ -294,20 +298,24 @@ typedef struct {
 
 /* Local Variable Mapping */
 typedef struct {
-    char name[64];
+    char name[128];
     uint32_t local_idx;
     uint8_t val_type;
     int is_memory;       /* 1 if stored in linear memory */
     int stack_offset;    /* byte offset relative to function frame pointer */
     int size;            /* byte size in memory */
     void *type;          /* Type* */
+    void *sym;           /* Symbol* for lexical block disambiguation */
 } WasmLocalEntry;
 
 typedef struct {
-    WasmLocalEntry entries[128];
+    WasmLocalEntry *entries;
     int count;
+    int cap;
     int frame_size;      /* Total local memory frame size in bytes */
     int fp_local_idx;    /* WASM local index for frame pointer ($fp), -1 if none */
+    int va_ptr_local_idx;/* Hidden trailing i32 param for variadic funcs, -1 if none */
+    int sret_local_idx;  /* Hidden trailing i32 param for struct/union return, -1 if none */
     int tmp_addr_idx;    /* Scratch local for address evaluation */
     int tmp_val_idx;     /* Scratch local for i32 value evaluation */
     int tmp_i64_idx;     /* Scratch local for i64 value evaluation */
@@ -318,11 +326,12 @@ typedef struct {
 
 /* Function Definition */
 typedef struct {
-    char name[64];
+    char name[128];
     int type_idx;
     uint32_t num_params;
-    uint8_t local_types[128];
+    uint8_t *local_types;
     uint32_t num_locals;
+    uint32_t cap_locals;
     WASMBuffer body;
 } WasmFunction;
 
@@ -350,26 +359,35 @@ typedef struct {
 
 /* Complete WebAssembly Module Representation */
 typedef struct {
-    WasmFuncType types[64];
+    WasmFuncType *types;
     int num_types;
-    WasmImport imports[32];
+    int cap_types;
+    WasmImport *imports;
     int num_imports;
-    WasmFunction funcs[128];
+    int cap_imports;
+    WasmFunction *funcs;
     int num_funcs;
-    WasmExport exports[128];
+    int cap_funcs;
+    WasmExport *exports;
     int num_exports;
-    WasmGlobal globals[16];
+    int cap_exports;
+    WasmGlobal *globals;
     int num_globals;
-    WasmDataSegment data_segments[32];
+    int cap_globals;
+    WasmDataSegment *data_segments;
     int num_data_segments;
+    int cap_data_segments;
     int has_memory;
     uint32_t mem_min_pages;
     uint32_t mem_max_pages;
     int has_table;
     uint32_t table_min_elems;
     uint32_t table_max_elems;
-    uint32_t table_func_indices[256];
+    uint32_t *table_func_indices;
     int num_table_elements;
+    int cap_table_elements;
+    uint32_t heap_base_init;
+    int free_head_global_idx;
 } WasmModule;
 
 /* Buffer & Encoding Functions */
@@ -400,6 +418,17 @@ void wasm_module_add_export(WasmModule *mod, const char *name, WASMExportKind ki
 int wasm_module_add_global(WasmModule *mod, uint8_t val_type, uint8_t is_mutable, int32_t init_val);
 int wasm_module_add_data_segment(WasmModule *mod, uint32_t offset, const uint8_t *data, size_t size);
 int wasm_module_add_table_element(WasmModule *mod, uint32_t func_idx);
+int wasm_local_alloc_entry(WasmLocalMap *map);
+void wasm_local_map_free(WasmLocalMap *map);
+int wasm_func_reserve_locals(WasmFunction *fn, uint32_t needed);
+int wasm_module_configure_layout(WasmModule *mod, uint32_t static_data_end, uint32_t max_pages_override);
+int wasm_emit_synth_allocator(WasmModule *mod, int synth_malloc, int synth_free, int export_runtime);
+int wasm_emit_synth_allocator_ex(WasmModule *mod, int synth_malloc, int synth_free,
+                                 int synth_calloc, int synth_realloc,
+                                 int synth_heap_used, int synth_heap_cap, int export_runtime);
+int wasm_emit_synth_wasi(WasmModule *mod, int fd_write_idx, int fd_read_idx, int proc_exit_idx,
+                         int need_puts, int need_putchar, int need_write, int need_read,
+                         int need_exit, int need_start, int export_runtime);
 int wasm_module_emit_binary(const WasmModule *mod, WASMBuffer *out);
 int wasm_module_write_file(const WasmModule *mod, const char *filename);
 

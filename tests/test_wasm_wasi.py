@@ -1,11 +1,15 @@
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ZCC_BIN = os.path.join(REPO_ROOT, "zcc")
-NODE_BIN = "/usr/bin/node"
+NODE_BIN = (
+    shutil.which("node")
+    or ("/home/ZKAEDI/.local/bin/node" if os.path.exists("/home/ZKAEDI/.local/bin/node") else "/usr/bin/node")
+)
 
 def run_wasi_program(c_source: str, stdin_input: str = "") -> tuple[int, str, str]:
     with tempfile.NamedTemporaryFile(suffix=".c", mode="w", delete=False) as f_c:

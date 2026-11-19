@@ -3614,11 +3614,15 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
             Node *item = init_list->args[i];
             if (item->kind == ND_INIT_LIST) {
                 emit_local_initializer(cc, block, cnt, cap, base_var, elem_type, item, offset + i * elem_sz);
-            } else if (elem_type->kind == TY_ARRAY || elem_type->kind == TY_STRUCT || elem_type->kind == TY_UNION) {
+            } else if ((elem_type->kind == TY_ARRAY || elem_type->kind == TY_STRUCT || elem_type->kind == TY_UNION) &&
+                       !(item->type && (item->type->kind == TY_STRUCT || item->type->kind == TY_UNION))) {
                 Node dummy_list;
+                Node *dargs[1];
                 memset(&dummy_list, 0, sizeof(Node));
+                dargs[0] = item;
                 dummy_list.kind = ND_INIT_LIST;
-                dummy_list.num_args = 0;
+                dummy_list.args = dargs;
+                dummy_list.num_args = 1;
                 emit_local_initializer(cc, block, cnt, cap, base_var, elem_type, &dummy_list, offset + i * elem_sz);
             } else {
                 /* Cast base to char* so byte offset is not double-scaled */
@@ -3691,6 +3695,11 @@ static void emit_local_initializer(Compiler *cc, Node *block, int *cnt, int *cap
 
             if (item->kind == ND_INIT_LIST) {
                 emit_local_initializer(cc, block, cnt, cap, base_var, f->type, item, offset + f->offset);
+            } else if ((f->type->kind == TY_ARRAY || f->type->kind == TY_STRUCT || f->type->kind == TY_UNION) &&
+                       !(item->type && (item->type->kind == TY_STRUCT || item->type->kind == TY_UNION))) {
+                Node dummy_list; Node *dargs[1]; memset(&dummy_list, 0, sizeof(Node));
+                dargs[0] = item; dummy_list.kind = ND_INIT_LIST; dummy_list.args = dargs; dummy_list.num_args = 1;
+                emit_local_initializer(cc, block, cnt, cap, base_var, f->type, &dummy_list, offset + f->offset);
             } else {
                 Node *target;
                 if (f->is_bitfield) {

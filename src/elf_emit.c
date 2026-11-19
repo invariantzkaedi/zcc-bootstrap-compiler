@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
 
 /* DbgBuffer helper for DWARF writing */
 typedef struct {
@@ -142,13 +145,18 @@ typedef struct {
     int sec_idx;
 } DbgRela;
 
-int elf_emit_obj(const char *out_filename,
-                 const unsigned char *code_bytes,
-                 size_t code_size,
-                 const zcc_elf_sym_t *syms,
-                 size_t sym_count,
-                 const zcc_elf_rela_t *relas,
-                 size_t rela_count) {
+int elf_emit_obj_full(const char *out_filename,
+                      zcc_u16 e_machine,
+                      zcc_u32 e_flags,
+                      const unsigned char *code_bytes,
+                      size_t code_size,
+                      const unsigned char *data_bytes,
+                      size_t data_size,
+                      size_t bss_size,
+                      const zcc_elf_sym_t *syms,
+                      size_t sym_count,
+                      const zcc_elf_rela_t *relas,
+                      size_t rela_count) {
     FILE *f = NULL;
     zcc_elf_ehdr_t ehdr;
     zcc_elf_sym_t *final_syms = NULL;
@@ -163,11 +171,14 @@ int elf_emit_obj(const char *out_filename,
     size_t i;
     size_t curr_off = 0;
 
-    int has_dwarf = (g_asm_loc_count > 0);
+    int has_dwarf = (g_asm_loc_count > 0 && e_machine == EM_X86_64);
+    int has_data = (data_bytes != NULL && data_size > 0);
+    int has_bss = (bss_size > 0);
 
     /* Dynamic section indexes assignment */
-    int idx_null = 0;
     int idx_text = -1;
+    int idx_data = -1;
+    int idx_bss = -1;
     int idx_rela_text = -1;
     int idx_symtab = -1;
     int idx_strtab = -1;
@@ -181,6 +192,12 @@ int elf_emit_obj(const char *out_filename,
 
     int next_idx = 1;
     idx_text = next_idx++;
+    if (has_data) {
+        idx_data = next_idx++;
+    }
+    if (has_bss) {
+        idx_bss = next_idx++;
+    }
     if (rela_count > 0) {
         idx_rela_text = next_idx++;
     }
@@ -200,6 +217,8 @@ int elf_emit_obj(const char *out_filename,
 
     /* Offsets of sections inside the file */
     size_t text_off = 0;
+    size_t data_off = 0;
+    size_t bss_off = 0;
     size_t rela_off = 0;
     size_t symtab_off = 0;
     size_t strtab_off = 0;
@@ -275,7 +294,10 @@ int elf_emit_obj(const char *out_filename,
     /* Copy local symbols */
     for (i = 0; i < sym_count; i++) {
         if (syms[i].binding == STB_LOCAL) {
-            final_syms[local_count++] = syms[i];
+            final_syms[local_count] = syms[i];
+            if (syms[i].shndx == 2 && idx_data > 0) final_syms[local_count].shndx = (zcc_u16)idx_data;
+            else if (syms[i].shndx == 3 && idx_bss > 0) final_syms[local_count].shndx = (zcc_u16)idx_bss;
+            local_count++;
         }
     }
 
@@ -283,7 +305,10 @@ int elf_emit_obj(const char *out_filename,
     curr_off = local_count;
     for (i = 0; i < sym_count; i++) {
         if (syms[i].binding != STB_LOCAL) {
-            final_syms[curr_off++] = syms[i];
+            final_syms[curr_off] = syms[i];
+            if (syms[i].shndx == 2 && idx_data > 0) final_syms[curr_off].shndx = (zcc_u16)idx_data;
+            else if (syms[i].shndx == 3 && idx_bss > 0) final_syms[curr_off].shndx = (zcc_u16)idx_bss;
+            curr_off++;
         }
     }
 
@@ -705,6 +730,8 @@ int elf_emit_obj(const char *out_filename,
     dbg_write_u8(&shstr_buf, 0);
 
     size_t off_text = add_shstr(&shstr_buf, ".text");
+    size_t off_data = has_data ? add_shstr(&shstr_buf, ".data") : 0;
+    size_t off_bss = has_bss ? add_shstr(&shstr_buf, ".bss") : 0;
     size_t off_rela_text = (rela_count > 0) ? add_shstr(&shstr_buf, ".rela.text") : 0;
     size_t off_symtab = add_shstr(&shstr_buf, ".symtab");
     size_t off_strtab = add_shstr(&shstr_buf, ".strtab");
@@ -737,7 +764,8 @@ int elf_emit_obj(const char *out_filename,
     ehdr.e_ident[7] = ELFOSABI_NONE;
 
     ehdr.e_type = ET_REL;
-    ehdr.e_machine = EM_X86_64;
+    ehdr.e_machine = e_machine;
+    ehdr.e_flags = e_flags;
     ehdr.e_version = EV_CURRENT;
     ehdr.e_ehsize = sizeof(zcc_elf_ehdr_t);
     ehdr.e_shentsize = sizeof(zcc_elf_shdr_t);
@@ -751,8 +779,21 @@ int elf_emit_obj(const char *out_filename,
     /* .text section */
     curr_off = write_padding(f, curr_off, 16);
     text_off = curr_off;
-    fwrite(code_bytes, 1, code_size, f);
-    curr_off += code_size;
+    if (code_size > 0 && code_bytes) {
+        fwrite(code_bytes, 1, code_size, f);
+        curr_off += code_size;
+    }
+
+    /* .data section */
+    if (has_data) {
+        curr_off = write_padding(f, curr_off, 16);
+        data_off = curr_off;
+        fwrite(data_bytes, 1, data_size, f);
+        curr_off += data_size;
+    }
+    if (has_bss) {
+        bss_off = curr_off;
+    }
 
     /* .rela.text section */
     if (rela_count > 0) {
@@ -841,6 +882,32 @@ int elf_emit_obj(const char *out_filename,
     shdrs[idx_text].sh_info = 0;
     shdrs[idx_text].sh_addralign = 16;
     shdrs[idx_text].sh_entsize = 0;
+
+    if (has_data) {
+        shdrs[idx_data].sh_name = (zcc_u32)off_data;
+        shdrs[idx_data].sh_type = SHT_PROGBITS;
+        shdrs[idx_data].sh_flags = SHF_ALLOC | SHF_WRITE;
+        shdrs[idx_data].sh_addr = 0;
+        shdrs[idx_data].sh_offset = data_off;
+        shdrs[idx_data].sh_size = data_size;
+        shdrs[idx_data].sh_link = 0;
+        shdrs[idx_data].sh_info = 0;
+        shdrs[idx_data].sh_addralign = 16;
+        shdrs[idx_data].sh_entsize = 0;
+    }
+
+    if (has_bss) {
+        shdrs[idx_bss].sh_name = (zcc_u32)off_bss;
+        shdrs[idx_bss].sh_type = SHT_NOBITS;
+        shdrs[idx_bss].sh_flags = SHF_ALLOC | SHF_WRITE;
+        shdrs[idx_bss].sh_addr = 0;
+        shdrs[idx_bss].sh_offset = bss_off;
+        shdrs[idx_bss].sh_size = bss_size;
+        shdrs[idx_bss].sh_link = 0;
+        shdrs[idx_bss].sh_info = 0;
+        shdrs[idx_bss].sh_addralign = 16;
+        shdrs[idx_bss].sh_entsize = 0;
+    }
 
     /* Section idx_rela_text: .rela.text */
     if (rela_count > 0) {
@@ -970,6 +1037,7 @@ int elf_emit_obj(const char *out_filename,
 
     /* Write out all Section Headers */
     fwrite(shdrs, sizeof(zcc_elf_shdr_t), num_sections, f);
+    free(shdrs);
 
     {
         size_t total_payload = 64 + code_size + (rela_count * 24) + (final_sym_count * 24) + strtab_size + shstr_buf.size;
@@ -1004,4 +1072,197 @@ int elf_emit_obj(const char *out_filename,
     free(final_syms);
 
     return 0;
+}
+
+int elf_emit_obj_arch(const char *out_filename,
+                      zcc_u16 e_machine,
+                      zcc_u32 e_flags,
+                      const unsigned char *code_bytes,
+                      size_t code_size,
+                      const zcc_elf_sym_t *syms,
+                      size_t sym_count,
+                      const zcc_elf_rela_t *relas,
+                      size_t rela_count) {
+    return elf_emit_obj_full(out_filename, e_machine, e_flags,
+                             code_bytes, code_size, NULL, 0, 0,
+                             syms, sym_count, relas, rela_count);
+}
+
+int elf_emit_obj(const char *out_filename,
+                 const unsigned char *code_bytes,
+                 size_t code_size,
+                 const zcc_elf_sym_t *syms,
+                 size_t sym_count,
+                 const zcc_elf_rela_t *relas,
+                 size_t rela_count) {
+    return elf_emit_obj_full(out_filename, EM_X86_64, 0,
+                             code_bytes, code_size, NULL, 0, 0,
+                             syms, sym_count, relas, rela_count);
+}
+
+int elf_emit_exec_arch(const char *out_filename,
+                       zcc_u16 e_machine,
+                       zcc_u32 e_flags,
+                       zcc_u64 entry_vaddr,
+                       zcc_u64 text_vaddr,
+                       const unsigned char *text_bytes,
+                       size_t text_size,
+                       zcc_u64 data_vaddr,
+                       const unsigned char *data_bytes,
+                       size_t data_size,
+                       size_t bss_size) {
+    if (!out_filename) return -1;
+    FILE *f = fopen(out_filename, "wb");
+    if (!f) return -1;
+
+    int has_rw = (data_size > 0 || bss_size > 0);
+    int phnum = has_rw ? 2 : 1;
+
+    size_t text_file_off = 0x1000;
+    size_t data_file_off = (text_file_off + text_size + 0xFFFULL) & ~0xFFFULL;
+    if (data_file_off == text_file_off) data_file_off += 0x1000;
+    size_t shstr_file_off = has_rw ? (data_file_off + data_size) : (text_file_off + text_size);
+
+    /* Optional minimal section header table (.text, .data/.bss, .shstrtab) for readelf inspection */
+    DbgBuffer shstr;
+    dbg_buf_init(&shstr);
+    dbg_write_u8(&shstr, 0);
+    size_t sh_text = add_shstr(&shstr, ".text");
+    size_t sh_data = (data_size > 0) ? add_shstr(&shstr, ".data") : 0;
+    size_t sh_bss = (bss_size > 0) ? add_shstr(&shstr, ".bss") : 0;
+    size_t sh_shstr = add_shstr(&shstr, ".shstrtab");
+
+    int shnum = 3 + (data_size > 0 ? 1 : 0) + (bss_size > 0 ? 1 : 0);
+    int shstr_idx = shnum - 1;
+    size_t shdrs_off = (shstr_file_off + shstr.size + 7ULL) & ~7ULL;
+
+    zcc_elf_ehdr_t ehdr;
+    memset(&ehdr, 0, sizeof(ehdr));
+    ehdr.e_ident[0] = 0x7f;
+    ehdr.e_ident[1] = 'E';
+    ehdr.e_ident[2] = 'L';
+    ehdr.e_ident[3] = 'F';
+    ehdr.e_ident[4] = ELFCLASS64;
+    ehdr.e_ident[5] = ELFDATA2LSB;
+    ehdr.e_ident[6] = EV_CURRENT;
+    ehdr.e_ident[7] = ELFOSABI_NONE;
+    ehdr.e_type = ET_EXEC;
+    ehdr.e_machine = e_machine;
+    ehdr.e_flags = e_flags;
+    ehdr.e_version = EV_CURRENT;
+    ehdr.e_entry = entry_vaddr;
+    ehdr.e_phoff = sizeof(zcc_elf_ehdr_t);
+    ehdr.e_shoff = shdrs_off;
+    ehdr.e_ehsize = sizeof(zcc_elf_ehdr_t);
+    ehdr.e_phentsize = sizeof(zcc_elf_phdr_t);
+    ehdr.e_phnum = (zcc_u16)phnum;
+    ehdr.e_shentsize = sizeof(zcc_elf_shdr_t);
+    ehdr.e_shnum = (zcc_u16)shnum;
+    ehdr.e_shstrndx = (zcc_u16)shstr_idx;
+
+    zcc_elf_phdr_t phdrs[2];
+    memset(phdrs, 0, sizeof(phdrs));
+    /* Segment 0: ELF header + phdrs + .text (RX) */
+    zcc_u64 seg0_base = text_vaddr - text_file_off;
+    phdrs[0].p_type = PT_LOAD;
+    phdrs[0].p_flags = PF_R | PF_X;
+    phdrs[0].p_offset = 0;
+    phdrs[0].p_vaddr = seg0_base;
+    phdrs[0].p_paddr = seg0_base;
+    phdrs[0].p_filesz = text_file_off + text_size;
+    phdrs[0].p_memsz = text_file_off + text_size;
+    phdrs[0].p_align = 0x1000;
+
+    if (has_rw) {
+        phdrs[1].p_type = PT_LOAD;
+        phdrs[1].p_flags = PF_R | PF_W;
+        phdrs[1].p_offset = data_file_off;
+        phdrs[1].p_vaddr = data_vaddr;
+        phdrs[1].p_paddr = data_vaddr;
+        phdrs[1].p_filesz = data_size;
+        phdrs[1].p_memsz = data_size + bss_size;
+        phdrs[1].p_align = 0x1000;
+    }
+
+    int write_ok = 1;
+    if (fwrite(&ehdr, sizeof(ehdr), 1, f) != 1) write_ok = 0;
+    if (fwrite(phdrs, sizeof(zcc_elf_phdr_t), (size_t)phnum, f) != (size_t)phnum) write_ok = 0;
+
+    size_t pos = sizeof(ehdr) + (size_t)phnum * sizeof(zcc_elf_phdr_t);
+    while (pos < text_file_off && write_ok) {
+        zcc_u8 z = 0;
+        if (fwrite(&z, 1, 1, f) != 1) write_ok = 0;
+        pos++;
+    }
+    if (text_size > 0 && text_bytes && write_ok) {
+        if (fwrite(text_bytes, 1, text_size, f) != text_size) write_ok = 0;
+        pos += text_size;
+    }
+    if (has_rw && write_ok) {
+        while (pos < data_file_off && write_ok) {
+            zcc_u8 z = 0;
+            if (fwrite(&z, 1, 1, f) != 1) write_ok = 0;
+            pos++;
+        }
+        if (data_size > 0 && data_bytes && write_ok) {
+            if (fwrite(data_bytes, 1, data_size, f) != data_size) write_ok = 0;
+            pos += data_size;
+        }
+    }
+    if (shstr.size > 0 && write_ok) {
+        if (fwrite(shstr.data, 1, shstr.size, f) != shstr.size) write_ok = 0;
+        pos += shstr.size;
+    }
+    while (pos < shdrs_off && write_ok) {
+        zcc_u8 z = 0;
+        if (fwrite(&z, 1, 1, f) != 1) write_ok = 0;
+        pos++;
+    }
+
+    zcc_elf_shdr_t *sh = (zcc_elf_shdr_t *)calloc((size_t)shnum, sizeof(zcc_elf_shdr_t));
+    if (!sh) write_ok = 0;
+    if (write_ok && sh) {
+        int s = 1;
+        sh[s].sh_name = (zcc_u32)sh_text;
+        sh[s].sh_type = SHT_PROGBITS;
+        sh[s].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+        sh[s].sh_addr = text_vaddr;
+        sh[s].sh_offset = text_file_off;
+        sh[s].sh_size = text_size;
+        sh[s].sh_addralign = 16;
+        s++;
+        if (data_size > 0) {
+            sh[s].sh_name = (zcc_u32)sh_data;
+            sh[s].sh_type = SHT_PROGBITS;
+            sh[s].sh_flags = SHF_ALLOC | SHF_WRITE;
+            sh[s].sh_addr = data_vaddr;
+            sh[s].sh_offset = data_file_off;
+            sh[s].sh_size = data_size;
+            sh[s].sh_addralign = 16;
+            s++;
+        }
+        if (bss_size > 0) {
+            sh[s].sh_name = (zcc_u32)sh_bss;
+            sh[s].sh_type = SHT_NOBITS;
+            sh[s].sh_flags = SHF_ALLOC | SHF_WRITE;
+            sh[s].sh_addr = data_vaddr + data_size;
+            sh[s].sh_offset = data_file_off + data_size;
+            sh[s].sh_size = bss_size;
+            sh[s].sh_addralign = 16;
+            s++;
+        }
+        sh[s].sh_name = (zcc_u32)sh_shstr;
+        sh[s].sh_type = SHT_STRTAB;
+        sh[s].sh_offset = shstr_file_off;
+        sh[s].sh_size = shstr.size;
+        sh[s].sh_addralign = 1;
+        if (fwrite(sh, sizeof(zcc_elf_shdr_t), (size_t)shnum, f) != (size_t)shnum) write_ok = 0;
+    }
+    if (sh) free(sh);
+    dbg_buf_free(&shstr);
+    if (fclose(f) != 0) write_ok = 0;
+#ifndef _WIN32
+    if (write_ok) chmod(out_filename, 0755);
+#endif
+    return write_ok ? 0 : -1;
 }

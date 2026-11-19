@@ -762,6 +762,7 @@ yul_*.json
 
 # Compiled binaries and object/shared libraries in tools/
 tools/zcc_*[!cphs]
+!tools/zcc_wasm_playground.html
 tools/zcc-*
 tools/cuda_quantum_walk_rtx5070
 tools/cuda_stratum_miner

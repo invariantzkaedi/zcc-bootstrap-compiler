@@ -2,13 +2,19 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "elf_emit.h"
+#include "arm64_elf_emit.c"
+#include "riscv_elf_emit.c"
 #include "win64_pe_emit.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
+#if defined(_MSC_VER) || defined(__MINGW32__)
 #include <process.h>
+#else
+extern int _getpid(void);
+#endif
 #else
 #include <unistd.h>
 #endif
@@ -155,8 +161,42 @@ static void ensure_codegen_tables(void) {
   }
 }
 
+static int codegen_cmp_u32(const void *a, const void *b) {
+  uint32_t ua = *(const uint32_t *)a;
+  uint32_t ub = *(const uint32_t *)b;
+  return (ua > ub) - (ua < ub);
+}
+
+static const char *win64_remap_msvcrt_sym(const char *sym, int ms_abi) {
+  if (!sym) return sym;
+  if (strcmp(sym, "snprintf") == 0) return ms_abi ? "_snprintf" : "_vsnprintf";
+  if (!ms_abi && strcmp(sym, "_snprintf") == 0) return "_vsnprintf";
+  if (strcmp(sym, "strdup") == 0) return "_strdup";
+  if (strcmp(sym, "strtoll") == 0) return "_strtoi64";
+  if (strcmp(sym, "strtoull") == 0) return "_strtoui64";
+  if (strcmp(sym, "atoll") == 0) return "_atoi64";
+  if (strcmp(sym, "isatty") == 0) return "_isatty";
+  if (strcmp(sym, "getpid") == 0) return "_getpid";
+  if (strcmp(sym, "getcwd") == 0) return "_getcwd";
+  return sym;
+}
+
 static void add_reloc(Reloc r) {
   ensure_codegen_tables();
+  size_t tlen = strlen(r.target_name);
+  if (tlen > 2) {
+    for (size_t k = 1; k < tlen; k++) {
+      if (r.target_name[k] == '+' || r.target_name[k] == '-') {
+        char *ep = NULL;
+        long long off = strtoll(&r.target_name[k], &ep, 0);
+        if (ep && *ep == '\0' && ep != &r.target_name[k] + 1) {
+          r.addend += off;
+          r.target_name[k] = '\0';
+        }
+        break;
+      }
+    }
+  }
   if (reloc_count >= 131072) {
     fprintf(stderr,
             "error: assembler relocation table limit exceeded (max 131072)\n");
@@ -3155,6 +3195,11 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
       unsigned char b[2] = {0xf3, 0xa4};
       seg_append(&text_seg, b, 2);
       matched = 1;
+    } else if (strcmp(mnemonic, "rep") == 0 && args_start &&
+               strcmp(trim(args_start), "stosb") == 0) {
+      unsigned char b[2] = {0xf3, 0xaa};
+      seg_append(&text_seg, b, 2);
+      matched = 1;
     } else if (strcmp(mnemonic, "cqto") == 0 || strcmp(mnemonic, "cqo") == 0) {
       unsigned char b[2] = {0x48, 0x99};
       seg_append(&text_seg, b, 2);
@@ -4785,9 +4830,11 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
   }
 
   /* For Win64 PE: Synthesize import stubs for unresolved external symbols */
-  const char *win_import_funcs[64];
+  const char *win_import_funcs[512];
   size_t win_import_count = 0;
-  size_t win_stub_offsets[64];
+  size_t win_stub_offsets[512];
+  size_t win_bss_size = 0;
+  int is_win64_exe = (is_win64_pe && !g_win64_is_shared);
   int win_stdio_stdin_idx = -1;
   int win_stdio_stdout_idx = -1;
   int win_stdio_stderr_idx = -1;
@@ -4795,24 +4842,30 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
 
   if (is_win64_pe) {
     size_t k;
-    /* 1. Allocate .comm symbols (segment == 3) into data_seg (segment = 2) */
+    /* 1. Allocate .comm symbols (segment == 3): virtual BSS for .exe (v9), or data_seg for DLL (v8) */
     for (k = 0; k < label_count; k++) {
       if (labels[k].segment == 3) {
         size_t align = (labels[k].offset > 0 && labels[k].offset <= 64)
                            ? (size_t)labels[k].offset
                            : 8;
-        size_t pad = (align - (data_seg.size % align)) % align;
-        if (pad > 0) {
-          unsigned char pad_z[64] = {0};
-          seg_append(&data_seg, pad_z, pad);
-        }
-        labels[k].offset = data_seg.size;
-        labels[k].segment = 2;
         size_t sz = (labels[k].size > 0) ? (size_t)labels[k].size : 8;
-        unsigned char *zeros = (unsigned char *)calloc(1, sz);
-        if (zeros) {
-          seg_append(&data_seg, zeros, sz);
-          free(zeros);
+        if (is_win64_exe) {
+          win_bss_size = (win_bss_size + align - 1) & ~(align - 1);
+          labels[k].offset = win_bss_size;
+          win_bss_size += sz;
+        } else {
+          size_t pad = (align - (data_seg.size % align)) % align;
+          if (pad > 0) {
+            unsigned char pad_z[64] = {0};
+            seg_append(&data_seg, pad_z, pad);
+          }
+          labels[k].offset = data_seg.size;
+          labels[k].segment = 2;
+          unsigned char *zeros = (unsigned char *)calloc(1, sz);
+          if (zeros) {
+            seg_append(&data_seg, zeros, sz);
+            free(zeros);
+          }
         }
       }
     }
@@ -4900,7 +4953,15 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
 
     for (k = 0; k < label_count; k++) {
       if (labels[k].segment == 0 && labels[k].is_global) {
-        if (win_import_count < 64) {
+        if (win_import_count >= 512) {
+          fprintf(stderr, "error: win64 PE import limit (512) exceeded at '%s'\n",
+                  labels[k].name);
+          free(text_seg.data);
+          free(data_seg.data);
+          if (tls_seg.data) free(tls_seg.data);
+          return -1;
+        }
+        {
           /* Pad text segment to 16 bytes */
           size_t pad = (16 - (text_seg.size % 16)) % 16;
           if (pad > 0) {
@@ -4911,10 +4972,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
           labels[k].offset = text_seg.size;
 
           const char *iat_name =
-              (strcmp(labels[k].name, "snprintf") == 0 ||
-               (!g_win64_ms_abi && strcmp(labels[k].name, "_snprintf") == 0))
-                  ? (g_win64_ms_abi ? "_snprintf" : "_vsnprintf")
-                  : labels[k].name;
+              win64_remap_msvcrt_sym(labels[k].name, g_win64_ms_abi);
           if (g_win64_ms_abi) {
             /* MS-ABI caller already places args in rcx/rdx/r8/r9 + xmm0..3,
              * 32-byte shadow space, and stack args 5..N at 0x20+(%rsp).
@@ -5176,12 +5234,12 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
       }
       continue;
     }
+    if (relocs[i].type == R_X86_64_64) continue;
     int j = find_label_idx(relocs[i].target_name);
     if (j >= 0 && labels[j].segment == 1) {
       /* Relative offset to local label */
-      long long target_val = labels[j].offset;
-      long long pc = relocs[i].offset + 4;
-      long long disp = target_val - pc;
+      long long disp = (long long)labels[j].offset + relocs[i].addend -
+                       (long long)relocs[i].offset;
 
       text_seg.data[relocs[i].offset] = disp & 0xFF;
       text_seg.data[relocs[i].offset + 1] = (disp >> 8) & 0xFF;
@@ -5221,97 +5279,41 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
     }
   }
 
-  /* Merge data segment into text segment and adjust displacements */
-  if (is_win64_pe && !g_win64_is_shared) {
-    size_t total_sz = text_seg.size + data_seg.size;
-    size_t min_pad = 0;
-    if (win_import_count == 1 && strcmp(win_import_funcs[0], "printf") == 0 &&
-        total_sz < 4096) {
-      min_pad = 4096 - total_sz;
-    } else if (total_sz >= 13800 && total_sz < 15000) {
-      min_pad = 1024;
-    }
-    if (min_pad > 0) {
-      unsigned char *zpad = (unsigned char *)calloc(1, min_pad);
-      if (zpad) {
-        seg_append(&data_seg, zpad, min_pad);
-        free(zpad);
-      }
-    }
-  }
   size_t orig_text_size = text_seg.size;
-  if (data_seg.size > 0) {
-    /* Pad text to 16 bytes first */
-    size_t pad_size = (16 - (text_seg.size % 16)) % 16;
-    if (pad_size > 0) {
-      unsigned char pad[16] = {0};
-      seg_append(&text_seg, pad, pad_size);
-    }
-    size_t data_start = text_seg.size;
-    seg_append(&text_seg, data_seg.data, data_seg.size);
-
-    /* Adjust all data labels */
-    for (i = 0; i < final_sym_count; i++) {
-      if (labels[i].segment == 2) {
-        elf_syms[i].value = data_start + labels[i].offset;
-        elf_syms[i].shndx = 1;
+  if (!is_win64_exe) {
+    /* Legacy merge of data_seg into text_seg (ELF and Win64 DLL v8) */
+    if (data_seg.size > 0) {
+      size_t pad_size = (16 - (text_seg.size % 16)) % 16;
+      if (pad_size > 0) {
+        unsigned char pad[16] = {0};
+        seg_append(&text_seg, pad, pad_size);
       }
-    }
+      size_t data_start = text_seg.size;
+      seg_append(&text_seg, data_seg.data, data_seg.size);
 
-    /* Adjust any relocation that pointed to data segment */
-    for (i = 0; i < reloc_count; i++) {
-      if (relocs[i].type == R_X86_64_64) {
-        relocs[i].offset += data_start;
+      for (i = 0; i < final_sym_count; i++) {
+        if (labels[i].segment == 2) {
+          elf_syms[i].value = data_start + labels[i].offset;
+          elf_syms[i].shndx = 1;
+        }
+      }
+      for (i = 0; i < reloc_count; i++) {
+        if (relocs[i].type == R_X86_64_64) {
+          relocs[i].offset += data_start;
+        }
       }
     }
   }
 
   if (is_win64_pe) {
-    uint32_t win_reloc_rvas[256];
+    size_t max_win_relocs = reloc_count + 16;
+    uint32_t *win_reloc_rvas =
+        (uint32_t *)malloc(sizeof(uint32_t) * max_win_relocs);
     size_t win_reloc_count = 0;
     uint64_t image_base = 0x140000000ULL;
     uint32_t text_rva = 0x1000;
-    size_t data_start = orig_text_size + ((16 - (orig_text_size % 16)) % 16);
 
-    /* Resolve relocations pointing to merged data segment or text segment */
-    for (i = 0; i < reloc_count; i++) {
-      if (relocs[i].type == R_X86_64_64) {
-        int j = find_label_idx(relocs[i].target_name);
-        if (j >= 0) {
-          uint64_t target_offset = 0;
-          if (labels[j].segment == 1) {
-            target_offset = (uint64_t)labels[j].offset;
-          } else if (labels[j].segment == 2) {
-            target_offset = (uint64_t)(data_start + labels[j].offset);
-          }
-          target_offset += (uint64_t)relocs[i].addend;
-          uint64_t abs_va = image_base + text_rva + target_offset;
-          if (relocs[i].offset + 8 <= text_seg.size) {
-            memcpy(&text_seg.data[relocs[i].offset], &abs_va,
-                   sizeof(uint64_t));
-          }
-          if (win_reloc_count < 256) {
-            win_reloc_rvas[win_reloc_count++] =
-                text_rva + (uint32_t)relocs[i].offset;
-          }
-          relocs[i].type = R_X86_64_NONE;
-        }
-      } else if (relocs[i].type == R_X86_64_PC32 && data_seg.size > 0) {
-        int j = find_label_idx(relocs[i].target_name);
-        if (j >= 0 && labels[j].segment == 2) {
-          long long target_val = data_start + labels[j].offset;
-          long long pc = relocs[i].offset + 4;
-          long long disp = target_val - pc;
-          text_seg.data[relocs[i].offset] = disp & 0xFF;
-          text_seg.data[relocs[i].offset + 1] = (disp >> 8) & 0xFF;
-          text_seg.data[relocs[i].offset + 2] = (disp >> 16) & 0xFF;
-          text_seg.data[relocs[i].offset + 3] = (disp >> 24) & 0xFF;
-          relocs[i].type = R_X86_64_NONE;
-        }
-      }
-    }
-
-    /* Determine entry point offset: find WinMain, wWinMain, main, or _main */
+    /* Determine entry point offset: GUI WinMain, then mainCRTStartup, then main */
     uint32_t entry_offset = 0;
     int found_entry = 0;
     if (g_win64_gui_subsystem) {
@@ -5328,6 +5330,16 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
     }
     if (!found_entry) {
       for (i = 0; i < label_count; i++) {
+        if (strcmp(labels[i].name, "mainCRTStartup") == 0 ||
+            strcmp(labels[i].name, "_mainCRTStartup") == 0) {
+          entry_offset = (uint32_t)labels[i].offset;
+          found_entry = 1;
+          break;
+        }
+      }
+    }
+    if (!found_entry) {
+      for (i = 0; i < label_count; i++) {
         if (strcmp(labels[i].name, "main") == 0 ||
             strcmp(labels[i].name, "_main") == 0) {
           entry_offset = (uint32_t)labels[i].offset;
@@ -5336,8 +5348,12 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
       }
     }
 
-    /* If stdin/stdout/stderr globals are used, synthesize CRT stdio init
-     * wrapper before IAT calc */
+    size_t data_start_v8 = orig_text_size + ((16 - (orig_text_size % 16)) % 16);
+    long long win_crt_in_patch = -1;
+    long long win_crt_out_patch = -1;
+    long long win_crt_err_patch = -1;
+
+    /* If stdin/stdout/stderr globals are used, synthesize CRT stdio init wrapper */
     if (!g_win64_is_shared && win_iob_func_idx >= 0 &&
         (win_stdio_stdin_idx >= 0 || win_stdio_stdout_idx >= 0 ||
          win_stdio_stderr_idx >= 0)) {
@@ -5347,10 +5363,8 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
         seg_append(&text_seg, pad_b, pad);
       }
       uint32_t crt_entry = (uint32_t)text_seg.size;
-      /* subq $0x28, %rsp */
       unsigned char sub_rsp[4] = {0x48, 0x83, 0xEC, 0x28};
       seg_append(&text_seg, sub_rsp, 4);
-      /* call __iob_func_stub */
       int32_t call_disp = (int32_t)((int64_t)labels[win_iob_func_idx].offset -
                                     (int64_t)(text_seg.size + 5));
       unsigned char call_ins[5] = {0xE8, (unsigned char)(call_disp & 0xFF),
@@ -5359,54 +5373,26 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
                                    (unsigned char)((call_disp >> 24) & 0xFF)};
       seg_append(&text_seg, call_ins, 5);
       if (win_stdio_stdin_idx >= 0) {
-        int64_t target_off =
-            (int64_t)(data_start + labels[win_stdio_stdin_idx].offset);
-        int32_t d = (int32_t)(target_off - (int64_t)(text_seg.size + 7));
-        unsigned char mov_in[7] = {0x48,
-                                   0x89,
-                                   0x05,
-                                   (unsigned char)(d & 0xFF),
-                                   (unsigned char)((d >> 8) & 0xFF),
-                                   (unsigned char)((d >> 16) & 0xFF),
-                                   (unsigned char)((d >> 24) & 0xFF)};
+        unsigned char mov_in[7] = {0x48, 0x89, 0x05, 0, 0, 0, 0};
+        win_crt_in_patch = (long long)(text_seg.size + 3);
         seg_append(&text_seg, mov_in, 7);
       }
       if (win_stdio_stdout_idx >= 0) {
-        unsigned char lea_out[4] = {0x48, 0x8D, 0x48,
-                                    0x30}; /* leaq 48(%rax), %rcx */
+        unsigned char lea_out[4] = {0x48, 0x8D, 0x48, 0x30};
         seg_append(&text_seg, lea_out, 4);
-        int64_t target_off =
-            (int64_t)(data_start + labels[win_stdio_stdout_idx].offset);
-        int32_t d = (int32_t)(target_off - (int64_t)(text_seg.size + 7));
-        unsigned char mov_out[7] = {0x48,
-                                    0x89,
-                                    0x0D,
-                                    (unsigned char)(d & 0xFF),
-                                    (unsigned char)((d >> 8) & 0xFF),
-                                    (unsigned char)((d >> 16) & 0xFF),
-                                    (unsigned char)((d >> 24) & 0xFF)};
+        unsigned char mov_out[7] = {0x48, 0x89, 0x0D, 0, 0, 0, 0};
+        win_crt_out_patch = (long long)(text_seg.size + 3);
         seg_append(&text_seg, mov_out, 7);
       }
       if (win_stdio_stderr_idx >= 0) {
-        unsigned char lea_err[4] = {0x48, 0x8D, 0x48,
-                                    0x60}; /* leaq 96(%rax), %rcx */
+        unsigned char lea_err[4] = {0x48, 0x8D, 0x48, 0x60};
         seg_append(&text_seg, lea_err, 4);
-        int64_t target_off =
-            (int64_t)(data_start + labels[win_stdio_stderr_idx].offset);
-        int32_t d = (int32_t)(target_off - (int64_t)(text_seg.size + 7));
-        unsigned char mov_err[7] = {0x48,
-                                    0x89,
-                                    0x0D,
-                                    (unsigned char)(d & 0xFF),
-                                    (unsigned char)((d >> 8) & 0xFF),
-                                    (unsigned char)((d >> 16) & 0xFF),
-                                    (unsigned char)((d >> 24) & 0xFF)};
+        unsigned char mov_err[7] = {0x48, 0x89, 0x0D, 0, 0, 0, 0};
+        win_crt_err_patch = (long long)(text_seg.size + 3);
         seg_append(&text_seg, mov_err, 7);
       }
-      /* addq $0x28, %rsp */
       unsigned char add_rsp[4] = {0x48, 0x83, 0xC4, 0x28};
       seg_append(&text_seg, add_rsp, 4);
-      /* jmp main */
       int32_t jmp_disp =
           (int32_t)((int64_t)entry_offset - (int64_t)(text_seg.size + 5));
       unsigned char jmp_ins[5] = {0xE9, (unsigned char)(jmp_disp & 0xFF),
@@ -5415,14 +5401,111 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
                                   (unsigned char)((jmp_disp >> 24) & 0xFF)};
       seg_append(&text_seg, jmp_ins, 5);
       entry_offset = crt_entry;
+      orig_text_size = text_seg.size;
     }
 
-    /* If imports present, calculate IAT RVAs and patch stub call displacements
-     */
+    size_t bss_start = 0;
+    size_t data_vsize = 0;
+    uint32_t sep_data_rva = text_rva + (uint32_t)data_start_v8;
+    if (is_win64_exe) {
+      size_t dpad = (16 - (data_seg.size % 16)) % 16;
+      if (dpad > 0) {
+        unsigned char z16[16] = {0};
+        seg_append(&data_seg, z16, dpad);
+      }
+      bss_start = data_seg.size;
+      data_vsize = ((bss_start + win_bss_size) > 16)
+                       ? (bss_start + win_bss_size)
+                       : 16;
+      uint32_t raw_tlen = (text_seg.size > 0) ? (uint32_t)text_seg.size : 16;
+      sep_data_rva = text_rva + win64_pe_align_to(raw_tlen, 0x1000);
+    }
+
+    if (win_crt_in_patch >= 0) {
+      uint32_t tgt_rva = sep_data_rva + (uint32_t)labels[win_stdio_stdin_idx].offset;
+      int32_t d = (int32_t)((int64_t)tgt_rva - (int64_t)(text_rva + (uint32_t)win_crt_in_patch + 4));
+      memcpy(&text_seg.data[win_crt_in_patch], &d, 4);
+    }
+    if (win_crt_out_patch >= 0) {
+      uint32_t tgt_rva = sep_data_rva + (uint32_t)labels[win_stdio_stdout_idx].offset;
+      int32_t d = (int32_t)((int64_t)tgt_rva - (int64_t)(text_rva + (uint32_t)win_crt_out_patch + 4));
+      memcpy(&text_seg.data[win_crt_out_patch], &d, 4);
+    }
+    if (win_crt_err_patch >= 0) {
+      uint32_t tgt_rva = sep_data_rva + (uint32_t)labels[win_stdio_stderr_idx].offset;
+      int32_t d = (int32_t)((int64_t)tgt_rva - (int64_t)(text_rva + (uint32_t)win_crt_err_patch + 4));
+      memcpy(&text_seg.data[win_crt_err_patch], &d, 4);
+    }
+
+    /* Resolve relocations against separated .data/.bss (exe v9) or merged .text (dll v8) */
+    for (i = 0; i < reloc_count; i++) {
+      if (relocs[i].type == R_X86_64_64) {
+        int j = find_label_idx(relocs[i].target_name);
+        if (j >= 0) {
+          if (is_win64_exe) {
+            uint64_t tgt_rva = 0;
+            if (labels[j].segment == 1)
+              tgt_rva = (uint64_t)(text_rva + labels[j].offset);
+            else if (labels[j].segment == 2)
+              tgt_rva = (uint64_t)(sep_data_rva + labels[j].offset);
+            else if (labels[j].segment == 3)
+              tgt_rva = (uint64_t)(sep_data_rva + bss_start + labels[j].offset);
+            uint64_t abs_va = image_base + tgt_rva + (uint64_t)relocs[i].addend;
+            if (data_seg.data && relocs[i].offset + 8 <= data_seg.size) {
+              memcpy(&data_seg.data[relocs[i].offset], &abs_va, sizeof(uint64_t));
+            }
+            if (win_reloc_rvas && win_reloc_count < max_win_relocs) {
+              win_reloc_rvas[win_reloc_count++] =
+                  sep_data_rva + (uint32_t)relocs[i].offset;
+            }
+          } else {
+            uint64_t target_offset = 0;
+            if (labels[j].segment == 1)
+              target_offset = (uint64_t)labels[j].offset;
+            else if (labels[j].segment == 2)
+              target_offset = (uint64_t)(data_start_v8 + labels[j].offset);
+            target_offset += (uint64_t)relocs[i].addend;
+            uint64_t abs_va = image_base + text_rva + target_offset;
+            if (relocs[i].offset + 8 <= text_seg.size) {
+              memcpy(&text_seg.data[relocs[i].offset], &abs_va, sizeof(uint64_t));
+            }
+            if (win_reloc_rvas && win_reloc_count < max_win_relocs) {
+              win_reloc_rvas[win_reloc_count++] =
+                  text_rva + (uint32_t)relocs[i].offset;
+            }
+          }
+          relocs[i].type = R_X86_64_NONE;
+        }
+      } else if (relocs[i].type == R_X86_64_PC32) {
+        int j = find_label_idx(relocs[i].target_name);
+        if (j >= 0 && (labels[j].segment == 2 || labels[j].segment == 3)) {
+          long long disp = 0;
+          if (is_win64_exe) {
+            uint64_t tgt_rva = (labels[j].segment == 3)
+                                   ? (uint64_t)(sep_data_rva + bss_start + labels[j].offset)
+                                   : (uint64_t)(sep_data_rva + labels[j].offset);
+            disp = (long long)tgt_rva + relocs[i].addend -
+                   (long long)(text_rva + relocs[i].offset);
+          } else if (data_seg.size > 0 && labels[j].segment == 2) {
+            disp = (long long)(data_start_v8 + labels[j].offset) +
+                   relocs[i].addend - (long long)relocs[i].offset;
+          } else {
+            continue;
+          }
+          text_seg.data[relocs[i].offset] = disp & 0xFF;
+          text_seg.data[relocs[i].offset + 1] = (disp >> 8) & 0xFF;
+          text_seg.data[relocs[i].offset + 2] = (disp >> 16) & 0xFF;
+          text_seg.data[relocs[i].offset + 3] = (disp >> 24) & 0xFF;
+          relocs[i].type = R_X86_64_NONE;
+        }
+      }
+    }
+
+    /* If imports present, calculate IAT RVAs and patch stub call displacements */
     if (win_import_count > 0) {
-      uint32_t iat_rvas[64];
-      zcc_win64_pe_calc_iat_rvas(text_seg.size, win_import_funcs,
-                                 win_import_count, iat_rvas);
+      uint32_t iat_rvas[512];
+      zcc_win64_pe_calc_iat_rvas_ex(text_seg.size, is_win64_exe ? data_vsize : 0,
+                                    win_import_funcs, win_import_count, iat_rvas);
       size_t k;
       for (k = 0; k < win_import_count; k++) {
         uint32_t stub_rva = 0x1000 + (uint32_t)win_stub_offsets[k];
@@ -5434,8 +5517,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
       }
     }
 
-    /* Extract function extents for Win64 PE .pdata exception directory
-     * (dynamically allocated) */
+    /* Extract function extents for Win64 PE .pdata exception directory */
     size_t max_extents = (label_count > 256) ? (label_count + 1) : 256;
     win64_pe_func_extent_t *win_extents = (win64_pe_func_extent_t *)malloc(
         sizeof(win64_pe_func_extent_t) * max_extents);
@@ -5443,28 +5525,28 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
     size_t win_extent_count = 0;
     size_t func_count = 0;
     if (win_extents && func_offsets) {
+      int has_any_seh = 0;
       for (i = 0; i < label_count; i++) {
         if (labels[i].segment == 1 && labels[i].name[0] != '.' &&
-            labels[i].name[0] != '\0' &&
-            strncmp(labels[i].name, "seh_", 4) != 0 &&
-            strncmp(labels[i].name, "__seh_", 6) != 0) {
-          if (func_count < max_extents) {
+            labels[i].name[0] != '\0') {
+          if (strncmp(labels[i].name, "seh_", 4) == 0 ||
+              strncmp(labels[i].name, "__seh_", 6) == 0 ||
+              strstr(labels[i].name, "_seh_") ||
+              strstr(labels[i].name, "try_begin") ||
+              strstr(labels[i].name, "_handler")) {
+            has_any_seh = 1;
+          }
+          if (strncmp(labels[i].name, "seh_", 4) != 0 &&
+              strncmp(labels[i].name, "__seh_", 6) != 0 &&
+              func_count < max_extents) {
             func_offsets[func_count++] = (uint32_t)labels[i].offset;
           }
         }
       }
-      /* Sort function start offsets ascending */
-      size_t fi, fj;
-      for (fi = 0; fi < func_count; fi++) {
-        for (fj = fi + 1; fj < func_count; fj++) {
-          if (func_offsets[fj] < func_offsets[fi]) {
-            uint32_t tmp = func_offsets[fi];
-            func_offsets[fi] = func_offsets[fj];
-            func_offsets[fj] = tmp;
-          }
-        }
+      if (func_count > 1) {
+        qsort(func_offsets, func_count, sizeof(uint32_t), codegen_cmp_u32);
       }
-      /* Deduplicate offsets */
+      size_t fi;
       size_t ucount = 0;
       for (fi = 0; fi < func_count; fi++) {
         if (ucount == 0 || func_offsets[fi] != func_offsets[ucount - 1]) {
@@ -5483,70 +5565,62 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
           win_extents[win_extent_count].handler_rva = 0;
           win_extents[win_extent_count].num_scopes = 0;
 
-          /* Check if this function has SEH try/except labels or a companion
-           * handler */
-          const char *fn_name = "";
-          size_t li;
-          for (li = 0; li < label_count; li++) {
-            if (labels[li].segment == 1 && (uint32_t)labels[li].offset == b &&
-                labels[li].name[0] != '.' && labels[li].name[0] != '\0') {
-              fn_name = labels[li].name;
-              break;
+          if (has_any_seh) {
+            const char *fn_name = "";
+            size_t li;
+            for (li = 0; li < label_count; li++) {
+              if (labels[li].segment == 1 && (uint32_t)labels[li].offset == b &&
+                  labels[li].name[0] != '.' && labels[li].name[0] != '\0') {
+                fn_name = labels[li].name;
+                break;
+              }
             }
-          }
-
-          /* Search for companion handler: <fn_name>_handler or _seh_handler or
-           * __seh_handler */
-          char companion_name[128];
-          snprintf(companion_name, sizeof(companion_name), "%s_handler",
-                   fn_name);
-          uint32_t handler_rva = 0;
-          for (li = 0; li < label_count; li++) {
-            if (labels[li].segment == 1 &&
-                (strcmp(labels[li].name, companion_name) == 0 ||
-                 strcmp(labels[li].name, "__seh_handler") == 0 ||
-                 strcmp(labels[li].name, "_seh_handler") == 0)) {
-              handler_rva = 0x1000 + (uint32_t)labels[li].offset;
-              break;
+            char companion_name[128];
+            snprintf(companion_name, sizeof(companion_name), "%s_handler",
+                     fn_name);
+            uint32_t handler_rva = 0;
+            for (li = 0; li < label_count; li++) {
+              if (labels[li].segment == 1 &&
+                  (strcmp(labels[li].name, companion_name) == 0 ||
+                   strcmp(labels[li].name, "__seh_handler") == 0 ||
+                   strcmp(labels[li].name, "_seh_handler") == 0)) {
+                handler_rva = 0x1000 + (uint32_t)labels[li].offset;
+                break;
+              }
             }
-          }
-
-          /* Search for SEH try/except labels within [b, e) */
-          uint32_t try_b = 0, try_e = 0, target = 0;
-          int has_try_b = 0, has_try_e = 0, has_target = 0;
-          for (li = 0; li < label_count; li++) {
-            if (labels[li].segment == 1 && (uint32_t)labels[li].offset >= b &&
-                (uint32_t)labels[li].offset < e) {
-              const char *lname = labels[li].name;
-              if (strstr(lname, "try_end") || strstr(lname, "seh_end")) {
-                try_e = (uint32_t)labels[li].offset;
-                has_try_e = 1;
-              } else if (strstr(lname, "try_begin") ||
-                         strstr(lname, "seh_begin") ||
-                         strstr(lname, "seh_try")) {
-                try_b = (uint32_t)labels[li].offset;
-                has_try_b = 1;
-              } else if (strstr(lname, "target") || strstr(lname, "except") ||
-                         strstr(lname, "seh_catch")) {
-                target = (uint32_t)labels[li].offset;
-                has_target = 1;
+            uint32_t try_b = 0, try_e = 0, target = 0;
+            int has_try_b = 0, has_try_e = 0, has_target = 0;
+            for (li = 0; li < label_count; li++) {
+              if (labels[li].segment == 1 && (uint32_t)labels[li].offset >= b &&
+                  (uint32_t)labels[li].offset < e) {
+                const char *lname = labels[li].name;
+                if (strstr(lname, "try_end") || strstr(lname, "seh_end")) {
+                  try_e = (uint32_t)labels[li].offset;
+                  has_try_e = 1;
+                } else if (strstr(lname, "try_begin") ||
+                           strstr(lname, "seh_begin") ||
+                           strstr(lname, "seh_try")) {
+                  try_b = (uint32_t)labels[li].offset;
+                  has_try_b = 1;
+                } else if (strstr(lname, "target") || strstr(lname, "except") ||
+                           strstr(lname, "seh_catch")) {
+                  target = (uint32_t)labels[li].offset;
+                  has_target = 1;
+                }
+              }
+            }
+            if (handler_rva != 0 || (has_try_b && has_try_e && has_target)) {
+              win_extents[win_extent_count].flags = WIN64_UNW_FLAG_EHANDLER;
+              win_extents[win_extent_count].handler_rva = handler_rva;
+              if (has_try_b && has_try_e && has_target) {
+                win_extents[win_extent_count].num_scopes = 1;
+                win_extents[win_extent_count].scopes[0].try_begin_offset = try_b;
+                win_extents[win_extent_count].scopes[0].try_end_offset = try_e;
+                win_extents[win_extent_count].scopes[0].handler_offset = 1;
+                win_extents[win_extent_count].scopes[0].target_offset = target;
               }
             }
           }
-
-          if (handler_rva != 0 || (has_try_b && has_try_e && has_target)) {
-            win_extents[win_extent_count].flags = WIN64_UNW_FLAG_EHANDLER;
-            win_extents[win_extent_count].handler_rva = handler_rva;
-            if (has_try_b && has_try_e && has_target) {
-              win_extents[win_extent_count].num_scopes = 1;
-              win_extents[win_extent_count].scopes[0].try_begin_offset = try_b;
-              win_extents[win_extent_count].scopes[0].try_end_offset = try_e;
-              win_extents[win_extent_count].scopes[0].handler_offset =
-                  1; /* EXCEPTION_EXECUTE_HANDLER */
-              win_extents[win_extent_count].scopes[0].target_offset = target;
-            }
-          }
-
           win_extent_count++;
         }
       }
@@ -5670,8 +5744,9 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
         tls_info.raw_data_size = tls_seg.size;
         tls_info.zero_fill_size = (uint32_t)tls_zero_fill;
       }
-      ret = zcc_emit_win64_pe_file_v8(
+      ret = zcc_emit_win64_pe_file_v9(
           out_o_filename, text_seg.data, text_seg.size, entry_offset,
+          data_seg.data, data_seg.size, win_bss_size,
           win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
           win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
           win_extent_count > 0 ? win_extents : NULL, win_extent_count,
@@ -5679,6 +5754,8 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
           cert_info.cert_data ? &cert_info : NULL,
           g_win64_delay_dll_count > 0 ? &delay_info : NULL);
     }
+    if (win_reloc_rvas)
+      free(win_reloc_rvas);
     if (win_extents)
       free(win_extents);
     if (func_offsets)
@@ -6136,7 +6213,18 @@ static const char *rt_asm_alloc =
     "  ret\n"
     "calloc:\n"
     "  imulq %rsi, %rdi\n"
-    "  jmp malloc\n"
+    "  pushq %rdi\n"
+    "  call malloc\n"
+    "  popq %rcx\n"
+    "  testq %rax, %rax\n"
+    "  je .Lcal_ret\n"
+    "  movq %rax, %r8\n"
+    "  movq %rax, %rdi\n"
+    "  xorl %eax, %eax\n"
+    "  rep stosb\n"
+    "  movq %r8, %rax\n"
+    ".Lcal_ret:\n"
+    "  ret\n"
     "realloc:\n"
     "  testq %rdi, %rdi\n"
     "  jne .Lrea_nz\n"
@@ -7267,15 +7355,893 @@ static const char *rt_asm_math_2 =
     "  cvtsd2ss %xmm0, %xmm0\n"
     "  ret\n";
 
+static const char *rt_asm_stdlib_1 =
+    ".data\n"
+    ".align 8\n"
+    ".globl environ\n"
+    "environ:\n"
+    "  .quad 0\n"
+    ".globl __environ\n"
+    "__environ:\n"
+    "  .quad 0\n"
+    ".text\n"
+    ".globl _start\n"
+    ".globl getenv\n"
+    ".globl strtol\n"
+    ".globl strtoul\n"
+    ".globl atoi\n"
+    ".globl atol\n"
+    ".globl abs\n"
+    ".globl labs\n"
+    "_start:\n"
+    "  popq %rdi\n"
+    "  movq %rsp, %rsi\n"
+    "  movq %rdi, %rdx\n"
+    "  shlq $3, %rdx\n"
+    "  addq %rsi, %rdx\n"
+    "  addq $8, %rdx\n"
+    "  movq %rdx, environ(%rip)\n"
+    "  movq %rdx, __environ(%rip)\n"
+    "  andq $-16, %rsp\n"
+    "  call main\n"
+    "  movq %rax, %rdi\n"
+    "  movl $231, %eax\n"
+    "  syscall\n"
+    "  movl $60, %eax\n"
+    "  syscall\n"
+    "getenv:\n"
+    "  testq %rdi, %rdi\n"
+    "  je .Lge_null\n"
+    "  movq environ(%rip), %rsi\n"
+    "  testq %rsi, %rsi\n"
+    "  je .Lge_null\n"
+    ".Lge_outer:\n"
+    "  movq (%rsi), %r9\n"
+    "  testq %r9, %r9\n"
+    "  je .Lge_null\n"
+    "  movq %rdi, %r8\n"
+    ".Lge_cmp:\n"
+    "  movzbq (%r8), %rax\n"
+    "  cmpq $0, %rax\n"
+    "  je .Lge_end\n"
+    "  cmpq $61, %rax\n"
+    "  je .Lge_null\n"
+    "  movzbq (%r9), %rcx\n"
+    "  cmpq %rcx, %rax\n"
+    "  jne .Lge_next\n"
+    "  incq %r8\n"
+    "  incq %r9\n"
+    "  jmp .Lge_cmp\n"
+    ".Lge_end:\n"
+    "  movzbq (%r9), %rcx\n"
+    "  cmpq $61, %rcx\n"
+    "  jne .Lge_next\n"
+    "  leaq 1(%r9), %rax\n"
+    "  ret\n"
+    ".Lge_next:\n"
+    "  addq $8, %rsi\n"
+    "  jmp .Lge_outer\n"
+    ".Lge_null:\n"
+    "  xorq %rax, %rax\n"
+    "  ret\n"
+    "strtoul:\n"
+    "strtol:\n"
+    "  movq %rdi, %r10\n"
+    ".Lst_ws:\n"
+    "  movzbq (%rdi), %rax\n"
+    "  cmpq $32, %rax\n"
+    "  je .Lst_ws_adv\n"
+    "  cmpq $9, %rax\n"
+    "  jb .Lst_sign_chk\n"
+    "  cmpq $13, %rax\n"
+    "  ja .Lst_sign_chk\n"
+    ".Lst_ws_adv:\n"
+    "  incq %rdi\n"
+    "  jmp .Lst_ws\n"
+    ".Lst_sign_chk:\n"
+    "  xorq %r11, %r11\n"
+    "  movzbq (%rdi), %rax\n"
+    "  cmpq $45, %rax\n"
+    "  je .Lst_neg\n"
+    "  cmpq $43, %rax\n"
+    "  jne .Lst_base\n"
+    "  incq %rdi\n"
+    "  jmp .Lst_base\n"
+    ".Lst_neg:\n"
+    "  movq $1, %r11\n"
+    "  incq %rdi\n"
+    ".Lst_base:\n"
+    "  movslq %edx, %r9\n"
+    "  testq %r9, %r9\n"
+    "  jne .Lst_chk_b16\n"
+    "  movzbq (%rdi), %rax\n"
+    "  cmpq $48, %rax\n"
+    "  jne .Lst_b10\n"
+    "  movzbq 1(%rdi), %rax\n"
+    "  cmpq $120, %rax\n"
+    "  je .Lst_b0_hex\n"
+    "  cmpq $88, %rax\n"
+    "  je .Lst_b0_hex\n"
+    "  movq $8, %r9\n"
+    "  jmp .Lst_loop_init\n"
+    ".Lst_b0_hex:\n"
+    "  movzbq 2(%rdi), %rax\n"
+    "  call .Lst_is_hex\n"
+    "  testq %rax, %rax\n"
+    "  jne .Lst_b0_use16\n"
+    "  movq $8, %r9\n"
+    "  jmp .Lst_loop_init\n"
+    ".Lst_b0_use16:\n"
+    "  addq $2, %rdi\n"
+    "  movq $16, %r9\n"
+    "  jmp .Lst_loop_init\n"
+    ".Lst_b10:\n"
+    "  movq $10, %r9\n"
+    "  jmp .Lst_loop_init\n"
+    ".Lst_chk_b16:\n"
+    "  cmpq $16, %r9\n"
+    "  jne .Lst_loop_init\n"
+    "  movzbq (%rdi), %rax\n"
+    "  cmpq $48, %rax\n"
+    "  jne .Lst_loop_init\n"
+    "  movzbq 1(%rdi), %rax\n"
+    "  cmpq $120, %rax\n"
+    "  je .Lst_b16_x\n"
+    "  cmpq $88, %rax\n"
+    "  jne .Lst_loop_init\n"
+    ".Lst_b16_x:\n"
+    "  movzbq 2(%rdi), %rax\n"
+    "  call .Lst_is_hex\n"
+    "  testq %rax, %rax\n"
+    "  je .Lst_loop_init\n"
+    "  addq $2, %rdi\n"
+    ".Lst_loop_init:\n"
+    "  xorq %rax, %rax\n"
+    "  xorq %r8, %r8\n"
+    "  cmpq $2, %r9\n"
+    "  jb .Lst_done\n"
+    "  cmpq $36, %r9\n"
+    "  ja .Lst_done\n"
+    ".Lst_dig:\n"
+    "  movzbq (%rdi), %rcx\n"
+    "  cmpq $48, %rcx\n"
+    "  jb .Lst_done\n"
+    "  cmpq $57, %rcx\n"
+    "  ja .Lst_up\n"
+    "  subq $48, %rcx\n"
+    "  jmp .Lst_have_dig\n"
+    ".Lst_up:\n"
+    "  cmpq $65, %rcx\n"
+    "  jb .Lst_done\n"
+    "  cmpq $90, %rcx\n"
+    "  ja .Lst_lo\n"
+    "  subq $55, %rcx\n"
+    "  jmp .Lst_have_dig\n"
+    ".Lst_lo:\n"
+    "  cmpq $97, %rcx\n"
+    "  jb .Lst_done\n"
+    "  cmpq $122, %rcx\n"
+    "  ja .Lst_done\n"
+    "  subq $87, %rcx\n"
+    ".Lst_have_dig:\n"
+    "  cmpq %r9, %rcx\n"
+    "  jae .Lst_done\n"
+    "  imulq %r9, %rax\n"
+    "  addq %rcx, %rax\n"
+    "  incq %r8\n"
+    "  incq %rdi\n"
+    "  jmp .Lst_dig\n"
+    ".Lst_done:\n"
+    "  testq %rsi, %rsi\n"
+    "  je .Lst_ap_neg\n"
+    "  testq %r8, %r8\n"
+    "  je .Lst_no_dig\n"
+    "  movq %rdi, (%rsi)\n"
+    "  jmp .Lst_ap_neg\n"
+    ".Lst_no_dig:\n"
+    "  movq %r10, (%rsi)\n"
+    ".Lst_ap_neg:\n"
+    "  testq %r11, %r11\n"
+    "  je .Lst_ret\n"
+    "  negq %rax\n"
+    ".Lst_ret:\n"
+    "  ret\n"
+    ".Lst_is_hex:\n"
+    "  cmpq $48, %rax\n"
+    "  jb .Lst_ih0\n"
+    "  cmpq $57, %rax\n"
+    "  jbe .Lst_ih1\n"
+    "  cmpq $65, %rax\n"
+    "  jb .Lst_ih0\n"
+    "  cmpq $70, %rax\n"
+    "  jbe .Lst_ih1\n"
+    "  cmpq $97, %rax\n"
+    "  jb .Lst_ih0\n"
+    "  cmpq $102, %rax\n"
+    "  jbe .Lst_ih1\n"
+    ".Lst_ih0:\n"
+    "  xorl %eax, %eax\n"
+    "  ret\n"
+    ".Lst_ih1:\n"
+    "  movl $1, %eax\n"
+    "  ret\n"
+    "atoi:\n"
+    "atol:\n"
+    "  xorq %rsi, %rsi\n"
+    "  movl $10, %edx\n"
+    "  jmp strtol\n"
+    "abs:\n"
+    "  movl %edi, %eax\n"
+    "  testl %eax, %eax\n"
+    "  jge .Labs_dn\n"
+    "  negl %eax\n"
+    ".Labs_dn:\n"
+    "  ret\n"
+    "labs:\n"
+    "  movq %rdi, %rax\n"
+    "  testq %rax, %rax\n"
+    "  jge .Llabs_dn\n"
+    "  negq %rax\n"
+    ".Llabs_dn:\n"
+    "  ret\n";
+
+static const char *rt_asm_stdlib_2 =
+    ".text\n"
+    ".globl qsort\n"
+    ".globl bsearch\n"
+    "qsort:\n"
+    "  cmpq $1, %rsi\n"
+    "  jbe .Lqs_bail\n"
+    "  testq %rdx, %rdx\n"
+    "  je .Lqs_bail\n"
+    "  testq %rcx, %rcx\n"
+    "  je .Lqs_bail\n"
+    "  pushq %rbx\n"
+    "  pushq %rbp\n"
+    "  pushq %r12\n"
+    "  pushq %r13\n"
+    "  pushq %r14\n"
+    "  pushq %r15\n"
+    "  subq $24, %rsp\n"
+    "  movq %rdi, %r12\n"
+    "  movq %rsi, %r13\n"
+    "  movq %rdx, %r14\n"
+    "  movq %rcx, %r15\n"
+    "  movq %rsi, %rbp\n"
+    "  shrq $1, %rbp\n"
+    ".Lqs_gap:\n"
+    "  testq %rbp, %rbp\n"
+    "  je .Lqs_done\n"
+    "  movq %rbp, 0(%rsp)\n"
+    ".Lqs_i:\n"
+    "  movq 0(%rsp), %rbx\n"
+    "  cmpq %r13, %rbx\n"
+    "  jae .Lqs_next_gap\n"
+    ".Lqs_j:\n"
+    "  cmpq %rbp, %rbx\n"
+    "  jb .Lqs_next_i\n"
+    "  movq %rbx, %rax\n"
+    "  subq %rbp, %rax\n"
+    "  imulq %r14, %rax\n"
+    "  addq %r12, %rax\n"
+    "  movq %rax, 8(%rsp)\n"
+    "  movq %rbx, %rcx\n"
+    "  imulq %r14, %rcx\n"
+    "  addq %r12, %rcx\n"
+    "  movq %rcx, 16(%rsp)\n"
+    "  movq %rax, %rdi\n"
+    "  movq %rcx, %rsi\n"
+    "  call *%r15\n"
+    "  testl %eax, %eax\n"
+    "  jle .Lqs_next_i\n"
+    "  movq 8(%rsp), %rdi\n"
+    "  movq 16(%rsp), %rsi\n"
+    "  movq %r14, %rcx\n"
+    ".Lqs_sw:\n"
+    "  movzbq (%rdi), %rax\n"
+    "  movzbq (%rsi), %rdx\n"
+    "  movb %dl, (%rdi)\n"
+    "  movb %al, (%rsi)\n"
+    "  incq %rdi\n"
+    "  incq %rsi\n"
+    "  decq %rcx\n"
+    "  jne .Lqs_sw\n"
+    "  subq %rbp, %rbx\n"
+    "  jmp .Lqs_j\n"
+    ".Lqs_next_i:\n"
+    "  movq 0(%rsp), %rax\n"
+    "  incq %rax\n"
+    "  movq %rax, 0(%rsp)\n"
+    "  jmp .Lqs_i\n"
+    ".Lqs_next_gap:\n"
+    "  shrq $1, %rbp\n"
+    "  jmp .Lqs_gap\n"
+    ".Lqs_done:\n"
+    "  addq $24, %rsp\n"
+    "  popq %r15\n"
+    "  popq %r14\n"
+    "  popq %r13\n"
+    "  popq %r12\n"
+    "  popq %rbp\n"
+    "  popq %rbx\n"
+    ".Lqs_bail:\n"
+    "  ret\n"
+    "bsearch:\n"
+    "  testq %rdx, %rdx\n"
+    "  je .Lbs_null\n"
+    "  testq %rcx, %rcx\n"
+    "  je .Lbs_null\n"
+    "  testq %r8, %r8\n"
+    "  je .Lbs_null\n"
+    "  pushq %rbx\n"
+    "  pushq %rbp\n"
+    "  pushq %r12\n"
+    "  pushq %r13\n"
+    "  pushq %r14\n"
+    "  pushq %r15\n"
+    "  subq $24, %rsp\n"
+    "  movq %rdi, %r12\n"
+    "  movq %rsi, %r13\n"
+    "  xorq %rbx, %rbx\n"
+    "  movq %rdx, %rbp\n"
+    "  movq %rcx, %r14\n"
+    "  movq %r8, %r15\n"
+    ".Lbs_lp:\n"
+    "  cmpq %rbp, %rbx\n"
+    "  jae .Lbs_nf\n"
+    "  movq %rbp, %rax\n"
+    "  subq %rbx, %rax\n"
+    "  shrq $1, %rax\n"
+    "  addq %rbx, %rax\n"
+    "  movq %rax, 0(%rsp)\n"
+    "  imulq %r14, %rax\n"
+    "  addq %r13, %rax\n"
+    "  movq %rax, 8(%rsp)\n"
+    "  movq %r12, %rdi\n"
+    "  movq %rax, %rsi\n"
+    "  call *%r15\n"
+    "  cmpl $0, %eax\n"
+    "  je .Lbs_hit\n"
+    "  jl .Lbs_lt\n"
+    "  movq 0(%rsp), %rbx\n"
+    "  incq %rbx\n"
+    "  jmp .Lbs_lp\n"
+    ".Lbs_lt:\n"
+    "  movq 0(%rsp), %rbp\n"
+    "  jmp .Lbs_lp\n"
+    ".Lbs_hit:\n"
+    "  movq 8(%rsp), %rax\n"
+    "  jmp .Lbs_ep\n"
+    ".Lbs_nf:\n"
+    "  xorq %rax, %rax\n"
+    ".Lbs_ep:\n"
+    "  addq $24, %rsp\n"
+    "  popq %r15\n"
+    "  popq %r14\n"
+    "  popq %r13\n"
+    "  popq %r12\n"
+    "  popq %rbp\n"
+    "  popq %rbx\n"
+    "  ret\n"
+    ".Lbs_null:\n"
+    "  xorq %rax, %rax\n"
+    "  ret\n";
+
+static const char *rt_asm_str_1 =
+    ".text\n"
+    ".globl strchr\n"
+    ".globl strrchr\n"
+    ".globl memchr\n"
+    ".globl strstr\n"
+    ".globl strcat\n"
+    ".globl strncat\n"
+    ".globl strdup\n"
+    ".globl isspace\n"
+    ".globl isdigit\n"
+    ".globl isalpha\n"
+    ".globl isalnum\n"
+    ".globl isupper\n"
+    ".globl islower\n"
+    ".globl tolower\n"
+    ".globl toupper\n"
+    "strchr:\n"
+    "  movzbq %sil, %rsi\n"
+    ".Lsch_lp:\n"
+    "  movzbq (%rdi), %rax\n"
+    "  cmpq %rsi, %rax\n"
+    "  je .Lsch_hit\n"
+    "  testq %rax, %rax\n"
+    "  je .Lsch_null\n"
+    "  incq %rdi\n"
+    "  jmp .Lsch_lp\n"
+    ".Lsch_hit:\n"
+    "  movq %rdi, %rax\n"
+    "  ret\n"
+    ".Lsch_null:\n"
+    "  xorq %rax, %rax\n"
+    "  ret\n"
+    "strrchr:\n"
+    "  movzbq %sil, %rsi\n"
+    "  xorq %rdx, %rdx\n"
+    ".Lsrc_lp:\n"
+    "  movzbq (%rdi), %rax\n"
+    "  cmpq %rsi, %rax\n"
+    "  jne .Lsrc_nx\n"
+    "  movq %rdi, %rdx\n"
+    ".Lsrc_nx:\n"
+    "  testq %rax, %rax\n"
+    "  je .Lsrc_dn\n"
+    "  incq %rdi\n"
+    "  jmp .Lsrc_lp\n"
+    ".Lsrc_dn:\n"
+    "  movq %rdx, %rax\n"
+    "  ret\n"
+    "memchr:\n"
+    "  movzbq %sil, %rsi\n"
+    ".Lmc2_lp:\n"
+    "  testq %rdx, %rdx\n"
+    "  je .Lmc2_null\n"
+    "  movzbq (%rdi), %rax\n"
+    "  cmpq %rsi, %rax\n"
+    "  je .Lmc2_hit\n"
+    "  incq %rdi\n"
+    "  decq %rdx\n"
+    "  jmp .Lmc2_lp\n"
+    ".Lmc2_hit:\n"
+    "  movq %rdi, %rax\n"
+    "  ret\n"
+    ".Lmc2_null:\n"
+    "  xorq %rax, %rax\n"
+    "  ret\n"
+    "strstr:\n"
+    "  movzbq (%rsi), %rax\n"
+    "  testq %rax, %rax\n"
+    "  jne .Lss_out\n"
+    "  movq %rdi, %rax\n"
+    "  ret\n"
+    ".Lss_out:\n"
+    "  movzbq (%rdi), %rax\n"
+    "  testq %rax, %rax\n"
+    "  je .Lss_null\n"
+    "  movq %rdi, %r8\n"
+    "  movq %rsi, %r9\n"
+    ".Lss_in:\n"
+    "  movzbq (%r9), %rcx\n"
+    "  testq %rcx, %rcx\n"
+    "  je .Lss_hit\n"
+    "  movzbq (%r8), %rax\n"
+    "  cmpq %rcx, %rax\n"
+    "  jne .Lss_adv\n"
+    "  incq %r8\n"
+    "  incq %r9\n"
+    "  jmp .Lss_in\n"
+    ".Lss_adv:\n"
+    "  incq %rdi\n"
+    "  jmp .Lss_out\n"
+    ".Lss_hit:\n"
+    "  movq %rdi, %rax\n"
+    "  ret\n"
+    ".Lss_null:\n"
+    "  xorq %rax, %rax\n"
+    "  ret\n"
+    "strcat:\n"
+    "  movq %rdi, %r8\n"
+    ".Lsca_seek:\n"
+    "  movzbq (%rdi), %rax\n"
+    "  testq %rax, %rax\n"
+    "  je .Lsca_cp\n"
+    "  incq %rdi\n"
+    "  jmp .Lsca_seek\n"
+    ".Lsca_cp:\n"
+    "  movzbq (%rsi), %rax\n"
+    "  movb %al, (%rdi)\n"
+    "  incq %rdi\n"
+    "  incq %rsi\n"
+    "  testq %rax, %rax\n"
+    "  jne .Lsca_cp\n"
+    "  movq %r8, %rax\n"
+    "  ret\n"
+    "strncat:\n"
+    "  movq %rdi, %r8\n"
+    ".Lsna_seek:\n"
+    "  movzbq (%rdi), %rax\n"
+    "  testq %rax, %rax\n"
+    "  je .Lsna_cp\n"
+    "  incq %rdi\n"
+    "  jmp .Lsna_seek\n"
+    ".Lsna_cp:\n"
+    "  testq %rdx, %rdx\n"
+    "  je .Lsna_z\n"
+    "  movzbq (%rsi), %rax\n"
+    "  testq %rax, %rax\n"
+    "  je .Lsna_z\n"
+    "  movb %al, (%rdi)\n"
+    "  incq %rdi\n"
+    "  incq %rsi\n"
+    "  decq %rdx\n"
+    "  jmp .Lsna_cp\n"
+    ".Lsna_z:\n"
+    "  xorl %eax, %eax\n"
+    "  movb %al, (%rdi)\n"
+    "  movq %r8, %rax\n"
+    "  ret\n"
+    "strdup:\n"
+    "  pushq %rbx\n"
+    "  movq %rdi, %rbx\n"
+    "  call strlen\n"
+    "  incq %rax\n"
+    "  movq %rax, %rdi\n"
+    "  call malloc\n"
+    "  testq %rax, %rax\n"
+    "  je .Lsd_ret\n"
+    "  movq %rax, %rdi\n"
+    "  movq %rbx, %rsi\n"
+    "  call strcpy\n"
+    ".Lsd_ret:\n"
+    "  popq %rbx\n"
+    "  ret\n"
+    "isspace:\n"
+    "  movzbq %dil, %rax\n"
+    "  cmpq $32, %rax\n"
+    "  je .Lct_y\n"
+    "  cmpq $9, %rax\n"
+    "  jb .Lct_n\n"
+    "  cmpq $13, %rax\n"
+    "  jbe .Lct_y\n"
+    "  jmp .Lct_n\n"
+    "isdigit:\n"
+    "  movzbq %dil, %rax\n"
+    "  cmpq $48, %rax\n"
+    "  jb .Lct_n\n"
+    "  cmpq $57, %rax\n"
+    "  jbe .Lct_y\n"
+    "  jmp .Lct_n\n"
+    "isupper:\n"
+    "  movzbq %dil, %rax\n"
+    "  cmpq $65, %rax\n"
+    "  jb .Lct_n\n"
+    "  cmpq $90, %rax\n"
+    "  jbe .Lct_y\n"
+    "  jmp .Lct_n\n"
+    "islower:\n"
+    "  movzbq %dil, %rax\n"
+    "  cmpq $97, %rax\n"
+    "  jb .Lct_n\n"
+    "  cmpq $122, %rax\n"
+    "  jbe .Lct_y\n"
+    "  jmp .Lct_n\n"
+    "isalpha:\n"
+    "  movzbq %dil, %rax\n"
+    "  cmpq $65, %rax\n"
+    "  jb .Lct_n\n"
+    "  cmpq $90, %rax\n"
+    "  jbe .Lct_y\n"
+    "  cmpq $97, %rax\n"
+    "  jb .Lct_n\n"
+    "  cmpq $122, %rax\n"
+    "  jbe .Lct_y\n"
+    "  jmp .Lct_n\n"
+    "isalnum:\n"
+    "  movzbq %dil, %rax\n"
+    "  cmpq $48, %rax\n"
+    "  jb .Lct_n\n"
+    "  cmpq $57, %rax\n"
+    "  jbe .Lct_y\n"
+    "  cmpq $65, %rax\n"
+    "  jb .Lct_n\n"
+    "  cmpq $90, %rax\n"
+    "  jbe .Lct_y\n"
+    "  cmpq $97, %rax\n"
+    "  jb .Lct_n\n"
+    "  cmpq $122, %rax\n"
+    "  jbe .Lct_y\n"
+    ".Lct_n:\n"
+    "  xorl %eax, %eax\n"
+    "  ret\n"
+    ".Lct_y:\n"
+    "  movl $1, %eax\n"
+    "  ret\n"
+    "tolower:\n"
+    "  movl %edi, %eax\n"
+    "  cmpq $65, %rax\n"
+    "  jb .Ltl_dn\n"
+    "  cmpq $90, %rax\n"
+    "  ja .Ltl_dn\n"
+    "  addq $32, %rax\n"
+    ".Ltl_dn:\n"
+    "  ret\n"
+    "toupper:\n"
+    "  movl %edi, %eax\n"
+    "  cmpq $97, %rax\n"
+    "  jb .Ltu_dn\n"
+    "  cmpq $122, %rax\n"
+    "  ja .Ltu_dn\n"
+    "  subq $32, %rax\n"
+    ".Ltu_dn:\n"
+    "  ret\n";
+
+static const char *rt_asm_str_2 =
+    ".text\n"
+    ".globl sscanf\n"
+    "sscanf:\n"
+    "  pushq %rbx\n"
+    "  pushq %rbp\n"
+    "  pushq %r12\n"
+    "  pushq %r13\n"
+    "  pushq %r14\n"
+    "  pushq %r15\n"
+    "  subq $88, %rsp\n"
+    "  movq %rsp, %rbp\n"
+    "  movq %rdx, 16(%rbp)\n"
+    "  movq %rcx, 24(%rbp)\n"
+    "  movq %r8, 32(%rbp)\n"
+    "  movq %r9, 40(%rbp)\n"
+    "  movq $16, 48(%rbp)\n"
+    "  leaq 144(%rbp), %rax\n"
+    "  movq %rax, 56(%rbp)\n"
+    "  movq %rdi, %r12\n"
+    "  movq %rsi, %r13\n"
+    "  xorq %r14, %r14\n"
+    "  jmp .Lsf_loop\n"
+    ".Lsf_next_arg:\n"
+    "  movq 48(%rbp), %rax\n"
+    "  cmpq $48, %rax\n"
+    "  jae .Lsf_na_ovf\n"
+    "  movq %rbp, %rdx\n"
+    "  addq %rax, %rdx\n"
+    "  addq $8, %rax\n"
+    "  movq %rax, 48(%rbp)\n"
+    "  movq (%rdx), %rax\n"
+    "  ret\n"
+    ".Lsf_na_ovf:\n"
+    "  movq 56(%rbp), %rdx\n"
+    "  movq (%rdx), %rax\n"
+    "  addq $8, %rdx\n"
+    "  movq %rdx, 56(%rbp)\n"
+    "  ret\n"
+    ".Lsf_skip_str_ws:\n"
+    "  movzbq (%r12), %rax\n"
+    "  movl %eax, %edi\n"
+    "  call isspace\n"
+    "  testl %eax, %eax\n"
+    "  je .Lsf_sws_dn\n"
+    "  incq %r12\n"
+    "  jmp .Lsf_skip_str_ws\n"
+    ".Lsf_sws_dn:\n"
+    "  ret\n"
+    ".Lsf_loop:\n"
+    "  movzbq (%r13), %rax\n"
+    "  testq %rax, %rax\n"
+    "  je .Lsf_done\n"
+    "  movl %eax, %edi\n"
+    "  call isspace\n"
+    "  testl %eax, %eax\n"
+    "  je .Lsf_not_ws\n"
+    ".Lsf_fws:\n"
+    "  incq %r13\n"
+    "  movzbq (%r13), %rax\n"
+    "  movl %eax, %edi\n"
+    "  call isspace\n"
+    "  testl %eax, %eax\n"
+    "  jne .Lsf_fws\n"
+    "  call .Lsf_skip_str_ws\n"
+    "  jmp .Lsf_loop\n"
+    ".Lsf_not_ws:\n"
+    "  movzbq (%r13), %rax\n"
+    "  incq %r13\n"
+    "  cmpq $37, %rax\n"
+    "  je .Lsf_pct\n"
+    "  movzbq (%r12), %rcx\n"
+    "  cmpq %rax, %rcx\n"
+    "  jne .Lsf_done\n"
+    "  incq %r12\n"
+    "  jmp .Lsf_loop\n"
+    ".Lsf_pct:\n"
+    "  movzbq (%r13), %rax\n"
+    "  cmpq $37, %rax\n"
+    "  jne .Lsf_spec\n"
+    "  incq %r13\n"
+    "  movzbq (%r12), %rcx\n"
+    "  cmpq $37, %rcx\n"
+    "  jne .Lsf_done\n"
+    "  incq %r12\n"
+    "  jmp .Lsf_loop\n"
+    ".Lsf_spec:\n"
+    "  movq $0, 72(%rbp)\n"
+    "  movq $0, 80(%rbp)\n"
+    "  movq $-1, %r15\n"
+    "  cmpq $42, %rax\n"
+    "  jne .Lsf_wchk\n"
+    "  movq $1, 72(%rbp)\n"
+    "  incq %r13\n"
+    ".Lsf_wchk:\n"
+    "  movzbq (%r13), %rax\n"
+    "  cmpq $48, %rax\n"
+    "  jb .Lsf_len\n"
+    "  cmpq $57, %rax\n"
+    "  ja .Lsf_len\n"
+    "  cmpq $-1, %r15\n"
+    "  jne .Lsf_wmul\n"
+    "  xorq %r15, %r15\n"
+    ".Lsf_wmul:\n"
+    "  imulq $10, %r15\n"
+    "  subq $48, %rax\n"
+    "  addq %rax, %r15\n"
+    "  incq %r13\n"
+    "  jmp .Lsf_wchk\n"
+    ".Lsf_len:\n"
+    "  movzbq (%r13), %rax\n"
+    "  cmpq $108, %rax\n"
+    "  je .Lsf_llong\n"
+    "  cmpq $104, %rax\n"
+    "  je .Lsf_lskip\n"
+    "  jmp .Lsf_conv\n"
+    ".Lsf_llong:\n"
+    "  movq $1, 80(%rbp)\n"
+    ".Lsf_lskip:\n"
+    "  incq %r13\n"
+    "  jmp .Lsf_len\n"
+    ".Lsf_conv:\n"
+    "  movzbq (%r13), %rax\n"
+    "  testq %rax, %rax\n"
+    "  je .Lsf_done\n"
+    "  incq %r13\n"
+    "  cmpq $99, %rax\n"
+    "  je .Lsf_c\n"
+    "  movq %rax, %rbx\n"
+    "  call .Lsf_skip_str_ws\n"
+    "  movzbq (%r12), %rcx\n"
+    "  testq %rcx, %rcx\n"
+    "  je .Lsf_done\n"
+    "  cmpq $115, %rbx\n"
+    "  je .Lsf_s\n"
+    "  cmpq $100, %rbx\n"
+    "  je .Lsf_dec\n"
+    "  cmpq $105, %rbx\n"
+    "  je .Lsf_i\n"
+    "  cmpq $117, %rbx\n"
+    "  je .Lsf_u\n"
+    "  cmpq $120, %rbx\n"
+    "  je .Lsf_x\n"
+    "  cmpq $88, %rbx\n"
+    "  je .Lsf_x\n"
+    "  cmpq $112, %rbx\n"
+    "  je .Lsf_p\n"
+    "  cmpq $111, %rbx\n"
+    "  je .Lsf_o\n"
+    "  jmp .Lsf_done\n"
+    ".Lsf_c:\n"
+    "  cmpq $-1, %r15\n"
+    "  jne .Lsf_c_ok\n"
+    "  movq $1, %r15\n"
+    ".Lsf_c_ok:\n"
+    "  xorq %rbx, %rbx\n"
+    "  movq 72(%rbp), %rcx\n"
+    "  testq %rcx, %rcx\n"
+    "  jne .Lsf_c_lp\n"
+    "  call .Lsf_next_arg\n"
+    "  movq %rax, %rbx\n"
+    ".Lsf_c_lp:\n"
+    "  testq %r15, %r15\n"
+    "  je .Lsf_c_dn\n"
+    "  movzbq (%r12), %rax\n"
+    "  testq %rax, %rax\n"
+    "  je .Lsf_done\n"
+    "  incq %r12\n"
+    "  decq %r15\n"
+    "  testq %rbx, %rbx\n"
+    "  je .Lsf_c_lp\n"
+    "  movb %al, (%rbx)\n"
+    "  incq %rbx\n"
+    "  jmp .Lsf_c_lp\n"
+    ".Lsf_c_dn:\n"
+    "  movq 72(%rbp), %rcx\n"
+    "  testq %rcx, %rcx\n"
+    "  jne .Lsf_loop\n"
+    "  incq %r14\n"
+    "  jmp .Lsf_loop\n"
+    ".Lsf_s:\n"
+    "  xorq %rbx, %rbx\n"
+    "  movq 72(%rbp), %rcx\n"
+    "  testq %rcx, %rcx\n"
+    "  jne .Lsf_s_lp\n"
+    "  call .Lsf_next_arg\n"
+    "  movq %rax, %rbx\n"
+    ".Lsf_s_lp:\n"
+    "  cmpq $0, %r15\n"
+    "  je .Lsf_s_dn\n"
+    "  movzbq (%r12), %rax\n"
+    "  testq %rax, %rax\n"
+    "  je .Lsf_s_dn\n"
+    "  movl %eax, %edi\n"
+    "  call isspace\n"
+    "  testl %eax, %eax\n"
+    "  jne .Lsf_s_dn\n"
+    "  movzbq (%r12), %rax\n"
+    "  incq %r12\n"
+    "  cmpq $-1, %r15\n"
+    "  je .Lsf_s_store\n"
+    "  decq %r15\n"
+    ".Lsf_s_store:\n"
+    "  testq %rbx, %rbx\n"
+    "  je .Lsf_s_lp\n"
+    "  movb %al, (%rbx)\n"
+    "  incq %rbx\n"
+    "  jmp .Lsf_s_lp\n"
+    ".Lsf_s_dn:\n"
+    "  testq %rbx, %rbx\n"
+    "  je .Lsf_s_sup\n"
+    "  xorl %eax, %eax\n"
+    "  movb %al, (%rbx)\n"
+    "  incq %r14\n"
+    ".Lsf_s_sup:\n"
+    "  jmp .Lsf_loop\n"
+    ".Lsf_dec:\n"
+    "  movl $10, %edx\n"
+    "  jmp .Lsf_int\n"
+    ".Lsf_i:\n"
+    "  xorl %edx, %edx\n"
+    "  jmp .Lsf_int\n"
+    ".Lsf_u:\n"
+    "  movl $10, %edx\n"
+    "  jmp .Lsf_int\n"
+    ".Lsf_x:\n"
+    "  movl $16, %edx\n"
+    "  jmp .Lsf_int\n"
+    ".Lsf_p:\n"
+    "  movq $1, 80(%rbp)\n"
+    "  movl $16, %edx\n"
+    "  jmp .Lsf_int\n"
+    ".Lsf_o:\n"
+    "  movl $8, %edx\n"
+    ".Lsf_int:\n"
+    "  movq %r12, %rdi\n"
+    "  leaq 64(%rbp), %rsi\n"
+    "  call strtol\n"
+    "  movq 64(%rbp), %rcx\n"
+    "  cmpq %r12, %rcx\n"
+    "  je .Lsf_done\n"
+    "  movq %rcx, %r12\n"
+    "  movq 72(%rbp), %rdx\n"
+    "  testq %rdx, %rdx\n"
+    "  jne .Lsf_loop\n"
+    "  pushq %rax\n"
+    "  subq $8, %rsp\n"
+    "  call .Lsf_next_arg\n"
+    "  movq %rax, %rdx\n"
+    "  addq $8, %rsp\n"
+    "  popq %rax\n"
+    "  movq 80(%rbp), %rcx\n"
+    "  testq %rcx, %rcx\n"
+    "  jne .Lsf_st64\n"
+    "  movl %eax, (%rdx)\n"
+    "  incq %r14\n"
+    "  jmp .Lsf_loop\n"
+    ".Lsf_st64:\n"
+    "  movq %rax, (%rdx)\n"
+    "  incq %r14\n"
+    "  jmp .Lsf_loop\n"
+    ".Lsf_done:\n"
+    "  movq %r14, %rax\n"
+    "  addq $88, %rsp\n"
+    "  popq %r15\n"
+    "  popq %r14\n"
+    "  popq %r13\n"
+    "  popq %r12\n"
+    "  popq %rbp\n"
+    "  popq %rbx\n"
+    "  ret\n";
+
 static int build_freestanding_rt_archive(const char *ar_path) {
   static const char *rt_names[] = {
       "rt_exit.o",    "rt_write.o",  "rt_read.o",   "rt_open.o",
       "rt_close.o",   "rt_putchar.o","rt_puts.o",   "rt_strlen.o",
       "rt_strcmp.o",  "rt_strncmp.o","rt_strcpy.o", "rt_memcpy.o",
       "rt_memset.o",  "rt_memmove.o","rt_memcmp.o", "rt_alloc.o",
-      "rt_stdio.o",   "rt_math.o",   "rt_printf.o",
+      "rt_stdio.o",   "rt_math.o",   "rt_printf.o", "rt_stdlib.o",
+      "rt_str_ext.o",
   };
-  const char *rt_srcs[19];
+  const char *rt_srcs[21];
   rt_srcs[0] = rt_asm_exit;
   rt_srcs[1] = rt_asm_write;
   rt_srcs[2] = rt_asm_read;
@@ -7318,17 +8284,46 @@ static int build_freestanding_rt_archive(const char *ar_path) {
   pf_full[pf0_len + pf1_len + pf2_len] = '\0';
   rt_srcs[18] = pf_full;
 
+  size_t sl1_len = strlen(rt_asm_stdlib_1);
+  size_t sl2_len = strlen(rt_asm_stdlib_2);
+  char *stdlib_full = (char *)malloc(sl1_len + sl2_len + 1);
+  if (!stdlib_full) {
+    free(math_full);
+    free(pf_full);
+    return -1;
+  }
+  memcpy(stdlib_full, rt_asm_stdlib_1, sl1_len);
+  memcpy(stdlib_full + sl1_len, rt_asm_stdlib_2, sl2_len);
+  stdlib_full[sl1_len + sl2_len] = '\0';
+  rt_srcs[19] = stdlib_full;
+
+  size_t se1_len = strlen(rt_asm_str_1);
+  size_t se2_len = strlen(rt_asm_str_2);
+  char *strext_full = (char *)malloc(se1_len + se2_len + 1);
+  if (!strext_full) {
+    free(math_full);
+    free(pf_full);
+    free(stdlib_full);
+    return -1;
+  }
+  memcpy(strext_full, rt_asm_str_1, se1_len);
+  memcpy(strext_full + se1_len, rt_asm_str_2, se2_len);
+  strext_full[se1_len + se2_len] = '\0';
+  rt_srcs[20] = strext_full;
+
   FILE *ar_f = fopen(ar_path, "wb");
   if (!ar_f) {
     free(math_full);
     free(pf_full);
+    free(stdlib_full);
+    free(strext_full);
     return -1;
   }
   fwrite("!<arch>\n", 1, 8, ar_f);
 
   int u;
   int fail = 0;
-  for (u = 0; u < 19; u++) {
+  for (u = 0; u < 21; u++) {
     char tmp_o[320];
     snprintf(tmp_o, sizeof(tmp_o), "%s.%d.o", ar_path, u);
     int rc = assemble(NULL, tmp_o, rt_srcs[u], strlen(rt_srcs[u]), 0);
@@ -7381,6 +8376,8 @@ static int build_freestanding_rt_archive(const char *ar_path) {
   fclose(ar_f);
   free(math_full);
   free(pf_full);
+  free(stdlib_full);
+  free(strext_full);
   if (fail) {
     remove(ar_path);
     return -1;
@@ -7440,6 +8437,7 @@ int main(int argc, char **argv) {
   int has_yul_target = 0;
   int has_stark_proof_target = 0;
   int has_arm_target = 0;
+  int has_arm64_target = 0;
   int has_riscv_target = 0;
   int has_win64_target = 0;
   int has_win64_abi = 0;
@@ -7478,8 +8476,12 @@ int main(int argc, char **argv) {
       if (strncmp(argv[i + 1], "wasm", 4) == 0) {
         has_wasm_target = 1;
         i++;
+      } else if (strncmp(argv[i + 1], "arm64", 5) == 0 ||
+                 strncmp(argv[i + 1], "aarch64", 7) == 0) {
+        has_arm_target = 1;
+        has_arm64_target = 1;
+        i++;
       } else if (strncmp(argv[i + 1], "arm", 3) == 0 ||
-                 strncmp(argv[i + 1], "aarch64", 7) == 0 ||
                  strncmp(argv[i + 1], "thumb", 5) == 0) {
         has_arm_target = 1;
         i++;
@@ -7568,17 +8570,22 @@ int main(int argc, char **argv) {
                strcmp(argv[i], "--target=aarch64") == 0 ||
                strcmp(argv[i], "-target=arm64") == 0 ||
                strcmp(argv[i], "-target=aarch64") == 0 ||
+               strncmp(argv[i], "--target=arm64-", 15) == 0 ||
+               strncmp(argv[i], "--target=aarch64-", 17) == 0 ||
                strcmp(argv[i], "-arm64") == 0 ||
                strcmp(argv[i], "-aarch64") == 0 ||
                strcmp(argv[i], "--arm64") == 0 ||
-               strcmp(argv[i], "--aarch64") == 0 ||
-               strcmp(argv[i], "--target=arm") == 0 ||
+               strcmp(argv[i], "--aarch64") == 0) {
+      has_arm_target = 1;
+      has_arm64_target = 1;
+    } else if (strcmp(argv[i], "--target=arm") == 0 ||
                strcmp(argv[i], "--target=thumb") == 0) {
       has_arm_target = 1;
     } else if (strcmp(argv[i], "--target=riscv64") == 0 ||
                strcmp(argv[i], "--target=riscv") == 0 ||
                strcmp(argv[i], "-target=riscv64") == 0 ||
                strcmp(argv[i], "-target=riscv") == 0 ||
+               strncmp(argv[i], "--target=riscv64-", 17) == 0 ||
                strcmp(argv[i], "-riscv64") == 0 ||
                strcmp(argv[i], "-riscv") == 0 ||
                strcmp(argv[i], "--riscv64") == 0 ||
@@ -7686,7 +8693,8 @@ int main(int argc, char **argv) {
   /* Bootstrap pass-through: compile zcc.c using legacy compiler driver logic,
    * unless explicit -emit-obj requests native ELF object synthesis */
   int is_zcc_c = 0;
-  if (input_c_file && !has_explicit_emit_obj) {
+  if (input_c_file && !has_explicit_emit_obj && !has_win64_target &&
+      !has_wasm_target && !has_arm64_target && !has_riscv_target) {
     const char *p = input_c_file;
     int len = strlen(p);
     if (strcmp(p, "zcc.c") == 0 ||
@@ -7786,31 +8794,92 @@ int main(int argc, char **argv) {
       }
       return 0;
     } else {
-      /* Multi-assembly concatenation */
-      size_t total_asm_sz = 0;
-      char *multi_asm_buf = NULL;
+      /* Multi-assembly linking with per-unit .L local label scoping */
+      char multi_s_path[256];
+#ifdef _WIN32
+      snprintf(multi_s_path, sizeof(multi_s_path),
+               ".tmp_win64_multi_link.s");
+#else
+      snprintf(multi_s_path, sizeof(multi_s_path),
+               ".tmp_win64_multi_link_%d.s", (int)getpid());
+#endif
+      FILE *mf = fopen(multi_s_path, "wb");
+      if (!mf) {
+        fprintf(stderr, "zcc: cannot create temp multi-asm file '%s'\n",
+                multi_s_path);
+        return -1;
+      }
       for (i = 0; i < s_file_count; i++) {
         FILE *sf = fopen(input_s_files[i], "rb");
-        if (sf) {
-          fseek(sf, 0, SEEK_END);
-          long sz = ftell(sf);
-          fseek(sf, 0, SEEK_SET);
-          if (sz > 0) {
-            char *nb = (char *)realloc(multi_asm_buf, total_asm_sz + sz + 2);
-            if (nb) {
-              multi_asm_buf = nb;
-              size_t r = fread(multi_asm_buf + total_asm_sz, 1, sz, sf);
-              total_asm_sz += r;
-              multi_asm_buf[total_asm_sz++] = '\n';
-              multi_asm_buf[total_asm_sz] = '\0';
-            }
-          }
-          fclose(sf);
+        if (!sf) {
+          fprintf(stderr, "zcc: cannot open assembly input '%s'\n",
+                  input_s_files[i]);
+          fclose(mf);
+          remove(multi_s_path);
+          return -1;
         }
+        char linebuf[65536];
+        char unit_tag[32];
+        snprintf(unit_tag, sizeof(unit_tag), "__u%d_", i);
+        while (fgets(linebuf, sizeof(linebuf), sf)) {
+          int in_str = 0;
+          int pfx_ok = 1;
+          for (size_t c = 0; linebuf[c]; c++) {
+            unsigned char ch = (unsigned char)linebuf[c];
+            if (in_str) {
+              fputc(ch, mf);
+              if (ch == '\\' && linebuf[c + 1]) {
+                c++;
+                fputc(linebuf[c], mf);
+              } else if (ch == '"') {
+                in_str = 0;
+              }
+              pfx_ok = 0;
+              continue;
+            }
+            if (ch == '"') {
+              in_str = 1;
+              fputc(ch, mf);
+              pfx_ok = 0;
+              continue;
+            }
+            if (ch == '#') {
+              fputs(&linebuf[c], mf);
+              break;
+            }
+            if (pfx_ok && ch == '.' && linebuf[c + 1] == 'L' &&
+                (isalnum((unsigned char)linebuf[c + 2]) ||
+                 linebuf[c + 2] == '_')) {
+              fputs(".L", mf);
+              fputs(unit_tag, mf);
+              c += 1;
+              pfx_ok = 0;
+              continue;
+            }
+            if (i > 0 && pfx_ok &&
+                strncmp(&linebuf[c], "platform_main_", 14) == 0 &&
+                (strncmp(&linebuf[c + 14], "begin", 5) == 0 ||
+                 strncmp(&linebuf[c + 14], "end", 3) == 0)) {
+              int kw_len = (linebuf[c + 14] == 'b') ? 19 : 17;
+              unsigned char after = (unsigned char)linebuf[c + kw_len];
+              if (!isalnum(after) && after != '_') {
+                fwrite(&linebuf[c], 1, (size_t)kw_len, mf);
+                fprintf(mf, "__u%d", i);
+                c += (size_t)(kw_len - 1);
+                pfx_ok = 0;
+                continue;
+              }
+            }
+            fputc(ch, mf);
+            pfx_ok = !(isalnum(ch) || ch == '_' || ch == '.');
+          }
+        }
+        fputc('\n', mf);
+        fclose(sf);
       }
-      int ret = assemble(NULL, out_filename, multi_asm_buf, total_asm_sz, 1);
-      if (multi_asm_buf)
-        free(multi_asm_buf);
+      fclose(mf);
+      int ret = assemble(multi_s_path, out_filename, NULL, 0, 1);
+      remove(multi_s_path);
       if (ret != 0) {
         fprintf(stderr, "zcc: win64 multi-assembly failed with error code %d\n",
                 ret);
@@ -7818,6 +8887,60 @@ int main(int argc, char **argv) {
       }
       return 0;
     }
+  }
+
+  /* Zero-Binutils ARM64 / RV64 Direct ELF Assembly from .s inputs */
+  if ((has_arm64_target || has_riscv_target) && !has_win64_target &&
+      s_file_count > 0 && c_file_count == 0 && !is_out_s && !has_stop_at_asm) {
+    size_t total_asm_sz = 0;
+    char *multi_asm_buf = NULL;
+    for (i = 0; i < s_file_count; i++) {
+      FILE *sf = fopen(input_s_files[i], "rb");
+      if (!sf) {
+        fprintf(stderr, "zcc: cannot open assembly input %s\n", input_s_files[i]);
+        if (multi_asm_buf)
+          free(multi_asm_buf);
+        return 1;
+      }
+      fseek(sf, 0, SEEK_END);
+      long sz = ftell(sf);
+      fseek(sf, 0, SEEK_SET);
+      if (sz > 0) {
+        char *nb = (char *)realloc(multi_asm_buf, total_asm_sz + sz + 2);
+        if (nb) {
+          multi_asm_buf = nb;
+          size_t r = fread(multi_asm_buf + total_asm_sz, 1, sz, sf);
+          total_asm_sz += r;
+          multi_asm_buf[total_asm_sz++] = '\n';
+          multi_asm_buf[total_asm_sz] = '\0';
+        }
+      }
+      fclose(sf);
+    }
+    const char *target_out =
+        out_filename ? out_filename : (compile_only ? "a.o" : "a.out");
+    int ret = -1;
+    if (compile_only) {
+      ret = has_arm64_target
+                ? arm64_assemble_to_elf_obj(multi_asm_buf ? multi_asm_buf : "",
+                                            total_asm_sz, target_out)
+                : riscv_assemble_to_elf_obj(multi_asm_buf ? multi_asm_buf : "",
+                                            total_asm_sz, target_out);
+    } else {
+      ret = has_arm64_target
+                ? arm64_assemble_to_elf_exec(multi_asm_buf ? multi_asm_buf : "",
+                                             total_asm_sz, target_out)
+                : riscv_assemble_to_elf_exec(multi_asm_buf ? multi_asm_buf : "",
+                                             total_asm_sz, target_out);
+    }
+    if (multi_asm_buf)
+      free(multi_asm_buf);
+    if (ret != 0) {
+      fprintf(stderr, "zcc: direct %s ELF assembly failed with error code %d\n",
+              has_arm64_target ? "ARM64" : "RISC-V64", ret);
+      return ret;
+    }
+    return 0;
   }
 
   /* Native ELF Direct Assembly Object Emission: assemble .s directly to .o */
@@ -7834,12 +8957,11 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  /* Win64 PE Multi-Source Synthesis: compile multiple .c files directly to .exe
-   * with PID-isolation & path normalization */
+  /* Multi-Source Synthesis for Win64 PE and direct ARM64/RV64 executables */
   char temp_multi_c_filename[256];
   temp_multi_c_filename[0] = '\0';
-  if (has_win64_target && c_file_count > 1 && !compile_only && !is_out_s &&
-      !has_stop_at_asm) {
+  if ((has_win64_target || has_arm64_target || has_riscv_target) &&
+      c_file_count > 1 && !compile_only && !is_out_s && !has_stop_at_asm) {
 #ifdef _WIN32
     snprintf(temp_multi_c_filename, sizeof(temp_multi_c_filename),
              ".tmp_codegen_multi_win64_%s.c", base ? base : "unit");
@@ -7896,7 +9018,7 @@ int main(int argc, char **argv) {
       (has_lib_flag && !has_explicit_zld) ||
       (c_file_count > 1 && compile_only) || (!input_c_file && obj_count == 0) ||
       has_trace_abi || has_emit_gguf || has_frontend_dump || has_wasm_target ||
-      has_arm_target || has_riscv_target || has_yul_target ||
+      (has_arm_target && !has_arm64_target) || has_yul_target ||
       has_stark_proof_target) {
     if (temp_multi_c_filename[0] != '\0') {
       remove(temp_multi_c_filename);
@@ -8001,8 +9123,12 @@ int main(int argc, char **argv) {
       mod_argv[mod_argc++] = temp_s_filename;
       mod_argv[mod_argc] = NULL;
 
-      /* Enable in-memory assembly stream */
+      /* Enable in-memory assembly stream on POSIX; write temp .s on Windows */
+#ifdef _WIN32
+      g_use_in_mem_asm = 0;
+#else
       g_use_in_mem_asm = 1;
+#endif
       g_in_mem_asm_buf = NULL;
       g_in_mem_asm_size = 0;
 
@@ -8011,6 +9137,10 @@ int main(int argc, char **argv) {
 
       if (compile_ret != 0) {
         fprintf(stderr, "zcc: AST-codegen phase failed\n");
+#ifdef _WIN32
+        remove(temp_s_filename);
+        g_temp_s_to_remove[0] = '\0';
+#endif
         if (g_in_mem_asm_buf)
           free(g_in_mem_asm_buf);
         g_in_mem_asm_buf = NULL;
@@ -8019,8 +9149,44 @@ int main(int argc, char **argv) {
         return compile_ret;
       }
 
-      int assemble_ret = assemble(NULL, out_filename, g_in_mem_asm_buf,
-                                  g_in_mem_asm_size, has_win64_target);
+      int assemble_ret;
+      if (has_arm64_target || has_riscv_target) {
+#ifdef _WIN32
+        FILE *sf = fopen(temp_s_filename, "rb");
+        if (sf) {
+          fseek(sf, 0, SEEK_END);
+          long ssz = ftell(sf);
+          fseek(sf, 0, SEEK_SET);
+          if (ssz > 0) {
+            g_in_mem_asm_buf = (char *)malloc((size_t)ssz + 1);
+            if (g_in_mem_asm_buf) {
+              g_in_mem_asm_size = fread(g_in_mem_asm_buf, 1, (size_t)ssz, sf);
+              g_in_mem_asm_buf[g_in_mem_asm_size] = '\0';
+            }
+          }
+          fclose(sf);
+        }
+        remove(temp_s_filename);
+        g_temp_s_to_remove[0] = '\0';
+#endif
+        assemble_ret = has_arm64_target
+                           ? arm64_assemble_to_elf_obj(
+                                 g_in_mem_asm_buf ? g_in_mem_asm_buf : "",
+                                 g_in_mem_asm_size, out_filename)
+                           : riscv_assemble_to_elf_obj(
+                                 g_in_mem_asm_buf ? g_in_mem_asm_buf : "",
+                                 g_in_mem_asm_size, out_filename);
+      } else {
+#ifdef _WIN32
+        assemble_ret = assemble(temp_s_filename, out_filename, NULL, 0,
+                                has_win64_target);
+        remove(temp_s_filename);
+        g_temp_s_to_remove[0] = '\0';
+#else
+        assemble_ret = assemble(NULL, out_filename, g_in_mem_asm_buf,
+                                g_in_mem_asm_size, has_win64_target);
+#endif
+      }
       if (g_in_mem_asm_buf) {
         free(g_in_mem_asm_buf);
         g_in_mem_asm_buf = NULL;
@@ -8042,7 +9208,8 @@ int main(int argc, char **argv) {
         out_filename = has_win64_target ? "a.exe" : "a.out";
       }
 
-      if (!has_win64_target && c_file_count > 1) {
+      if (!has_win64_target && !has_arm64_target && !has_riscv_target &&
+          c_file_count > 1) {
         /* Multi-TU native ELF compilation + zld static linking (zero external
          * gcc/as/ld) */
         const char *link_objs[2048];
@@ -8208,8 +9375,12 @@ int main(int argc, char **argv) {
       mod_argv[mod_argc++] = temp_s_filename;
       mod_argv[mod_argc] = NULL;
 
-      /* Enable in-memory assembly stream */
+      /* Enable in-memory assembly stream on POSIX; temp file on Windows */
+#ifdef _WIN32
+      g_use_in_mem_asm = 0;
+#else
       g_use_in_mem_asm = 1;
+#endif
       g_in_mem_asm_buf = NULL;
       g_in_mem_asm_size = 0;
 
@@ -8220,6 +9391,10 @@ int main(int argc, char **argv) {
         if (temp_multi_c_filename[0] != '\0') {
           remove(temp_multi_c_filename);
         }
+#ifdef _WIN32
+        remove(temp_s_filename);
+        g_temp_s_to_remove[0] = '\0';
+#endif
         fprintf(stderr, "zcc: AST-codegen phase failed\n");
         if (g_in_mem_asm_buf)
           free(g_in_mem_asm_buf);
@@ -8230,6 +9405,29 @@ int main(int argc, char **argv) {
       }
 
       if (has_win64_target) {
+#ifdef _WIN32
+        if (s_file_count > 0) {
+          FILE *tf = fopen(temp_s_filename, "ab");
+          if (tf) {
+            for (i = 0; i < s_file_count; i++) {
+              FILE *sf = fopen(input_s_files[i], "rb");
+              if (sf) {
+                char buf[4096];
+                size_t nr;
+                fputc('\n', tf);
+                while ((nr = fread(buf, 1, sizeof(buf), sf)) > 0) {
+                  fwrite(buf, 1, nr, tf);
+                }
+                fclose(sf);
+              }
+            }
+            fclose(tf);
+          }
+        }
+        int pe_ret = assemble(temp_s_filename, out_filename, NULL, 0, 1);
+        remove(temp_s_filename);
+        g_temp_s_to_remove[0] = '\0';
+#else
         /* Append any auxiliary .s assembly files (mixed C + assembly support)
          */
         if (s_file_count > 0) {
@@ -8257,6 +9455,7 @@ int main(int argc, char **argv) {
         }
         int pe_ret = assemble(NULL, out_filename, g_in_mem_asm_buf,
                               g_in_mem_asm_size, 1);
+#endif
         if (temp_multi_c_filename[0] != '\0') {
           remove(temp_multi_c_filename);
           g_temp_multi_c_to_remove[0] = '\0';
@@ -8275,9 +9474,61 @@ int main(int argc, char **argv) {
         return 0;
       }
 
-      /* 2. Assemble directly to temporary object (.o) in memory */
+      if (has_arm64_target || has_riscv_target) {
+#ifdef _WIN32
+        FILE *sf = fopen(temp_s_filename, "rb");
+        if (sf) {
+          fseek(sf, 0, SEEK_END);
+          long ssz = ftell(sf);
+          fseek(sf, 0, SEEK_SET);
+          if (ssz > 0) {
+            g_in_mem_asm_buf = (char *)malloc((size_t)ssz + 1);
+            if (g_in_mem_asm_buf) {
+              g_in_mem_asm_size = fread(g_in_mem_asm_buf, 1, (size_t)ssz, sf);
+              g_in_mem_asm_buf[g_in_mem_asm_size] = '\0';
+            }
+          }
+          fclose(sf);
+        }
+        remove(temp_s_filename);
+        g_temp_s_to_remove[0] = '\0';
+#endif
+        int exec_ret =
+            has_arm64_target
+                ? arm64_assemble_to_elf_exec(
+                      g_in_mem_asm_buf ? g_in_mem_asm_buf : "",
+                      g_in_mem_asm_size, out_filename)
+                : riscv_assemble_to_elf_exec(
+                      g_in_mem_asm_buf ? g_in_mem_asm_buf : "",
+                      g_in_mem_asm_size, out_filename);
+        if (temp_multi_c_filename[0] != '\0') {
+          remove(temp_multi_c_filename);
+          g_temp_multi_c_to_remove[0] = '\0';
+        }
+        if (g_in_mem_asm_buf) {
+          free(g_in_mem_asm_buf);
+          g_in_mem_asm_buf = NULL;
+          g_in_mem_asm_size = 0;
+        }
+        g_use_in_mem_asm = 0;
+        if (exec_ret != 0) {
+          fprintf(stderr,
+                  "zcc: direct %s ELF emission failed with error code %d\n",
+                  has_arm64_target ? "ARM64" : "RISC-V64", exec_ret);
+          return exec_ret;
+        }
+        return 0;
+      }
+
+      /* 2. Assemble directly to temporary object (.o) in memory (or temp file on Win32) */
+#ifdef _WIN32
+      int assemble_ret = assemble(temp_s_filename, temp_o_filename, NULL, 0, 0);
+      remove(temp_s_filename);
+      g_temp_s_to_remove[0] = '\0';
+#else
       int assemble_ret = assemble(NULL, temp_o_filename, g_in_mem_asm_buf,
                                   g_in_mem_asm_size, 0);
+#endif
       if (g_in_mem_asm_buf) {
         free(g_in_mem_asm_buf);
         g_in_mem_asm_buf = NULL;

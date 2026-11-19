@@ -273,6 +273,8 @@ void backend_normalize_asm(char **line_ptrs, int nlines) {
                 strcpy(l, "    cmp x0, x1\n");
             } else if (strcmp(l, "    adds r0, r0, r3\n") == 0 || strcmp(l, "    add r0, r0, r3\n") == 0) {
                 strcpy(l, "    add x0, x0, x3\n");
+            } else if (strcmp(l, "    adds r1, r1, r3\n") == 0 || strcmp(l, "    add r1, r1, r3\n") == 0) {
+                strcpy(l, "    add x1, x1, x3\n");
             } else if (strcmp(l, "    subs r0, r0, r3\n") == 0 || strcmp(l, "    sub r0, r0, r3\n") == 0) {
                 strcpy(l, "    sub x0, x0, x3\n");
             } else if (strcmp(l, "    muls r1, r3, r1\n") == 0) {
@@ -326,6 +328,8 @@ void backend_normalize_asm(char **line_ptrs, int nlines) {
                 strcpy(l, "    snez a0, a0\n");
             } else if (strcmp(l, "    adds r0, r0, r3\n") == 0 || strcmp(l, "    add r0, r0, r3\n") == 0) {
                 strcpy(l, "    add a0, a0, a3\n");
+            } else if (strcmp(l, "    adds r1, r1, r3\n") == 0 || strcmp(l, "    add r1, r1, r3\n") == 0) {
+                strcpy(l, "    add a1, a1, a3\n");
             } else if (strcmp(l, "    subs r0, r0, r3\n") == 0 || strcmp(l, "    sub r0, r0, r3\n") == 0) {
                 strcpy(l, "    sub a0, a0, a3\n");
             } else if (strcmp(l, "    muls r1, r3, r1\n") == 0) {

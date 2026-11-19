@@ -1851,6 +1851,32 @@ test-quad-isa:
 	python3 tests/test_quad_isa_deep_regression.py
 	python3 tests/test_quad_isa_deep_01_03_05.py
 
+test-quad-elf-sovereign: zcc
+	python3 tests/test_arm64_riscv64_direct_elf.py
+
+.PHONY: selfhost-win64-sovereign selfhost-wasm test-quad-elf-sovereign build-lua-wasm build-sqlite-wasm test-wasm-lua-sqlite build-wasm-playground test-wasm-playground
+
+selfhost-win64-sovereign: zcc
+	python3 tools/win64_selfhost_sovereign.py
+
+selfhost-wasm: zcc
+	python3 tests/test_wasm_wasi_selfhost.py
+
+build-lua-wasm: zcc
+	python3 tools/build_lua_wasm.py
+
+build-sqlite-wasm: zcc
+	python3 tools/build_sqlite_wasm.py
+
+test-wasm-lua-sqlite: zcc
+	python3 tests/test_wasm_lua_sqlite.py
+
+build-wasm-playground: zcc
+	python3 tools/build_wasm_playground.py
+
+test-wasm-playground:
+	python3 tests/test_wasm_playground.py
+
 # ─── Gate 4 Target Harnesses (SQLite, QuickJS, MicroPython, DOOM, QEMU, Valgrind) ─
 .PHONY: test-sqlite test-quickjs test-micropython test-doom qemu valgrind
 
