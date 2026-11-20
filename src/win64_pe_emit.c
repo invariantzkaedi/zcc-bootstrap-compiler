@@ -318,7 +318,42 @@ const char *zcc_win64_pe_resolve_dll_for_symbol(const char *sym) {
         strcmp(sym, "_isatty") == 0 ||
         strcmp(sym, "strerror") == 0 ||
         strcmp(sym, "_errno") == 0 ||
-        strcmp(sym, "__iob_func") == 0) {
+        strcmp(sym, "__iob_func") == 0 ||
+        strcmp(sym, "abs") == 0 ||
+        strcmp(sym, "labs") == 0 ||
+        strcmp(sym, "isprint") == 0 ||
+        strcmp(sym, "iscntrl") == 0 ||
+        strcmp(sym, "isgraph") == 0 ||
+        strcmp(sym, "ispunct") == 0 ||
+        strcmp(sym, "strcoll") == 0 ||
+        strcmp(sym, "strpbrk") == 0 ||
+        strcmp(sym, "strspn") == 0 ||
+        strcmp(sym, "strcspn") == 0 ||
+        strcmp(sym, "localtime") == 0 ||
+        strcmp(sym, "_localtime64") == 0 ||
+        strcmp(sym, "gmtime") == 0 ||
+        strcmp(sym, "_gmtime64") == 0 ||
+        strcmp(sym, "_time64") == 0 ||
+        strcmp(sym, "difftime") == 0 ||
+        strcmp(sym, "mktime") == 0 ||
+        strcmp(sym, "strftime") == 0 ||
+        strcmp(sym, "localeconv") == 0 ||
+        strcmp(sym, "setlocale") == 0 ||
+        strcmp(sym, "ungetc") == 0 ||
+        strcmp(sym, "setvbuf") == 0 ||
+        strcmp(sym, "rename") == 0 ||
+        strcmp(sym, "tmpfile") == 0 ||
+        strcmp(sym, "modf") == 0 ||
+        strcmp(sym, "sinh") == 0 ||
+        strcmp(sym, "cosh") == 0 ||
+        strcmp(sym, "tanh") == 0 ||
+        strcmp(sym, "signal") == 0 ||
+        strcmp(sym, "raise") == 0 ||
+        strcmp(sym, "_access") == 0 ||
+        strcmp(sym, "_unlink") == 0 ||
+        strcmp(sym, "_setjmp") == 0 ||
+        strcmp(sym, "setjmp") == 0 ||
+        strcmp(sym, "longjmp") == 0) {
         return "msvcrt.dll";
     }
     if (strncmp(sym, "Reg", 3) == 0 ||

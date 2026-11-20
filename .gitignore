@@ -818,6 +818,8 @@ config/.isolated_vault/
 .releases/
 *.tx_tmp
 build/
+build_win64/
+!src/win64_setjmp.s
 releases/
 tests/embedded_quickjs/
 tests/embedded_micropython/

@@ -1854,7 +1854,7 @@ test-quad-isa:
 test-quad-elf-sovereign: zcc
 	python3 tests/test_arm64_riscv64_direct_elf.py
 
-.PHONY: selfhost-win64-sovereign selfhost-wasm test-quad-elf-sovereign build-lua-wasm build-sqlite-wasm test-wasm-lua-sqlite build-wasm-playground test-wasm-playground build-doom-wasm test-wasm-doom build-quickjs-wasm test-wasm-quickjs test-wasm-setjmp build-micropython-wasm test-wasm-micropython
+.PHONY: selfhost-win64-sovereign selfhost-wasm test-quad-elf-sovereign build-lua-wasm build-sqlite-wasm test-wasm-lua-sqlite build-wasm-playground test-wasm-playground build-doom-wasm test-wasm-doom build-quickjs-wasm test-wasm-quickjs test-wasm-setjmp build-micropython-wasm test-wasm-micropython build-lua-win64 build-sqlite-win64 test-win64-lua-sqlite
 
 selfhost-win64-sovereign: zcc
 	python3 tools/win64_selfhost_sovereign.py
@@ -1897,6 +1897,15 @@ build-micropython-wasm: zcc
 
 test-wasm-micropython: zcc
 	python3 tests/test_wasm_micropython.py
+
+build-lua-win64: zcc
+	python3 tools/build_lua_win64.py
+
+build-sqlite-win64: zcc
+	python3 tools/build_sqlite_win64.py
+
+test-win64-lua-sqlite: zcc
+	python3 tests/test_win64_lua_sqlite.py
 
 # ─── Gate 4 Target Harnesses (SQLite, QuickJS, MicroPython, DOOM, QEMU, Valgrind) ─
 .PHONY: test-sqlite test-quickjs test-micropython test-doom qemu valgrind

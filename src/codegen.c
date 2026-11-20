@@ -178,6 +178,9 @@ static const char *win64_remap_msvcrt_sym(const char *sym, int ms_abi) {
   if (strcmp(sym, "isatty") == 0) return "_isatty";
   if (strcmp(sym, "getpid") == 0) return "_getpid";
   if (strcmp(sym, "getcwd") == 0) return "_getcwd";
+  if (strcmp(sym, "__errno_location") == 0) return "_errno";
+  if (strcmp(sym, "access") == 0) return "_access";
+  if (strcmp(sym, "unlink") == 0) return "_unlink";
   return sym;
 }
 
@@ -187,11 +190,24 @@ static void add_reloc(Reloc r) {
   if (tlen > 2) {
     for (size_t k = 1; k < tlen; k++) {
       if (r.target_name[k] == '+' || r.target_name[k] == '-') {
+        int sign = (r.target_name[k] == '-') ? -1 : 1;
+        char *nump = &r.target_name[k + 1];
+        while (*nump == ' ' || *nump == '\t')
+          nump++;
         char *ep = NULL;
-        long long off = strtoll(&r.target_name[k], &ep, 0);
-        if (ep && *ep == '\0' && ep != &r.target_name[k] + 1) {
-          r.addend += off;
-          r.target_name[k] = '\0';
+        long long off = strtoll(nump, &ep, 0);
+        if (ep && ep != nump) {
+          while (*ep == ' ' || *ep == '\t')
+            ep++;
+          if (*ep == '\0') {
+            r.addend += sign * off;
+            size_t end_k = k;
+            while (end_k > 0 && (r.target_name[end_k - 1] == ' ' ||
+                                 r.target_name[end_k - 1] == '\t')) {
+              end_k--;
+            }
+            r.target_name[end_k] = '\0';
+          }
         }
         break;
       }
@@ -3032,12 +3048,33 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
         long long val = 0;
         char *arg = trim(p + 5);
         if (isalpha((unsigned char)*arg) || *arg == '.' || *arg == '_') {
-          sscanf(arg, "%127s", target);
+          size_t ti = 0;
+          char *q = arg;
+          while (*q && *q != ' ' && *q != '\t' && *q != '+' && *q != '-' &&
+                 *q != '#' && *q != ';') {
+            if (ti + 1 < sizeof(target))
+              target[ti++] = *q;
+            q++;
+          }
+          target[ti] = '\0';
+          long long q_addend = 0;
+          while (*q == ' ' || *q == '\t')
+            q++;
+          if (*q == '+' || *q == '-') {
+            int sign = (*q == '-') ? -1 : 1;
+            q++;
+            while (*q == ' ' || *q == '\t')
+              q++;
+            char *ep = NULL;
+            long long off = strtoll(q, &ep, 0);
+            if (ep && ep != q)
+              q_addend = sign * off;
+          }
           Reloc r;
           r.offset = CUR_DATA_SEG->size;
           strcpy(r.target_name, target);
           r.type = R_X86_64_64;
-          r.addend = 0;
+          r.addend = q_addend;
           add_reloc(r);
           unsigned char zero[8] = {0, 0, 0, 0, 0, 0, 0, 0};
           seg_append(CUR_DATA_SEG, zero, 8);

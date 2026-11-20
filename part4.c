@@ -5827,6 +5827,12 @@ static void compute_liveness(Node *n) {
   if (n->kind == ND_ADDR && n->lhs && n->lhs->kind == ND_VAR && n->lhs->sym) {
     n->lhs->sym->live_start = -1; /* disable alloc */
   }
+  if (n->kind == ND_COMPOUND_ASSIGN && n->lhs && n->lhs->kind == ND_VAR && n->lhs->sym) {
+    Type *lt = n->lhs->type ? n->lhs->type : n->type;
+    Type *ct = (n->compound_op == ND_SHL || n->compound_op == ND_SHR || is_pointer(lt) || !n->rhs || !n->rhs->type) ? lt : n->rhs->type;
+    if (ct != lt)
+      n->lhs->sym->live_start = -1; /* disable alloc: ct != lt uses stack fallback */
+  }
   if (n->kind == ND_VAR && n->sym && n->sym->is_local) {
     if (n->sym->live_start != -1) {
       if (n->sym->live_start == 0)
