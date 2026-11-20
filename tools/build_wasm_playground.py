@@ -345,7 +345,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <nav class="tabs" role="tablist">
     <button id="tabBtnC" class="tab-btn active" type="button" data-action="switchTab:c" onclick="zccUiAction('switchTab:c', event)">C99 Compiler (zcc.wasm)</button>
     <button id="tabBtnLua" class="tab-btn" type="button" data-action="switchTab:lua" onclick="zccUiAction('switchTab:lua', event)">Lua 5.4.6 WASI VM (lua.wasm)</button>
-    <button id="tabBtnExt" class="tab-btn" type="button" data-action="switchTab:ext" onclick="zccUiAction('switchTab:ext', event)">External WASI Runner (sqlite3.wasm / .wasm)</button>
+    <button id="tabBtnExt" class="tab-btn" type="button" data-action="switchTab:ext" onclick="zccUiAction('switchTab:ext', event)">External WASI Runner (sqlite3.wasm / qjs.wasm / .wasm)</button>
     <button id="tabBtnFb" class="tab-btn" type="button" data-action="switchTab:fb" onclick="zccUiAction('switchTab:fb', event)">Live Canvas / DOOM (Framebuffer)</button>
   </nav>
 
@@ -401,7 +401,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <!-- TAB 3: EXTERNAL WASI RUNNER -->
       <section id="panel-ext" class="panel hidden">
         <div id="extDropZone" class="dropzone">
-          Drop any WASI Preview1 <code>.wasm</code> (e.g. <code>build_wasm/sqlite3.wasm</code>) here or select locally with zero server:
+          Drop any WASI Preview1 <code>.wasm</code> (e.g. <code>build_wasm/sqlite3.wasm</code> or <code>build_wasm/qjs.wasm</code>) here or select locally with zero server:
           <div style="margin-top:8px">
             <input id="extWasmFile" type="file" accept=".wasm" data-action="loadExternalFile" onchange="zccUiAction('loadExternalFile', event)">
           </div>

@@ -473,42 +473,197 @@ long long atoll(const char *s) { return strtoll(s, NULL, 10); }
 long atol(const char *s) { return (long)strtoll(s, NULL, 10); }
 int atoi(const char *s) { return (int)strtoll(s, NULL, 10); }
 
+static uint64_t _wasi_f64_to_u64(double x) {
+    union { double d; uint64_t u; } v;
+    v.d = x;
+    return v.u;
+}
+
+static double _wasi_u64_to_f64(uint64_t u) {
+    union { double d; uint64_t u; } v;
+    v.u = u;
+    return v.d;
+}
+
+static int _wasi_bi_mul_u32(uint32_t *a, int n, int max_n, uint32_t mul) {
+    uint64_t carry = 0ULL;
+    int i;
+    for (i = 0; i < n; i++) {
+        uint64_t v = (uint64_t)a[i] * (uint64_t)mul + carry;
+        a[i] = (uint32_t)(v & 0xFFFFFFFFULL);
+        carry = v >> 32;
+    }
+    while (carry != 0ULL && n < max_n) {
+        a[n++] = (uint32_t)(carry & 0xFFFFFFFFULL);
+        carry >>= 32;
+    }
+    return n;
+}
+
+static int _wasi_bi_shl(uint32_t *a, int n, int max_n, int sh) {
+    if (sh <= 0 || n <= 0) return n;
+    int w = sh >> 5;
+    int b = sh & 31;
+    int i;
+    if (w > 0) {
+        int new_n = n + w;
+        if (new_n > max_n) new_n = max_n;
+        for (i = new_n - 1; i >= w; i--) a[i] = a[i - w];
+        for (i = 0; i < w && i < max_n; i++) a[i] = 0U;
+        n = new_n;
+    }
+    if (b > 0) {
+        uint32_t carry = 0U;
+        int rb = 32 - b;
+        for (i = w; i < n; i++) {
+            uint32_t cur = a[i];
+            a[i] = (cur << b) | carry;
+            carry = cur >> rb;
+        }
+        if (carry != 0U && n < max_n) {
+            a[n++] = carry;
+        }
+    }
+    return n;
+}
+
+static int _wasi_bi_bitlen(const uint32_t *a, int n) {
+    while (n > 0 && a[n - 1] == 0U) n--;
+    if (n <= 0) return 0;
+    uint32_t top = a[n - 1];
+    int bits = 0;
+    while (top != 0U) { top >>= 1; bits++; }
+    return (n - 1) * 32 + bits;
+}
+
+static int _wasi_bi_cmp(const uint32_t *a, int na, const uint32_t *b, int nb) {
+    while (na > 0 && a[na - 1] == 0U) na--;
+    while (nb > 0 && b[nb - 1] == 0U) nb--;
+    if (na != nb) return (na > nb) ? 1 : -1;
+    int i;
+    for (i = na - 1; i >= 0; i--) {
+        if (a[i] != b[i]) return (a[i] > b[i]) ? 1 : -1;
+    }
+    return 0;
+}
+
+static int _wasi_bi_sub(uint32_t *a, int na, const uint32_t *b, int nb) {
+    uint64_t borrow = 0ULL;
+    int i;
+    for (i = 0; i < na; i++) {
+        uint64_t av = (uint64_t)a[i];
+        uint64_t bv = (i < nb) ? (uint64_t)b[i] : 0ULL;
+        uint64_t sub = bv + borrow;
+        if (av < sub) {
+            a[i] = (uint32_t)((av + (1ULL << 32)) - sub);
+            borrow = 1ULL;
+        } else {
+            a[i] = (uint32_t)(av - sub);
+            borrow = 0ULL;
+        }
+    }
+    while (na > 0 && a[na - 1] == 0U) na--;
+    return na;
+}
+
+static int _wasi_bi_get_bit(const uint32_t *a, int n, int pos) {
+    if (pos < 0) return 0;
+    int w = pos >> 5;
+    if (w >= n) return 0;
+    return (int)((a[w] >> (pos & 31)) & 1U);
+}
+
+static int _wasi_bi_has_nonzero_below(const uint32_t *a, int n, int pos) {
+    if (pos <= 0) return 0;
+    int w = pos >> 5;
+    int b = pos & 31;
+    int i;
+    int lim = (w < n) ? w : n;
+    for (i = 0; i < lim; i++) {
+        if (a[i] != 0U) return 1;
+    }
+    if (w < n && b > 0) {
+        uint32_t mask = (1U << b) - 1U;
+        if ((a[w] & mask) != 0U) return 1;
+    }
+    return 0;
+}
+
+static int _wasi_ci_match3(const char *p, const char *lit) {
+    int i;
+    for (i = 0; lit[i]; i++) {
+        if ((char)tolower((unsigned char)p[i]) != lit[i]) return 0;
+    }
+    return 1;
+}
+
 double strtod(const char *nptr, char **endptr) {
+    static const double p10[23] = {
+        1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7,
+        1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15,
+        1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22
+    };
+    static const uint32_t pow5_tab[14] = {
+        1U, 5U, 25U, 125U, 625U, 3125U, 15625U, 78125U,
+        390625U, 1953125U, 9765625U, 48828125U, 244140625U, 1220703125U
+    };
     const char *p = nptr;
     while (isspace((unsigned char)*p)) p++;
     int neg = 0;
     if (*p == '-') { neg = 1; p++; }
     else if (*p == '+') { p++; }
 
-    double val = 0.0;
+    if (_wasi_ci_match3(p, "inf")) {
+        p += 3;
+        if (_wasi_ci_match3(p, "inity")) p += 5;
+        if (endptr) *endptr = (char *)p;
+        double infv = 1.0 / 0.0;
+        return neg ? -infv : infv;
+    }
+    if (_wasi_ci_match3(p, "nan")) {
+        p += 3;
+        if (endptr) *endptr = (char *)p;
+        return _wasi_u64_to_f64(0x7FF8000000000000ULL | (neg ? (1ULL << 63) : 0ULL));
+    }
+
+    uint64_t mant = 0ULL;
     int any = 0;
     int sig_digits = 0;
+    int eval = 0;
+    int extra_nz = 0;
     while (isdigit((unsigned char)*p)) {
-        if (sig_digits < 17) {
-            val = val * 10.0 + (double)(*p - '0');
-            if (val != 0.0) sig_digits++;
-        } else {
-            val *= 10.0;
+        int d = *p - '0';
+        if (mant != 0ULL || d != 0) {
+            if (sig_digits < 19) {
+                mant = mant * 10ULL + (uint64_t)d;
+                sig_digits++;
+            } else {
+                if (d != 0) extra_nz = 1;
+                if (eval < 10000) eval++;
+            }
         }
         any = 1;
         p++;
     }
     if (*p == '.') {
         p++;
-        double fnum = 0.0;
-        double fdiv = 1.0;
         while (isdigit((unsigned char)*p)) {
-            if (sig_digits < 17) {
-                fnum = fnum * 10.0 + (double)(*p - '0');
-                fdiv *= 10.0;
-                if (fnum != 0.0 || val != 0.0) sig_digits++;
+            int d = *p - '0';
+            if (mant != 0ULL || d != 0) {
+                if (sig_digits < 19) {
+                    mant = mant * 10ULL + (uint64_t)d;
+                    sig_digits++;
+                    if (eval > -10000) eval--;
+                } else {
+                    if (d != 0) extra_nz = 1;
+                }
+            } else if (sig_digits == 0) {
+                if (eval > -10000) eval--;
             }
             any = 1;
             p++;
         }
-        if (fdiv > 1.0) val += fnum / fdiv;
     }
-    int eval = 0;
     if (any && (*p == 'e' || *p == 'E')) {
         const char *ep = p + 1;
         int eneg = 0;
@@ -517,22 +672,137 @@ double strtod(const char *nptr, char **endptr) {
         if (isdigit((unsigned char)*ep)) {
             int ev = 0;
             while (isdigit((unsigned char)*ep)) {
-                ev = ev * 10 + (*ep - '0');
+                if (ev < 10000) ev = ev * 10 + (*ep - '0');
                 ep++;
             }
             eval += eneg ? -ev : ev;
             p = ep;
         }
     }
-    if (eval != 0) {
-        int eneg = (eval < 0) ? 1 : 0;
-        int ea = eneg ? -eval : eval;
-        double scale = 1.0;
-        while (ea >= 8) { scale *= 1e8; ea -= 8; }
-        while (ea-- > 0) scale *= 10.0;
-        val = eneg ? (val / scale) : (val * scale);
+
+    if (!any) {
+        if (endptr) *endptr = (char *)nptr;
+        return 0.0;
     }
-    if (endptr) *endptr = (char *)(any ? p : nptr);
+
+    if (mant == 0ULL) {
+        if (endptr) *endptr = (char *)p;
+        return neg ? -0.0 : 0.0;
+    }
+
+    double val = 0.0;
+    /* Clinger exact IEEE-754 fast path when mantissa and power of 10 are both exact */
+    if (!extra_nz && mant < (1ULL << 53) && eval >= -22 && eval <= 22) {
+        val = (double)mant;
+        if (eval > 0) val *= p10[eval];
+        else if (eval < 0) val /= p10[-eval];
+    } else if (eval > 350) {
+        val = 1.0 / 0.0;
+    } else if (eval < -350) {
+        val = 0.0;
+    } else {
+        uint32_t num[48];
+        int nlen, i;
+        for (i = 0; i < 48; i++) num[i] = 0U;
+        num[0] = (uint32_t)(mant & 0xFFFFFFFFULL);
+        num[1] = (uint32_t)((mant >> 32) & 0xFFFFFFFFULL);
+        nlen = (num[1] != 0U) ? 2 : 1;
+
+        if (eval >= 0) {
+            int rem = eval;
+            while (rem > 0) {
+                int k = (rem > 13) ? 13 : rem;
+                nlen = _wasi_bi_mul_u32(num, nlen, 48, pow5_tab[k]);
+                rem -= k;
+            }
+            int bl = _wasi_bi_bitlen(num, nlen);
+            int shift = bl - 53;
+            int be = eval + shift;
+            uint64_t q = 0ULL;
+            if (shift > 0) {
+                int bi;
+                for (bi = 52; bi >= 0; bi--) {
+                    q = (q << 1) | (uint64_t)_wasi_bi_get_bit(num, nlen, shift + bi);
+                }
+                int rbit = _wasi_bi_get_bit(num, nlen, shift - 1);
+                int sticky = _wasi_bi_has_nonzero_below(num, nlen, shift - 1) || extra_nz;
+                if (rbit && (sticky || (q & 1ULL))) {
+                    q++;
+                    if (q == (1ULL << 53)) { q >>= 1; be++; }
+                }
+            } else {
+                q = ((uint64_t)num[0]) | ((nlen > 1) ? ((uint64_t)num[1] << 32) : 0ULL);
+                if (shift < 0) q <<= (-shift);
+            }
+            int exp_bits = be + 1075;
+            if (exp_bits >= 0x7FF) {
+                val = 1.0 / 0.0;
+            } else {
+                uint64_t u = ((uint64_t)exp_bits << 52) | (q & 0xFFFFFFFFFFFFFULL);
+                val = _wasi_u64_to_f64(u);
+            }
+        } else {
+            uint32_t den[48];
+            int dlen;
+            for (i = 0; i < 48; i++) den[i] = 0U;
+            den[0] = 1U;
+            dlen = 1;
+            int rem = -eval;
+            while (rem > 0) {
+                int k = (rem > 13) ? 13 : rem;
+                dlen = _wasi_bi_mul_u32(den, dlen, 48, pow5_tab[k]);
+                rem -= k;
+            }
+            int bl_m = _wasi_bi_bitlen(num, nlen);
+            int bl_d = _wasi_bi_bitlen(den, dlen);
+            int k = bl_d - bl_m;
+            if (k > 0) nlen = _wasi_bi_shl(num, nlen, 48, k);
+            else if (k < 0) dlen = _wasi_bi_shl(den, dlen, 48, -k);
+            if (_wasi_bi_cmp(num, nlen, den, dlen) < 0) {
+                nlen = _wasi_bi_shl(num, nlen, 48, 1);
+                k++;
+            }
+            int e_real = eval - k;
+            if (e_real > 1023) {
+                val = 1.0 / 0.0;
+            } else if (e_real < -1075) {
+                val = 0.0;
+            } else {
+                int prec_bits, be;
+                if (e_real >= -1022) { prec_bits = 53; be = e_real - 52; }
+                else { prec_bits = e_real + 1075; be = -1074; }
+                uint64_t q = 0ULL;
+                for (i = 0; i < prec_bits; i++) {
+                    q <<= 1;
+                    if (_wasi_bi_cmp(num, nlen, den, dlen) >= 0) {
+                        nlen = _wasi_bi_sub(num, nlen, den, dlen);
+                        q |= 1ULL;
+                    }
+                    nlen = _wasi_bi_shl(num, nlen, 48, 1);
+                }
+                int cmp_r = _wasi_bi_cmp(num, nlen, den, dlen);
+                if (cmp_r > 0 || (cmp_r == 0 && (extra_nz || (q & 1ULL)))) {
+                    q++;
+                    if (prec_bits == 53 && q == (1ULL << 53)) {
+                        q >>= 1;
+                        be++;
+                    } else if (prec_bits < 53 && q == (1ULL << 52)) {
+                        val = _wasi_u64_to_f64(1ULL << 52);
+                        goto strtod_done;
+                    }
+                }
+                if (prec_bits < 53) {
+                    val = _wasi_u64_to_f64(q & 0xFFFFFFFFFFFFFULL);
+                } else {
+                    int exp_bits = be + 1075;
+                    if (exp_bits >= 0x7FF) val = 1.0 / 0.0;
+                    else val = _wasi_u64_to_f64(((uint64_t)exp_bits << 52) | (q & 0xFFFFFFFFFFFFFULL));
+                }
+            }
+        }
+    }
+strtod_done:
+    if (endptr) *endptr = (char *)p;
     return neg ? -val : val;
 }
 
@@ -1109,6 +1379,126 @@ static void _wasi_rt_sink_puts(_wasi_rt_fmt_sink *sk, const char *s, size_t n) {
     for (i = 0; i < n; i++) _wasi_rt_sink_putc(sk, s[i]);
 }
 
+/* Extract exact top `nd` decimal digits of finite positive double `dv` with IEEE RNE */
+static int _wasi_rt_f64_exact_dec(double dv, int nd, char *out_digits, int *out_exp10) {
+    static const uint32_t pow5_dec[14] = {
+        1U, 5U, 25U, 125U, 625U, 3125U, 15625U, 78125U,
+        390625U, 1953125U, 9765625U, 48828125U, 244140625U, 1220703125U
+    };
+    if (nd < 1) nd = 1;
+    if (nd > 26) nd = 26;
+    uint64_t u = _wasi_f64_to_u64(dv);
+    int eb = (int)((u >> 52) & 0x7FFULL);
+    uint64_t mant = u & 0xFFFFFFFFFFFFFULL;
+    int be;
+    if (eb == 0) {
+        be = -1074;
+    } else {
+        mant |= (1ULL << 52);
+        be = eb - 1075;
+    }
+    uint32_t d[128];
+    int dlen = 0, i;
+    while (mant != 0ULL && dlen < 128) {
+        d[dlen++] = (uint32_t)(mant % 1000000000ULL);
+        mant /= 1000000000ULL;
+    }
+    if (dlen == 0) d[dlen++] = 0U;
+
+    int exp_shift = 0;
+    if (be > 0) {
+        int rem = be;
+        while (rem > 0) {
+            int sh = (rem > 29) ? 29 : rem;
+            uint64_t carry = 0ULL;
+            for (i = 0; i < dlen; i++) {
+                uint64_t v = ((uint64_t)d[i] << sh) + carry;
+                d[i] = (uint32_t)(v % 1000000000ULL);
+                carry = v / 1000000000ULL;
+            }
+            while (carry != 0ULL && dlen < 128) {
+                d[dlen++] = (uint32_t)(carry % 1000000000ULL);
+                carry /= 1000000000ULL;
+            }
+            rem -= sh;
+        }
+    } else if (be < 0) {
+        int rem = -be;
+        while (rem > 0) {
+            int k = (rem > 13) ? 13 : rem;
+            uint64_t mul = (uint64_t)pow5_dec[k];
+            uint64_t carry = 0ULL;
+            for (i = 0; i < dlen; i++) {
+                uint64_t v = (uint64_t)d[i] * mul + carry;
+                d[i] = (uint32_t)(v % 1000000000ULL);
+                carry = v / 1000000000ULL;
+            }
+            while (carry != 0ULL && dlen < 128) {
+                d[dlen++] = (uint32_t)(carry % 1000000000ULL);
+                carry /= 1000000000ULL;
+            }
+            rem -= k;
+        }
+        exp_shift = be;
+    }
+
+    char top_buf[16];
+    uint32_t tv = d[dlen - 1];
+    int top_len = 0;
+    do {
+        top_buf[top_len++] = (char)('0' + (int)(tv % 10U));
+        tv /= 10U;
+    } while (tv > 0U && top_len < 16);
+
+    int exp10 = top_len + (dlen - 1) * 9 - 1 + exp_shift;
+
+    char stream[64];
+    int slen = 0;
+    for (i = top_len - 1; i >= 0 && slen < 63; i--) {
+        stream[slen++] = top_buf[i] - '0';
+    }
+    int idx = dlen - 2;
+    while (slen <= nd && idx >= 0 && slen + 9 <= 64) {
+        uint32_t lv = d[idx--];
+        int k;
+        for (k = 8; k >= 0; k--) {
+            stream[slen + k] = (char)(lv % 10U);
+            lv /= 10U;
+        }
+        slen += 9;
+    }
+    int sticky = 0;
+    for (i = idx; i >= 0; i--) {
+        if (d[i] != 0U) { sticky = 1; break; }
+    }
+    if (!sticky && slen > nd + 1) {
+        for (i = nd + 1; i < slen; i++) {
+            if (stream[i] != 0) { sticky = 1; break; }
+        }
+    }
+
+    for (i = 0; i < nd; i++) {
+        out_digits[i] = (i < slen) ? stream[i] : 0;
+    }
+    int guard = (nd < slen) ? (int)stream[nd] : 0;
+    if (guard > 5 || (guard == 5 && (sticky || (out_digits[nd - 1] & 1)))) {
+        int ci = nd - 1;
+        out_digits[ci]++;
+        while (ci > 0 && out_digits[ci] >= 10) {
+            out_digits[ci] = 0;
+            ci--;
+            out_digits[ci]++;
+        }
+        if (out_digits[0] >= 10) {
+            for (ci = 1; ci < nd; ci++) out_digits[ci] = 0;
+            out_digits[0] = 1;
+            exp10++;
+        }
+    }
+    *out_exp10 = exp10;
+    return 0;
+}
+
 static int _wasi_rt_vformat(_wasi_rt_fmt_sink *sk, const char *fmt, va_list ap) {
     if (!fmt) return 0;
     va_list aq;
@@ -1241,30 +1631,129 @@ static int _wasi_rt_vformat(_wasi_rt_fmt_sink *sk, const char *fmt, va_list ap) 
             if (left) while (pad-- > 0) _wasi_rt_sink_putc(sk, ' ');
         } else if (spec == 'f' || spec == 'F' || spec == 'e' || spec == 'E' || spec == 'g' || spec == 'G') {
             double dv = va_arg(aq, double);
-            int neg = 0;
-            if (dv < 0.0) { neg = 1; dv = -dv; }
+            union { double d; uint64_t u; } du;
+            du.d = dv;
+            int neg = ((du.u >> 63) != 0);
+            if (neg) dv = -dv;
+            int upper_fp = (spec == 'F' || spec == 'E' || spec == 'G');
             if (dv != dv) {
-                const char *nan_s = "nan";
-                _wasi_rt_sink_puts(sk, nan_s, 3);
+                if (neg) _wasi_rt_sink_putc(sk, '-');
+                _wasi_rt_sink_puts(sk, upper_fp ? "NAN" : "nan", 3);
                 continue;
             }
             if (dv > 1.7976931348623157e+308) {
                 if (neg) _wasi_rt_sink_putc(sk, '-');
-                _wasi_rt_sink_puts(sk, "inf", 3);
+                else if (plus) _wasi_rt_sink_putc(sk, '+');
+                else if (space) _wasi_rt_sink_putc(sk, ' ');
+                _wasi_rt_sink_puts(sk, upper_fp ? "INF" : "inf", 3);
                 continue;
             }
+            int is_e = (spec == 'e' || spec == 'E');
             int is_g = (spec == 'g' || spec == 'G');
             int p = (prec >= 0) ? prec : 6;
             if (is_g && p == 0) p = 1;
-            if (p > 12) p = 12;
-            int eff_p = p;
-            if (is_g) {
-                unsigned long long ip_est = (unsigned long long)dv;
-                int idig = 1;
-                unsigned long long t = ip_est;
-                while (t >= 10ULL) { t /= 10ULL; idig++; }
-                eff_p = (ip_est == 0ULL) ? p : ((p > idig) ? (p - idig) : 0);
+            if (p > 24) p = 24;
+
+            if (is_e || is_g) {
+                int nd = is_e ? (p + 1) : p;
+                char digits[32];
+                int exp10 = 0;
+                int di;
+                for (di = 0; di < 32; di++) digits[di] = 0;
+                if (dv > 0.0) {
+                    _wasi_rt_f64_exact_dec(dv, nd, digits, &exp10);
+                }
+
+                int use_sci = is_e || (dv > 0.0 && (exp10 < -4 || exp10 >= p));
+                if (use_sci) {
+                    int frac_len = nd - 1;
+                    if (is_g && !alt) {
+                        while (frac_len > 0 && digits[frac_len] == 0) frac_len--;
+                    }
+                    char ebuf[16];
+                    int ei = 0;
+                    ebuf[ei++] = upper_fp ? 'E' : 'e';
+                    int eabs = (exp10 < 0) ? -exp10 : exp10;
+                    ebuf[ei++] = (exp10 < 0) ? '-' : '+';
+                    if (eabs >= 100) {
+                        ebuf[ei++] = (char)('0' + (eabs / 100) % 10);
+                        ebuf[ei++] = (char)('0' + (eabs / 10) % 10);
+                        ebuf[ei++] = (char)('0' + (eabs % 10));
+                    } else {
+                        ebuf[ei++] = (char)('0' + (eabs / 10));
+                        ebuf[ei++] = (char)('0' + (eabs % 10));
+                    }
+                    int plen = (neg || plus || space) ? 1 : 0;
+                    int dotlen = (frac_len > 0 || alt) ? (1 + frac_len) : 0;
+                    int total_len = plen + 1 + dotlen + ei;
+                    int pad = (width > total_len) ? (width - total_len) : 0;
+                    if (!left && !zpad) while (pad-- > 0) _wasi_rt_sink_putc(sk, ' ');
+                    if (neg) _wasi_rt_sink_putc(sk, '-');
+                    else if (plus) _wasi_rt_sink_putc(sk, '+');
+                    else if (space) _wasi_rt_sink_putc(sk, ' ');
+                    if (!left && zpad) while (pad-- > 0) _wasi_rt_sink_putc(sk, '0');
+                    _wasi_rt_sink_putc(sk, (char)('0' + digits[0]));
+                    if (frac_len > 0 || alt) {
+                        _wasi_rt_sink_putc(sk, '.');
+                        for (di = 1; di <= frac_len; di++) _wasi_rt_sink_putc(sk, (char)('0' + digits[di]));
+                    }
+                    _wasi_rt_sink_puts(sk, ebuf, (size_t)ei);
+                    if (left) while (pad-- > 0) _wasi_rt_sink_putc(sk, ' ');
+                    continue;
+                }
+
+                /* Fixed %g / %G directly from exact decimal digits & exp10 (-4 <= exp10 < p) */
+                int plen = (neg || plus || space) ? 1 : 0;
+                if (dv == 0.0) {
+                    int fzeros = alt ? (p - 1) : 0;
+                    int total_len = plen + 1 + ((fzeros > 0 || alt) ? (1 + fzeros) : 0);
+                    int pad = (width > total_len) ? (width - total_len) : 0;
+                    if (!left && !zpad) while (pad-- > 0) _wasi_rt_sink_putc(sk, ' ');
+                    if (neg) _wasi_rt_sink_putc(sk, '-');
+                    else if (plus) _wasi_rt_sink_putc(sk, '+');
+                    else if (space) _wasi_rt_sink_putc(sk, ' ');
+                    if (!left && zpad) while (pad-- > 0) _wasi_rt_sink_putc(sk, '0');
+                    _wasi_rt_sink_putc(sk, '0');
+                    if (fzeros > 0 || alt) {
+                        _wasi_rt_sink_putc(sk, '.');
+                        for (di = 0; di < fzeros; di++) _wasi_rt_sink_putc(sk, '0');
+                    }
+                    if (left) while (pad-- > 0) _wasi_rt_sink_putc(sk, ' ');
+                    continue;
+                }
+                int sig_len = nd;
+                int min_sig = (exp10 >= 0) ? (exp10 + 1) : 1;
+                if (!alt) {
+                    while (sig_len > min_sig && digits[sig_len - 1] == 0) sig_len--;
+                }
+                int int_len = (exp10 >= 0) ? (exp10 + 1) : 1;
+                int lead_zeros = (exp10 < 0) ? (-exp10 - 1) : 0;
+                int frac_len = (exp10 >= 0) ? (sig_len - (exp10 + 1)) : (lead_zeros + sig_len);
+                int dotlen = (frac_len > 0 || alt) ? (1 + frac_len) : 0;
+                int total_len = plen + int_len + dotlen;
+                int pad = (width > total_len) ? (width - total_len) : 0;
+                if (!left && !zpad) while (pad-- > 0) _wasi_rt_sink_putc(sk, ' ');
+                if (neg) _wasi_rt_sink_putc(sk, '-');
+                else if (plus) _wasi_rt_sink_putc(sk, '+');
+                else if (space) _wasi_rt_sink_putc(sk, ' ');
+                if (!left && zpad) while (pad-- > 0) _wasi_rt_sink_putc(sk, '0');
+                if (exp10 >= 0) {
+                    for (di = 0; di <= exp10; di++) _wasi_rt_sink_putc(sk, (char)('0' + digits[di]));
+                    if (frac_len > 0 || alt) {
+                        _wasi_rt_sink_putc(sk, '.');
+                        for (di = exp10 + 1; di < sig_len; di++) _wasi_rt_sink_putc(sk, (char)('0' + digits[di]));
+                    }
+                } else {
+                    _wasi_rt_sink_putc(sk, '0');
+                    _wasi_rt_sink_putc(sk, '.');
+                    for (di = 0; di < lead_zeros; di++) _wasi_rt_sink_putc(sk, '0');
+                    for (di = 0; di < sig_len; di++) _wasi_rt_sink_putc(sk, (char)('0' + digits[di]));
+                }
+                if (left) while (pad-- > 0) _wasi_rt_sink_putc(sk, ' ');
+                continue;
             }
+
+            int eff_p = p;
             double round_add = 0.5;
             int rp;
             for (rp = 0; rp < eff_p; rp++) round_add *= 0.1;
@@ -1277,7 +1766,7 @@ static int _wasi_rt_vformat(_wasi_rt_fmt_sink *sk, const char *fmt, va_list ap) 
                 ipart /= 10ULL;
             } while (ipart > 0 && ti < 64);
 
-            char fbuf[16];
+            char fbuf[32];
             int fi = 0;
             for (fi = 0; fi < eff_p; fi++) {
                 fpart *= 10.0;
@@ -1997,6 +2486,7 @@ static double _wasi_rt_cos_core(double r) {
 }
 
 double sin(double x) {
+    if (x == 0.0) return x;
     if (x != x || fabs(x) > 1.0e15) return 0.0 / 0.0;
     double r = 0.0; int q = 0;
     _wasi_rt_sincos_reduce(x, &r, &q);
@@ -2022,7 +2512,7 @@ float cosf(float x) { return (float)cos((double)x); }
 float tanf(float x) { return (float)tan((double)x); }
 
 double atan(double x) {
-    if (x != x) return x;
+    if (x != x || x == 0.0) return x;
     int neg = 0, recip = 0;
     if (x < 0.0) { neg = 1; x = -x; }
     if (x > 1.0) { recip = 1; x = 1.0 / x; }
@@ -2043,11 +2533,14 @@ double atan(double x) {
 double atan2(double y, double x) {
     const double PI = 3.14159265358979323846;
     if (x != x || y != y) return 0.0 / 0.0;
+    int yneg = (int)((_wasi_rt_d2u(y) >> 63) & 1ULL);
+    int xneg = (int)((_wasi_rt_d2u(x) >> 63) & 1ULL);
     if (x > 0.0) return atan(y / x);
-    if (x < 0.0) return (y >= 0.0) ? (atan(y / x) + PI) : (atan(y / x) - PI);
+    if (x < 0.0) return yneg ? (atan(y / x) - PI) : (atan(y / x) + PI);
     if (y > 0.0) return 0.5 * PI;
     if (y < 0.0) return -0.5 * PI;
-    return 0.0;
+    if (xneg) return yneg ? -PI : PI;
+    return yneg ? -0.0 : 0.0;
 }
 
 double asin(double x) {
@@ -2065,6 +2558,161 @@ float atanf(float x) { return (float)atan((double)x); }
 float atan2f(float y, float x) { return (float)atan2((double)y, (double)x); }
 float asinf(float x) { return (float)asin((double)x); }
 float acosf(float x) { return (float)acos((double)x); }
+
+#ifndef FE_TONEAREST
+#define FE_TONEAREST  0
+#define FE_DOWNWARD   1
+#define FE_UPWARD     2
+#define FE_TOWARDZERO 3
+#endif
+
+static int fegetround(void) { return FE_TONEAREST; }
+static int fesetround(int mode) { (void)mode; return 0; }
+
+static int _wasi_signbit(double x) {
+    return (int)((_wasi_rt_d2u(x) >> 63) & 1ULL);
+}
+#ifdef signbit
+#undef signbit
+#endif
+#define signbit(x) _wasi_signbit((double)(x))
+
+long lrint(double x) {
+    if (x != x || fabs(x) >= 2147483648.0) return (long)x;
+    if (x >= 0.0) {
+        double f = floor(x);
+        double d = x - f;
+        if (d > 0.5) return (long)(f + 1.0);
+        if (d < 0.5) return (long)f;
+        long iv = (long)f;
+        return (iv & 1L) ? (iv + 1L) : iv;
+    } else {
+        double c = ceil(x);
+        double d = c - x;
+        if (d > 0.5) return (long)(c - 1.0);
+        if (d < 0.5) return (long)c;
+        long iv = (long)c;
+        return (iv & 1L) ? (iv - 1L) : iv;
+    }
+}
+
+double hypot(double x, double y) {
+    double ax = fabs(x), ay = fabs(y);
+    double inf = 1.0 / 0.0;
+    if (ax == inf || ay == inf) return inf;
+    if (ax != ax || ay != ay) return 0.0 / 0.0;
+    if (ax < ay) { double t = ax; ax = ay; ay = t; }
+    if (ax == 0.0) return 0.0;
+    double r = ay / ax;
+    return ax * sqrt(1.0 + r * r);
+}
+
+double cbrt(double x) {
+    if (x == 0.0 || x != x || fabs(x) > 1.7976931348623157e+308) return x;
+    int neg = 0;
+    if (x < 0.0) { neg = 1; x = -x; }
+    int e = 0;
+    double m = frexp(x, &e);
+    int r = e % 3;
+    if (r < 0) r += 3;
+    if (r == 1) { m *= 2.0; e -= 1; }
+    else if (r == 2) { m *= 4.0; e -= 2; }
+    double y = 0.5 * (m + 1.0);
+    int i;
+    for (i = 0; i < 10; i++) y = (2.0 * y + m / (y * y)) / 3.0;
+    double out = ldexp(y, e / 3);
+    return neg ? -out : out;
+}
+
+double expm1(double x) {
+    if (x != x || x == 0.0) return x;
+    if (x > 709.7827) return 1.0 / 0.0;
+    if (x < -38.0) return -1.0;
+    if (fabs(x) < 1e-4) {
+        double t = x, s = 0.0;
+        int k;
+        for (k = 1; k <= 8; k++) {
+            s += t;
+            t *= x / (double)(k + 1);
+        }
+        return s;
+    }
+    return exp(x) - 1.0;
+}
+
+double log1p(double x) {
+    if (x != x || x == 0.0) return x;
+    if (x < -1.0) return 0.0 / 0.0;
+    if (x == -1.0) return -1.0 / 0.0;
+    if (x > 1.7976931348623157e+308) return x;
+    if (fabs(x) < 1e-4) {
+        double t = x, s = 0.0;
+        int k;
+        for (k = 1; k <= 10; k++) {
+            s += (k & 1) ? (t / (double)k) : (-t / (double)k);
+            t *= x;
+        }
+        return s;
+    }
+    return log(1.0 + x);
+}
+
+double sinh(double x) {
+    if (x != x || x == 0.0) return x;
+    if (fabs(x) > 710.0) return (x > 0.0) ? (1.0 / 0.0) : (-1.0 / 0.0);
+    if (fabs(x) < 0.25) {
+        double s = expm1(x);
+        return 0.5 * (s + s / (1.0 + s));
+    }
+    double e = exp(fabs(x));
+    double res = 0.5 * (e - 1.0 / e);
+    return (x < 0.0) ? -res : res;
+}
+
+double cosh(double x) {
+    if (x != x) return x;
+    double ax = fabs(x);
+    if (ax > 710.0) return 1.0 / 0.0;
+    double e = exp(ax);
+    return 0.5 * (e + 1.0 / e);
+}
+
+double tanh(double x) {
+    if (x != x || x == 0.0) return x;
+    double ax = fabs(x);
+    if (ax > 22.0) return (x > 0.0) ? 1.0 : -1.0;
+    double res = sinh(ax) / cosh(ax);
+    return (x < 0.0) ? -res : res;
+}
+
+double asinh(double x) {
+    if (x != x || x == 0.0) return x;
+    double ax = fabs(x);
+    if (ax > 1.7976931348623157e+308) return x;
+    double res;
+    if (ax > 1e8) res = log(ax) + 0.69314718055994530942;
+    else if (ax < 1e-4) res = ax - (ax * ax * ax) / 6.0;
+    else res = log1p(ax + (ax * ax) / (1.0 + sqrt(1.0 + ax * ax)));
+    return (x < 0.0) ? -res : res;
+}
+
+double acosh(double x) {
+    if (x != x) return x;
+    if (x < 1.0) return 0.0 / 0.0;
+    if (x > 1.7976931348623157e+308) return x;
+    if (x > 1e8) return log(x) + 0.69314718055994530942;
+    double xm1 = x - 1.0;
+    return log1p(xm1 + sqrt(2.0 * xm1 + xm1 * xm1));
+}
+
+double atanh(double x) {
+    if (x != x || x == 0.0) return x;
+    double ax = fabs(x);
+    if (ax > 1.0) return 0.0 / 0.0;
+    if (ax == 1.0) return (x > 0.0) ? (1.0 / 0.0) : (-1.0 / 0.0);
+    double res = 0.5 * log1p(2.0 * ax / (1.0 - ax));
+    return (x < 0.0) ? -res : res;
+}
 
 void perror(const char *s) {
     if (s && s[0]) {

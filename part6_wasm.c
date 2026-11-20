@@ -98,13 +98,17 @@ static void wasm_emit_numeric_conversion(WASMBuffer *buf, uint8_t src_vt, uint8_
     } else if (src_vt == WASM_TYPE_F64 && dst_vt == WASM_TYPE_F32) {
         wasm_buf_append_u8(buf, WASM_OP_F32_DEMOTE_F64);
     } else if (src_vt == WASM_TYPE_F32 && dst_vt == WASM_TYPE_I32) {
-        wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_I32_TRUNC_F32_U : WASM_OP_I32_TRUNC_F32_S);
+        wasm_buf_append_u8(buf, 0xFC);
+        wasm_buf_append_u8(buf, is_unsigned ? 0x01 : 0x00);
     } else if (src_vt == WASM_TYPE_F64 && dst_vt == WASM_TYPE_I32) {
-        wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_I32_TRUNC_F64_U : WASM_OP_I32_TRUNC_F64_S);
+        wasm_buf_append_u8(buf, 0xFC);
+        wasm_buf_append_u8(buf, is_unsigned ? 0x03 : 0x02);
     } else if (src_vt == WASM_TYPE_F32 && dst_vt == WASM_TYPE_I64) {
-        wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_I64_TRUNC_F32_U : WASM_OP_I64_TRUNC_F32_S);
+        wasm_buf_append_u8(buf, 0xFC);
+        wasm_buf_append_u8(buf, is_unsigned ? 0x05 : 0x04);
     } else if (src_vt == WASM_TYPE_F64 && dst_vt == WASM_TYPE_I64) {
-        wasm_buf_append_u8(buf, is_unsigned ? WASM_OP_I64_TRUNC_F64_U : WASM_OP_I64_TRUNC_F64_S);
+        wasm_buf_append_u8(buf, 0xFC);
+        wasm_buf_append_u8(buf, is_unsigned ? 0x07 : 0x06);
     }
 }
 
@@ -2728,6 +2732,32 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                 wasm_buf_append_sleb128(&fn->body, 0);
                 break;
             }
+            if ((strcmp(node->func_name, "alloca") == 0 || strcmp(node->func_name, "__builtin_alloca") == 0) &&
+                node->num_args >= 1 && node->args && node->args[0] &&
+                lmap->tmp_val_idx >= 0 && lmap->tmp_addr_idx >= 0) {
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_int);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                wasm_buf_append_sleb128(&fn->body, 16);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_ADD);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                wasm_buf_append_sleb128(&fn->body, -16);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_AND);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                wasm_buf_append_u8(&fn->body, WASM_OP_GLOBAL_GET);
+                wasm_buf_append_uleb128(&fn->body, 0);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_val_idx);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_SUB);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_addr_idx);
+                wasm_buf_append_u8(&fn->body, WASM_OP_GLOBAL_SET);
+                wasm_buf_append_uleb128(&fn->body, 0);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->tmp_addr_idx);
+                break;
+            }
             if (node->num_args == 1 && node->args && node->args[0] &&
                 wasm_find_func_idx(mod, node->func_name) < 0 &&
                 (strcmp(node->func_name, "fabsf") == 0 || strcmp(node->func_name, "__builtin_fabsf") == 0 ||
@@ -4720,20 +4750,101 @@ static int wasm_eval_ginit_ptr_const(const WasmModule *mod, WasmGlobalMap *gmap,
     return 0;
 }
 
+static int wasm_eval_ginit_double_const(Node *n, double *out) {
+    if (!n || !out) return 0;
+    while (n && n->kind == ND_CAST) n = n->lhs;
+    if (!n) return 0;
+    if (n->kind == ND_FLIT) { *out = n->f_val; return 1; }
+    if (n->kind == ND_NUM) { *out = (double)n->int_val; return 1; }
+    if (n->kind == ND_NEG && n->lhs) {
+        double v = 0.0;
+        if (wasm_eval_ginit_double_const(n->lhs, &v)) { *out = -v; return 1; }
+        return 0;
+    }
+    if ((n->kind == ND_ADD || n->kind == ND_SUB || n->kind == ND_MUL || n->kind == ND_DIV) && n->lhs && n->rhs) {
+        double lv = 0.0, rv = 0.0;
+        if (wasm_eval_ginit_double_const(n->lhs, &lv) && wasm_eval_ginit_double_const(n->rhs, &rv)) {
+            if (n->kind == ND_ADD) *out = lv + rv;
+            else if (n->kind == ND_SUB) *out = lv - rv;
+            else if (n->kind == ND_MUL) *out = lv * rv;
+            else *out = lv / rv;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static void wasm_fill_ginit(Compiler *cc, const WasmModule *mod, WasmGlobalMap *gmap, Node *init, Type *t, uint8_t *dst, int max_sz) {
     if (!init || max_sz <= 0) return;
     if (init->kind == ND_INIT_LIST) {
         if (t && (t->kind == TY_STRUCT || t->kind == TY_UNION)) {
             StructField *f = t->fields;
             for (int i = 0; i < init->num_args && f; i++, f = f->next) {
-                if (f->type && f->offset + type_size(f->type) <= max_sz) {
-                    wasm_fill_ginit(cc, mod, gmap, init->args[i], f->type, dst + f->offset, type_size(f->type));
+                Node *elem = init->args[i];
+                int foff = f->offset;
+                if (elem && elem->member_name[0]) {
+                    int dummy_off = 0;
+                    StructField *sf = find_struct_member(t, elem->member_name, &dummy_off);
+                    if (sf) {
+                        f = sf;
+                        foff = dummy_off;
+                    }
+                }
+                if (f->is_bitfield) {
+                    int c_off = f->offset;
+                    int c_sz = (f->type && type_size(f->type) > 0) ? type_size(f->type) : 4;
+                    uint64_t bit_accum = 0;
+                    if (c_off >= 0 && c_sz > 0 && c_off + c_sz <= max_sz) {
+                        memcpy(&bit_accum, dst + c_off, c_sz <= 8 ? (size_t)c_sz : 8);
+                    }
+                    while (f && f->is_bitfield && f->offset == c_off && i < init->num_args) {
+                        Node *belem = init->args[i];
+                        while (belem && belem->kind == ND_CAST) belem = belem->lhs;
+                        int bok = 1;
+                        long long bval = eval_const_expr_p4(belem, &bok);
+                        uint64_t bmask = (f->bit_size >= 64) ? ~0ULL : ((1ULL << f->bit_size) - 1ULL);
+                        bit_accum = (bit_accum & ~(bmask << f->bit_offset)) | (((uint64_t)bval & bmask) << f->bit_offset);
+                        if (f->next && f->next->is_bitfield && f->next->offset == c_off && (i + 1) < init->num_args) {
+                            f = f->next;
+                            i++;
+                        } else {
+                            break;
+                        }
+                    }
+                    if (c_off >= 0 && c_sz > 0 && c_off + c_sz <= max_sz) {
+                        memcpy(dst + c_off, &bit_accum, c_sz <= 8 ? (size_t)c_sz : 8);
+                    }
+                    if (t->kind == TY_UNION) break;
+                    continue;
+                }
+                int fsz = f->type ? type_size(f->type) : 0;
+                if (f->type && f->type->kind == TY_PTR) fsz = 4;
+                if (f->type && foff >= 0 && fsz > 0 && foff + fsz <= max_sz) {
+                    wasm_fill_ginit(cc, mod, gmap, elem, f->type, dst + foff, fsz);
                 }
                 if (t->kind == TY_UNION) break;
             }
         } else {
-            Type *et = (t && t->base) ? t->base : t; int esz = (et && type_size(et) > 0) ? type_size(et) : 4;
-            for (int i = 0; i < init->num_args && (i + 1) * esz <= max_sz; i++) wasm_fill_ginit(cc, mod, gmap, init->args[i], et, dst + i * esz, esz);
+            Type *et = (t && t->base) ? t->base : t;
+            if (init->num_args == 1 && init->args[0] && init->args[0]->kind == ND_STR &&
+                t && t->kind == TY_ARRAY && et && type_size(et) == 1) {
+                wasm_fill_ginit(cc, mod, gmap, init->args[0], t, dst, max_sz);
+                return;
+            }
+            int esz = (et && type_size(et) > 0) ? type_size(et) : 4;
+            if (et && et->kind == TY_PTR) esz = 4;
+            for (int i = 0; i < init->num_args && (i + 1) * esz <= max_sz; i++) {
+                wasm_fill_ginit(cc, mod, gmap, init->args[i], et, dst + i * esz, esz);
+            }
+        }
+        return;
+    }
+    if (t && (t->kind == TY_STRUCT || t->kind == TY_UNION) &&
+        !(init->type && (init->type->kind == TY_STRUCT || init->type->kind == TY_UNION))) {
+        if (t->fields && t->fields->type) {
+            int fsz = (t->fields->type->kind == TY_PTR) ? 4 : type_size(t->fields->type);
+            if (fsz <= 0 || t->fields->offset + fsz > max_sz) fsz = max_sz - t->fields->offset;
+            wasm_fill_ginit(cc, mod, gmap, init, t->fields->type, dst + t->fields->offset, fsz);
         }
         return;
     }
@@ -4757,7 +4868,12 @@ static void wasm_fill_ginit(Compiler *cc, const WasmModule *mod, WasmGlobalMap *
     if (init->kind == ND_FLIT ||
         (init->kind == ND_NEG && init->lhs && init->lhs->kind == ND_FLIT) ||
         (t && (t->kind == TY_FLOAT || t->kind == TY_DOUBLE))) {
-        double dv = (init->kind == ND_NEG && init->lhs) ? -init->lhs->f_val : (init->kind == ND_FLIT ? init->f_val : (double)init->int_val);
+        double dv = 0.0;
+        if (!wasm_eval_ginit_double_const(init, &dv)) {
+            int ok = 1;
+            long long iv = eval_const_expr_p4(init, &ok);
+            dv = ok ? (double)iv : (double)init->int_val;
+        }
         if (t && t->kind == TY_FLOAT) { float fv = (float)dv; if (max_sz >= 4) memcpy(dst, &fv, 4); }
         else if (max_sz >= 8) memcpy(dst, &dv, 8);
         return;
@@ -4802,7 +4918,8 @@ static int wasm_is_runtime_reserved_name(const char *name) {
             strcmp(name, "malloc") == 0 || strcmp(name, "free") == 0 ||
             strcmp(name, "calloc") == 0 || strcmp(name, "realloc") == 0 ||
             strcmp(name, "zcc_heap_used") == 0 || strcmp(name, "zcc_heap_capacity") == 0 ||
-            strcmp(name, "fabsf") == 0 || strcmp(name, "sqrtf") == 0);
+            strcmp(name, "fabsf") == 0 || strcmp(name, "sqrtf") == 0 ||
+            strcmp(name, "alloca") == 0);
 }
 
 static Symbol *wasm_find_scope_symbol(Compiler *cc, const char *name) {
@@ -5235,6 +5352,11 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
 
             /* Allocate frame pointer and temporary locals */
             if (wasm_func_reserve_locals(fn, fn->num_locals + 6U) < 0) goto fail_cleanup;
+            if (frame_size <= 0 && curr->body &&
+                (wasm_ast_has_call_name(curr->body, "alloca") ||
+                 wasm_ast_has_call_name(curr->body, "__builtin_alloca"))) {
+                frame_size = 16;
+            }
             if (frame_size > 0) {
                 frame_size = (frame_size + 15) & -16; /* 16-byte frame alignment */
                 lmap.frame_size = frame_size;

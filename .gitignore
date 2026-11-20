@@ -819,6 +819,7 @@ config/.isolated_vault/
 *.tx_tmp
 build/
 releases/
+tests/embedded_quickjs/
 
 
 
