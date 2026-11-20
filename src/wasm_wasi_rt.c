@@ -15,6 +15,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifndef SSIZE_MAX
+#define SSIZE_MAX 2147483647
+#endif
+
 /* -------------------------------------------------------------------------
  * 1. WASI Preview1 Imports (`__wasi_*` -> `wasi_snapshot_preview1.*`)
  * ------------------------------------------------------------------------- */
@@ -2231,18 +2235,18 @@ int sigsetjmp(sigjmp_buf env, int savesigs) {
     return 0;
 }
 
+extern void __zcc_wasm_longjmp(jmp_buf env, int val);
+
 void longjmp(jmp_buf env, int val) {
-    (void)env;
-    fprintf(stderr, "wasi_rt: uncaught longjmp(%d)\n", val);
-    exit(val ? val : 1);
+    __zcc_wasm_longjmp(env, val);
 }
 
 void _longjmp(jmp_buf env, int val) {
-    longjmp(env, val);
+    __zcc_wasm_longjmp(env, val);
 }
 
 void siglongjmp(sigjmp_buf env, int val) {
-    longjmp((long *)env, val);
+    __zcc_wasm_longjmp((long *)env, val);
 }
 
 void (*signal(int sig, void (*func)(int)))(int) {
@@ -2372,6 +2376,30 @@ double fmod(double x, double y) {
 
 float fmodf(float x, float y) {
     return (float)fmod((double)x, (double)y);
+}
+
+double nan(const char *tagp) {
+    (void)tagp;
+    return _wasi_rt_u2d(0x7FF8000000000000ULL);
+}
+
+double nearbyint(double x) {
+    if (x == 0.0 || x != x || fabs(x) >= 4503599627370496.0) return x;
+    double f = floor(x);
+    double d = x - f;
+    double res;
+    if (d > 0.5) {
+        res = f + 1.0;
+    } else if (d < 0.5) {
+        res = f;
+    } else {
+        res = (fmod(f, 2.0) == 0.0) ? f : (f + 1.0);
+    }
+    return copysign(res, x);
+}
+
+float nearbyintf(float x) {
+    return (float)nearbyint((double)x);
 }
 
 double sqrt(double x) {

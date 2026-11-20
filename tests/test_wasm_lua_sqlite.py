@@ -299,6 +299,29 @@ class TestWasmLuaSqlite(unittest.TestCase):
             self.assertEqual(r_fshim["exitCode"], 0, r_fshim["stderr"])
             self.assertEqual(r_fshim["stdout"], "FILE_OK\t55\n")
 
+    def test_02b_lua54_pcall_xpcall_error_recovery(self):
+        script = r"""
+local ok1, err1 = pcall(function() error("boom_pcall", 0) end)
+assert(ok1 == false and err1 == "boom_pcall", "pcall mismatch")
+local ok2, err2 = xpcall(function() local x = nil; return x + 1 end, function(m) return "X:" .. tostring(m) end)
+assert(ok2 == false and type(err2) == "string" and #err2 > 4, "xpcall mismatch")
+local ok3, res3 = pcall(function()
+  local iok, ierr = pcall(function() error("nested_inner", 0) end)
+  assert(iok == false and ierr == "nested_inner")
+  return "RECOVERED:" .. ierr
+end)
+assert(ok3 == true and res3 == "RECOVERED:nested_inner", "nested mismatch")
+print("PCALL_OK", res3)
+"""
+        r_node = run_node_wasi(self.node_bin, LUA_WASM, ["lua.wasm", "-e", script])
+        self.assertEqual(r_node.returncode, 0, r_node.stderr)
+        self.assertEqual(r_node.stdout.strip(), "PCALL_OK\tRECOVERED:nested_inner")
+
+        r_shim = run_browser_shim(self.node_bin, LUA_WASM, ["lua.wasm", "pcall_chk.lua"], files={"pcall_chk.lua": script})
+        self.assertIsNone(r_shim["trap"])
+        self.assertEqual(r_shim["exitCode"], 0, r_shim["stderr"])
+        self.assertEqual(r_shim["stdout"].strip(), "PCALL_OK\tRECOVERED:nested_inner")
+
     def test_03_sqlite3_memory_differential_dual_host(self):
         expected_rows = sqlite_python_oracle(SQL_WORKLOAD)
         self.assertEqual(expected_rows, "Eng|2|325\nOps|2|300\nResearch|1|200\n21|6\n")

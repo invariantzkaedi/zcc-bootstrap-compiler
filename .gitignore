@@ -820,6 +820,7 @@ config/.isolated_vault/
 build/
 releases/
 tests/embedded_quickjs/
+tests/embedded_micropython/
 
 
 

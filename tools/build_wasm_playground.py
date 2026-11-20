@@ -401,7 +401,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <!-- TAB 3: EXTERNAL WASI RUNNER -->
       <section id="panel-ext" class="panel hidden">
         <div id="extDropZone" class="dropzone">
-          Drop any WASI Preview1 <code>.wasm</code> (e.g. <code>build_wasm/sqlite3.wasm</code> or <code>build_wasm/qjs.wasm</code>) here or select locally with zero server:
+          Drop any WASI Preview1 <code>.wasm</code> (e.g. <code>build_wasm/sqlite3.wasm</code>, <code>build_wasm/qjs.wasm</code>, or <code>build_wasm/micropython.wasm</code>) here or select locally with zero server:
           <div style="margin-top:8px">
             <input id="extWasmFile" type="file" accept=".wasm" data-action="loadExternalFile" onchange="zccUiAction('loadExternalFile', event)">
           </div>
@@ -891,11 +891,12 @@ __EMBEDDED_SHIM_JS__
   const SECTION_NAMES = {
     0: "Custom", 1: "Type", 2: "Import", 3: "Function", 4: "Table",
     5: "Memory", 6: "Global", 7: "Export", 8: "Start", 9: "Element",
-    10: "Code", 11: "Data",
+    10: "Code", 11: "Data", 13: "Tag",
   };
   const SECTION_COLORS = {
     1: "#38bdf8", 2: "#818cf8", 3: "#2dd4bf", 4: "#f59e0b", 5: "#f97316",
     6: "#ec4899", 7: "#22c55e", 9: "#a855f7", 10: "#0ea5e9", 11: "#eab308",
+    13: "#f43f5e",
   };
 
   function el(id) {

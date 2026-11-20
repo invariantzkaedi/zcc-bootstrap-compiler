@@ -29,7 +29,8 @@ typedef enum {
     WASM_SEC_START    = 8,
     WASM_SEC_ELEMENT  = 9,
     WASM_SEC_CODE     = 10,
-    WASM_SEC_DATA     = 11
+    WASM_SEC_DATA     = 11,
+    WASM_SEC_TAG      = 13
 } WASMSectionID;
 
 /* WebAssembly Value Types */
@@ -59,6 +60,7 @@ typedef enum {
     WASM_OP_LOOP         = 0x03,
     WASM_OP_IF           = 0x04,
     WASM_OP_ELSE         = 0x05,
+    WASM_OP_THROW        = 0x08,
     WASM_OP_END          = 0x0B,
     WASM_OP_BR           = 0x0C,
     WASM_OP_BR_IF        = 0x0D,
@@ -68,6 +70,7 @@ typedef enum {
     WASM_OP_CALL_INDIRECT= 0x11,
     WASM_OP_DROP         = 0x1A,
     WASM_OP_SELECT       = 0x1B,
+    WASM_OP_TRY_TABLE    = 0x1F,
     WASM_OP_LOCAL_GET    = 0x20,
     WASM_OP_LOCAL_SET    = 0x21,
     WASM_OP_LOCAL_TEE    = 0x22,
@@ -322,6 +325,7 @@ typedef struct {
     int tmp_f32_idx;     /* Scratch local for f32 evaluation */
     int tmp_f64_idx;     /* Scratch local for f64 evaluation */
     int tmp_v128_idx;    /* Scratch local for v128 vector reduction */
+    int sj_val_local_idx;/* Returned value local for setjmp EH dispatch, -1 if none */
 } WasmLocalMap;
 
 /* Function Definition */
@@ -388,7 +392,11 @@ typedef struct {
     int cap_table_elements;
     uint32_t heap_base_init;
     int free_head_global_idx;
+    int has_longjmp_tag;
+    int longjmp_tag_type_idx;
 } WasmModule;
+
+#define WASM_CATCH_TAG 0x00
 
 /* Buffer & Encoding Functions */
 void wasm_buf_init(WASMBuffer *buf);

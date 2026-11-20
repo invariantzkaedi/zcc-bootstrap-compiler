@@ -267,9 +267,32 @@ static int wasm_register_global(WasmGlobalMap *gmap, uint32_t *static_off, Node 
     int sz = gvar->type ? type_size(gvar->type) : 0;
     if (gvar->type && gvar->type->kind == TY_ARRAY && gvar->type->base &&
         gvar->initializer && gvar->initializer->kind == ND_INIT_LIST) {
-        int esz = type_size(gvar->type->base);
+        int esz = (gvar->type->base->kind == TY_PTR) ? 4 : type_size(gvar->type->base);
         int list_sz = (esz > 0) ? (esz * gvar->initializer->num_args) : 0;
         if (list_sz > sz) sz = list_sz;
+    }
+    if (gvar->type && gvar->type->kind == TY_STRUCT &&
+        gvar->initializer && gvar->initializer->kind == ND_INIT_LIST) {
+        StructField *f = gvar->type->fields;
+        for (int i = 0; i < gvar->initializer->num_args && f; i++, f = f->next) {
+            Node *elem = gvar->initializer->args[i];
+            int foff = f->offset;
+            if (elem && elem->member_name[0]) {
+                int dummy_off = 0;
+                StructField *sf = find_struct_member(gvar->type, elem->member_name, &dummy_off);
+                if (sf) { f = sf; foff = dummy_off; }
+            }
+            if (f->type && f->type->kind == TY_ARRAY && f->type->array_len <= 0 && f->type->base) {
+                int esz = (f->type->base->kind == TY_PTR) ? 4 : type_size(f->type->base);
+                if (esz <= 0) esz = 4;
+                int count = (elem && elem->kind == ND_INIT_LIST)
+                            ? elem->num_args
+                            : ((f->next == NULL) ? (gvar->initializer->num_args - i) : 1);
+                int end_off = foff + esz * count;
+                if (end_off > sz) sz = end_off;
+                if (!elem || elem->kind != ND_INIT_LIST) break;
+            }
+        }
     }
     if (sz <= 0) sz = 4;
     WasmGlobalVar *existing = wasm_global_find(gmap, gname);
@@ -648,6 +671,8 @@ static int wasm_node_has_side_effects(Node *n) {
     return 0;
 }
 
+static int wasm_is_longjmp_name(const char *name);
+
 static int wasm_expr_has_value(const WasmModule *mod, Node *n) {
     if (!n) return 0;
     if (n->kind == ND_BLOCK || n->kind == ND_NOP || n->kind == ND_IF ||
@@ -671,6 +696,9 @@ static int wasm_expr_has_value(const WasmModule *mod, Node *n) {
         return 1;
     }
     if (n->kind == ND_CALL) {
+        if (wasm_is_longjmp_name(n->func_name)) {
+            return 0;
+        }
         if (strncmp(n->func_name, "__zcc_wasm_", 11) == 0 ||
             strncmp(n->func_name, "__builtin_", 10) == 0) {
             return 1;
@@ -2732,6 +2760,58 @@ static void wasm_lower_expr(Compiler *cc, const WasmModule *mod, WasmFunction *f
                 wasm_buf_append_sleb128(&fn->body, 0);
                 break;
             }
+            if (strcmp(node->func_name, "__zcc_wasm_sj_val") == 0) {
+                if (lmap->sj_val_local_idx >= 0) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->sj_val_local_idx);
+                } else {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 0);
+                }
+                break;
+            }
+            if ((strcmp(node->func_name, "longjmp") == 0 || strcmp(node->func_name, "_longjmp") == 0 ||
+                 strcmp(node->func_name, "siglongjmp") == 0 || strcmp(node->func_name, "__zcc_wasm_longjmp") == 0 ||
+                 strcmp(node->func_name, "__builtin_longjmp") == 0) &&
+                node->num_args >= 2 && node->args && node->args[0] && node->args[1]) {
+                if (!mod->has_longjmp_tag) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_UNREACHABLE);
+                    break;
+                }
+                int env_loc = wasm_alloc_temp_local(fn, WASM_TYPE_I32);
+                int val_loc = wasm_alloc_temp_local(fn, WASM_TYPE_I32);
+                if (env_loc < 0 || val_loc < 0) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_UNREACHABLE);
+                    break;
+                }
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[0]);
+                wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[0]), node->args[0]->type, WASM_TYPE_I32, cc->ty_int);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)env_loc);
+                wasm_lower_expr(cc, mod, fn, lmap, gmap, node->args[1]);
+                wasm_emit_type_conversion(&fn->body, wasm_node_valtype(node->args[1]), node->args[1]->type, WASM_TYPE_I32, cc->ty_int);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)val_loc);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_EQZ);
+                wasm_buf_append_u8(&fn->body, WASM_OP_IF);
+                wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                wasm_buf_append_sleb128(&fn->body, 1);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)val_loc);
+                wasm_buf_append_u8(&fn->body, WASM_OP_END);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)env_loc);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)val_loc);
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_STORE);
+                wasm_emit_memarg_safe(&fn->body, 2, 12);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)env_loc);
+                wasm_buf_append_u8(&fn->body, WASM_OP_THROW);
+                wasm_buf_append_uleb128(&fn->body, 0);
+                break;
+            }
             if ((strcmp(node->func_name, "alloca") == 0 || strcmp(node->func_name, "__builtin_alloca") == 0) &&
                 node->num_args >= 1 && node->args && node->args[0] &&
                 lmap->tmp_val_idx >= 0 && lmap->tmp_addr_idx >= 0) {
@@ -4086,14 +4166,15 @@ static void wasm_lower_stmt(Compiler *cc, const WasmModule *mod, WasmFunction *f
     }
 }
 
-/* CFG Flattener & br_table Dispatcher for Functions Containing goto */
+/* CFG Flattener & br_table Dispatcher for Functions Containing goto or setjmp */
 typedef enum {
     WASM_CFG_NONE = 0,
     WASM_CFG_JMP,
     WASM_CFG_BRANCH,
     WASM_CFG_SWITCH,
     WASM_CFG_RETURN,
-    WASM_CFG_EXIT
+    WASM_CFG_EXIT,
+    WASM_CFG_SETJMP
 } WasmCfgTermKind;
 
 typedef struct {
@@ -4126,7 +4207,73 @@ typedef struct {
     WasmCfgLabel *labels;
     int num_labels;
     int cap_labels;
+    int has_setjmp;
 } WasmCfg;
+
+static int wasm_is_setjmp_name(const char *name) {
+    if (!name || !name[0]) return 0;
+    return (strcmp(name, "setjmp") == 0 || strcmp(name, "_setjmp") == 0 ||
+            strcmp(name, "sigsetjmp") == 0 || strcmp(name, "__builtin_setjmp") == 0);
+}
+
+static int wasm_is_longjmp_name(const char *name) {
+    if (!name || !name[0]) return 0;
+    return (strcmp(name, "longjmp") == 0 || strcmp(name, "_longjmp") == 0 ||
+            strcmp(name, "siglongjmp") == 0 || strcmp(name, "__zcc_wasm_longjmp") == 0 ||
+            strcmp(name, "__builtin_longjmp") == 0);
+}
+
+static int wasm_ast_has_setjmp(Node *node) {
+    if (!node) return 0;
+    if (node->kind == ND_CALL && !node->lhs && wasm_is_setjmp_name(node->func_name)) return 1;
+    if (node->lhs && wasm_ast_has_setjmp(node->lhs)) return 1;
+    if (node->rhs && wasm_ast_has_setjmp(node->rhs)) return 1;
+    if (node->cond && wasm_ast_has_setjmp(node->cond)) return 1;
+    if (node->then_body && wasm_ast_has_setjmp(node->then_body)) return 1;
+    if (node->else_body && wasm_ast_has_setjmp(node->else_body)) return 1;
+    if (node->body && wasm_ast_has_setjmp(node->body)) return 1;
+    if (node->init && wasm_ast_has_setjmp(node->init)) return 1;
+    if (node->inc && wasm_ast_has_setjmp(node->inc)) return 1;
+    if (node->stmts) {
+        int s;
+        for (s = 0; s < node->num_stmts; s++) {
+            if (wasm_ast_has_setjmp(node->stmts[s])) return 1;
+        }
+    }
+    if (node->args) {
+        int a;
+        for (a = 0; a < node->num_args; a++) {
+            if (wasm_ast_has_setjmp(node->args[a])) return 1;
+        }
+    }
+    return 0;
+}
+
+static int wasm_ast_has_longjmp(Node *node) {
+    if (!node) return 0;
+    if (node->kind == ND_CALL && !node->lhs && wasm_is_longjmp_name(node->func_name)) return 1;
+    if (node->lhs && wasm_ast_has_longjmp(node->lhs)) return 1;
+    if (node->rhs && wasm_ast_has_longjmp(node->rhs)) return 1;
+    if (node->cond && wasm_ast_has_longjmp(node->cond)) return 1;
+    if (node->then_body && wasm_ast_has_longjmp(node->then_body)) return 1;
+    if (node->else_body && wasm_ast_has_longjmp(node->else_body)) return 1;
+    if (node->body && wasm_ast_has_longjmp(node->body)) return 1;
+    if (node->init && wasm_ast_has_longjmp(node->init)) return 1;
+    if (node->inc && wasm_ast_has_longjmp(node->inc)) return 1;
+    if (node->stmts) {
+        int s;
+        for (s = 0; s < node->num_stmts; s++) {
+            if (wasm_ast_has_longjmp(node->stmts[s])) return 1;
+        }
+    }
+    if (node->args) {
+        int a;
+        for (a = 0; a < node->num_args; a++) {
+            if (wasm_ast_has_longjmp(node->args[a])) return 1;
+        }
+    }
+    return 0;
+}
 
 static int wasm_ast_has_goto(Node *node) {
     if (!node) return 0;
@@ -4211,6 +4358,61 @@ static void wasm_cfg_free(WasmCfg *cfg) {
     memset(cfg, 0, sizeof(WasmCfg));
 }
 
+static Node *wasm_cfg_find_and_hoist_setjmp(WasmCfg *cfg, int cur_bb, Node **p_node) {
+    if (!p_node || !*p_node) return NULL;
+    Node *n = *p_node;
+    if (n->kind == ND_CALL && !n->lhs && wasm_is_setjmp_name(n->func_name)) {
+        return n;
+    }
+    if (n->kind == ND_COMMA_EXPR) {
+        if (n->lhs && wasm_ast_has_setjmp(n->lhs)) {
+            return wasm_cfg_find_and_hoist_setjmp(cfg, cur_bb, &n->lhs);
+        }
+        if (n->rhs && wasm_ast_has_setjmp(n->rhs)) {
+            if (cur_bb >= 0 && n->lhs) {
+                wasm_cfg_add_stmt(cfg, cur_bb, n->lhs);
+            }
+            *p_node = n->rhs;
+            return wasm_cfg_find_and_hoist_setjmp(cfg, cur_bb, p_node);
+        }
+        return NULL;
+    }
+    if (n->kind == ND_ASSIGN) {
+        if (n->rhs && wasm_ast_has_setjmp(n->rhs)) {
+            return wasm_cfg_find_and_hoist_setjmp(cfg, cur_bb, &n->rhs);
+        }
+        return NULL;
+    }
+    if (n->lhs && wasm_ast_has_setjmp(n->lhs)) {
+        return wasm_cfg_find_and_hoist_setjmp(cfg, cur_bb, &n->lhs);
+    }
+    if (n->rhs && wasm_ast_has_setjmp(n->rhs)) {
+        return wasm_cfg_find_and_hoist_setjmp(cfg, cur_bb, &n->rhs);
+    }
+    if (n->cond && wasm_ast_has_setjmp(n->cond)) {
+        return wasm_cfg_find_and_hoist_setjmp(cfg, cur_bb, &n->cond);
+    }
+    return NULL;
+}
+
+static void wasm_cfg_extract_setjmp(WasmCfg *cfg, int *p_cur_bb, Node **p_expr) {
+    while (*p_cur_bb >= 0 && p_expr && *p_expr && wasm_ast_has_setjmp(*p_expr)) {
+        Node *sj = wasm_cfg_find_and_hoist_setjmp(cfg, *p_cur_bb, p_expr);
+        if (!sj) break;
+        int resume_bb = wasm_cfg_new_block(cfg);
+        if (resume_bb < 0) break;
+        WasmCfgBlock *cb = &cfg->blocks[*p_cur_bb];
+        cb->term = WASM_CFG_SETJMP;
+        cb->cond_or_ret = (sj->num_args >= 1 && sj->args) ? sj->args[0] : NULL;
+        cb->target = resume_bb;
+        cfg->has_setjmp = 1;
+        strncpy(sj->func_name, "__zcc_wasm_sj_val", MAX_IDENT - 1);
+        sj->func_name[MAX_IDENT - 1] = '\0';
+        sj->num_args = 0;
+        *p_cur_bb = resume_bb;
+    }
+}
+
 static int wasm_cfg_build_stmt(WasmCfg *cfg, Node *stmt, int cur_bb, int break_tgt, int cont_tgt) {
     if (!stmt) return cur_bb;
 
@@ -4258,6 +4460,9 @@ static int wasm_cfg_build_stmt(WasmCfg *cfg, Node *stmt, int cur_bb, int break_t
         }
 
         case ND_RETURN: {
+            if (cur_bb >= 0 && stmt->lhs && wasm_ast_has_setjmp(stmt->lhs)) {
+                wasm_cfg_extract_setjmp(cfg, &cur_bb, &stmt->lhs);
+            }
             if (cur_bb >= 0) {
                 cfg->blocks[cur_bb].term = WASM_CFG_RETURN;
                 cfg->blocks[cur_bb].cond_or_ret = stmt;
@@ -4285,6 +4490,9 @@ static int wasm_cfg_build_stmt(WasmCfg *cfg, Node *stmt, int cur_bb, int break_t
                 if (ee >= 0) { cfg->blocks[ee].term = WASM_CFG_JMP; cfg->blocks[ee].target = after_bb; }
                 return after_bb;
             }
+            if (stmt->cond && wasm_ast_has_setjmp(stmt->cond)) {
+                wasm_cfg_extract_setjmp(cfg, &cur_bb, &stmt->cond);
+            }
             int then_bb = wasm_cfg_new_block(cfg);
             int after_bb = wasm_cfg_new_block(cfg);
             int else_bb = else_node ? wasm_cfg_new_block(cfg) : after_bb;
@@ -4311,15 +4519,19 @@ static int wasm_cfg_build_stmt(WasmCfg *cfg, Node *stmt, int cur_bb, int break_t
                 cfg->blocks[cur_bb].target = hdr_bb;
             }
             if (stmt->cond) {
-                cfg->blocks[hdr_bb].term = WASM_CFG_BRANCH;
-                cfg->blocks[hdr_bb].cond_or_ret = stmt->cond;
-                cfg->blocks[hdr_bb].target = body_bb;
-                cfg->blocks[hdr_bb].false_target = after_bb;
+                int cond_bb = hdr_bb;
+                if (wasm_ast_has_setjmp(stmt->cond)) {
+                    wasm_cfg_extract_setjmp(cfg, &cond_bb, &stmt->cond);
+                }
+                cfg->blocks[cond_bb].term = WASM_CFG_BRANCH;
+                cfg->blocks[cond_bb].cond_or_ret = stmt->cond;
+                cfg->blocks[cond_bb].target = body_bb;
+                cfg->blocks[cond_bb].false_target = after_bb;
             } else {
                 cfg->blocks[hdr_bb].term = WASM_CFG_JMP;
                 cfg->blocks[hdr_bb].target = body_bb;
             }
-            int be = loop_body ? wasm_cfg_build_stmt(cfg, loop_body, (cur_bb >= 0 || wasm_ast_has_goto(loop_body)) ? body_bb : -1, after_bb, hdr_bb) : body_bb;
+            int be = loop_body ? wasm_cfg_build_stmt(cfg, loop_body, (cur_bb >= 0 || wasm_ast_has_goto(loop_body) || wasm_ast_has_setjmp(loop_body)) ? body_bb : -1, after_bb, hdr_bb) : body_bb;
             if (be >= 0) { cfg->blocks[be].term = WASM_CFG_JMP; cfg->blocks[be].target = hdr_bb; }
             return after_bb;
         }
@@ -4336,10 +4548,14 @@ static int wasm_cfg_build_stmt(WasmCfg *cfg, Node *stmt, int cur_bb, int break_t
             int be = loop_body ? wasm_cfg_build_stmt(cfg, loop_body, body_bb, after_bb, cond_bb) : body_bb;
             if (be >= 0) { cfg->blocks[be].term = WASM_CFG_JMP; cfg->blocks[be].target = cond_bb; }
             if (stmt->cond) {
-                cfg->blocks[cond_bb].term = WASM_CFG_BRANCH;
-                cfg->blocks[cond_bb].cond_or_ret = stmt->cond;
-                cfg->blocks[cond_bb].target = body_bb;
-                cfg->blocks[cond_bb].false_target = after_bb;
+                int cond_bb2 = cond_bb;
+                if (wasm_ast_has_setjmp(stmt->cond)) {
+                    wasm_cfg_extract_setjmp(cfg, &cond_bb2, &stmt->cond);
+                }
+                cfg->blocks[cond_bb2].term = WASM_CFG_BRANCH;
+                cfg->blocks[cond_bb2].cond_or_ret = stmt->cond;
+                cfg->blocks[cond_bb2].target = body_bb;
+                cfg->blocks[cond_bb2].false_target = after_bb;
             } else {
                 cfg->blocks[cond_bb].term = WASM_CFG_JMP;
                 cfg->blocks[cond_bb].target = body_bb;
@@ -4349,8 +4565,8 @@ static int wasm_cfg_build_stmt(WasmCfg *cfg, Node *stmt, int cur_bb, int break_t
 
         case ND_FOR: {
             Node *loop_body = stmt->body ? stmt->body : stmt->then_body;
-            if (cur_bb >= 0 && stmt->init) {
-                wasm_cfg_add_stmt(cfg, cur_bb, stmt->init);
+            if (stmt->init) {
+                cur_bb = wasm_cfg_build_stmt(cfg, stmt->init, cur_bb, break_tgt, cont_tgt);
             }
             int hdr_bb = wasm_cfg_new_block(cfg);
             int body_bb = wasm_cfg_new_block(cfg);
@@ -4361,25 +4577,39 @@ static int wasm_cfg_build_stmt(WasmCfg *cfg, Node *stmt, int cur_bb, int break_t
                 cfg->blocks[cur_bb].target = hdr_bb;
             }
             if (stmt->cond) {
-                cfg->blocks[hdr_bb].term = WASM_CFG_BRANCH;
-                cfg->blocks[hdr_bb].cond_or_ret = stmt->cond;
-                cfg->blocks[hdr_bb].target = body_bb;
-                cfg->blocks[hdr_bb].false_target = after_bb;
+                int cond_bb = hdr_bb;
+                if (wasm_ast_has_setjmp(stmt->cond)) {
+                    wasm_cfg_extract_setjmp(cfg, &cond_bb, &stmt->cond);
+                }
+                cfg->blocks[cond_bb].term = WASM_CFG_BRANCH;
+                cfg->blocks[cond_bb].cond_or_ret = stmt->cond;
+                cfg->blocks[cond_bb].target = body_bb;
+                cfg->blocks[cond_bb].false_target = after_bb;
             } else {
                 cfg->blocks[hdr_bb].term = WASM_CFG_JMP;
                 cfg->blocks[hdr_bb].target = body_bb;
             }
             int be = loop_body ? wasm_cfg_build_stmt(cfg, loop_body, body_bb, after_bb, inc_bb) : body_bb;
             if (be >= 0) { cfg->blocks[be].term = WASM_CFG_JMP; cfg->blocks[be].target = inc_bb; }
-            if (stmt->inc) wasm_cfg_add_stmt(cfg, inc_bb, stmt->inc);
-            cfg->blocks[inc_bb].term = WASM_CFG_JMP;
-            cfg->blocks[inc_bb].target = hdr_bb;
+            if (stmt->inc) {
+                int inc_end = wasm_cfg_build_stmt(cfg, stmt->inc, inc_bb, break_tgt, cont_tgt);
+                if (inc_end >= 0) {
+                    cfg->blocks[inc_end].term = WASM_CFG_JMP;
+                    cfg->blocks[inc_end].target = hdr_bb;
+                }
+            } else {
+                cfg->blocks[inc_bb].term = WASM_CFG_JMP;
+                cfg->blocks[inc_bb].target = hdr_bb;
+            }
             return after_bb;
         }
 
         case ND_SWITCH: {
             int after_sw = wasm_cfg_new_block(cfg);
             if (cur_bb >= 0) {
+                if (stmt->cond && wasm_ast_has_setjmp(stmt->cond)) {
+                    wasm_cfg_extract_setjmp(cfg, &cur_bb, &stmt->cond);
+                }
                 /* Resolve label blocks BEFORE writing cfg->blocks[cur_bb] since wasm_cfg_new_block may realloc cfg->blocks */
                 int def_tgt = (stmt->default_case && stmt->default_case->case_body)
                     ? wasm_cfg_get_label_block(cfg, stmt->default_case->case_body->label_name)
@@ -4427,7 +4657,13 @@ static int wasm_cfg_build_stmt(WasmCfg *cfg, Node *stmt, int cur_bb, int break_t
         }
 
         default:
-            if (cur_bb >= 0) wasm_cfg_add_stmt(cfg, cur_bb, stmt);
+            if (cur_bb >= 0) {
+                Node *s2 = stmt;
+                if (wasm_ast_has_setjmp(s2)) {
+                    wasm_cfg_extract_setjmp(cfg, &cur_bb, &s2);
+                }
+                wasm_cfg_add_stmt(cfg, cur_bb, s2);
+            }
             return cur_bb;
     }
 }
@@ -4455,16 +4691,38 @@ static void wasm_lower_stmt_cfg(Compiler *cc, const WasmModule *mod, WasmFunctio
         wasm_cfg_free(&cfg);
         return;
     }
+    int has_sj = (cfg.has_setjmp && mod && mod->has_longjmp_tag && lmap->fp_local_idx >= 0) ? 1 : 0;
+    int sj_val_loc = -1;
+    int caught_env_loc = -1;
+    if (has_sj) {
+        sj_val_loc = wasm_alloc_temp_local(fn, WASM_TYPE_I32);
+        caught_env_loc = wasm_alloc_temp_local(fn, WASM_TYPE_I32);
+        if (sj_val_loc < 0 || caught_env_loc < 0) {
+            wasm_cfg_free(&cfg);
+            return;
+        }
+        lmap->sj_val_local_idx = sj_val_loc;
+    }
     wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
     wasm_buf_append_sleb128(&fn->body, 0);
     wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
     wasm_buf_append_uleb128(&fn->body, (uint32_t)pc_loc);
 
-    /* block $exit { loop $dispatch { block $b_N { ... block $b_0 { br_table } ... } br $exit } } */
+    /* block $exit { loop $dispatch { [block $caught (result i32) { try_table ... {] block $b_N ... block $b_0 ... */
     wasm_buf_append_u8(&fn->body, WASM_OP_BLOCK);
     wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
     wasm_buf_append_u8(&fn->body, WASM_OP_LOOP);
     wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+    if (has_sj) {
+        wasm_buf_append_u8(&fn->body, WASM_OP_BLOCK);
+        wasm_buf_append_u8(&fn->body, WASM_TYPE_I32);
+        wasm_buf_append_u8(&fn->body, WASM_OP_TRY_TABLE);
+        wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+        wasm_buf_append_uleb128(&fn->body, 1); /* 1 catch clause */
+        wasm_buf_append_u8(&fn->body, WASM_CATCH_TAG);
+        wasm_buf_append_uleb128(&fn->body, 0); /* tag 0 */
+        wasm_buf_append_uleb128(&fn->body, 0); /* label $caught */
+    }
     for (k = 0; k <= N; k++) {
         wasm_buf_append_u8(&fn->body, WASM_OP_BLOCK);
         wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
@@ -4485,9 +4743,55 @@ static void wasm_lower_stmt_cfg(Compiler *cc, const WasmModule *mod, WasmFunctio
         for (si = 0; si < b->num_stmts; si++) {
             wasm_lower_stmt(cc, mod, fn, lmap, gmap, b->stmts[si], ret_type);
         }
-        uint32_t depth_dispatch = (uint32_t)(N - k);
-        uint32_t depth_exit = (uint32_t)(N - k + 1);
+        uint32_t depth_dispatch = (uint32_t)(N - k + (has_sj ? 2 : 0));
+        uint32_t depth_exit = (uint32_t)(N - k + (has_sj ? 3 : 1));
         switch (b->term) {
+            case WASM_CFG_SETJMP:
+                if (has_sj && b->cond_or_ret) {
+                    wasm_lower_expr(cc, mod, fn, lmap, gmap, b->cond_or_ret);
+                    wasm_emit_type_conversion(&fn->body, wasm_node_valtype(b->cond_or_ret), b->cond_or_ret->type, WASM_TYPE_I32, cc->ty_int);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)caught_env_loc);
+                    /* [env + 0] = $fp */
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)caught_env_loc);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->fp_local_idx);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_STORE);
+                    wasm_emit_memarg_safe(&fn->body, 2, 0);
+                    /* [env + 4] = global 0 (__stack_pointer) */
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)caught_env_loc);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_GLOBAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, 0);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_STORE);
+                    wasm_emit_memarg_safe(&fn->body, 2, 4);
+                    /* [env + 8] = resume basic block ID */
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)caught_env_loc);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, b->target);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_STORE);
+                    wasm_emit_memarg_safe(&fn->body, 2, 8);
+                    /* Initial return value of setjmp() is 0 */
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 0);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)sj_val_loc);
+                } else if (has_sj) {
+                    wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                    wasm_buf_append_sleb128(&fn->body, 0);
+                    wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                    wasm_buf_append_uleb128(&fn->body, (uint32_t)sj_val_loc);
+                }
+                wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
+                wasm_buf_append_sleb128(&fn->body, b->target);
+                wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+                wasm_buf_append_uleb128(&fn->body, (uint32_t)pc_loc);
+                wasm_buf_append_u8(&fn->body, WASM_OP_BR);
+                wasm_buf_append_uleb128(&fn->body, depth_dispatch);
+                break;
+
             case WASM_CFG_JMP:
                 wasm_buf_append_u8(&fn->body, WASM_OP_I32_CONST);
                 wasm_buf_append_sleb128(&fn->body, b->target);
@@ -4569,10 +4873,54 @@ static void wasm_lower_stmt_cfg(Compiler *cc, const WasmModule *mod, WasmFunctio
     }
 
     wasm_buf_append_u8(&fn->body, WASM_OP_END); /* close $b_N */
-    wasm_buf_append_u8(&fn->body, WASM_OP_BR);
-    wasm_buf_append_uleb128(&fn->body, 1); /* break $exit */
+    if (has_sj) {
+        wasm_buf_append_u8(&fn->body, WASM_OP_BR);
+        wasm_buf_append_uleb128(&fn->body, 3); /* break $exit */
+        wasm_buf_append_u8(&fn->body, WASM_OP_END); /* end try_table */
+        wasm_buf_append_u8(&fn->body, WASM_OP_UNREACHABLE);
+        wasm_buf_append_u8(&fn->body, WASM_OP_END); /* end $caught -> env_addr on stack */
+        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_TEE);
+        wasm_buf_append_uleb128(&fn->body, (uint32_t)caught_env_loc);
+        wasm_buf_append_u8(&fn->body, WASM_OP_I32_LOAD);
+        wasm_emit_memarg_safe(&fn->body, 2, 0);
+        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+        wasm_buf_append_uleb128(&fn->body, (uint32_t)lmap->fp_local_idx);
+        wasm_buf_append_u8(&fn->body, WASM_OP_I32_NE);
+        wasm_buf_append_u8(&fn->body, WASM_OP_IF);
+        wasm_buf_append_u8(&fn->body, WASM_TYPE_VOID);
+        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+        wasm_buf_append_uleb128(&fn->body, (uint32_t)caught_env_loc);
+        wasm_buf_append_u8(&fn->body, WASM_OP_THROW);
+        wasm_buf_append_uleb128(&fn->body, 0);
+        wasm_buf_append_u8(&fn->body, WASM_OP_END);
+        /* Restore __stack_pointer, $sj_val, and $pc, then loop $dispatch */
+        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+        wasm_buf_append_uleb128(&fn->body, (uint32_t)caught_env_loc);
+        wasm_buf_append_u8(&fn->body, WASM_OP_I32_LOAD);
+        wasm_emit_memarg_safe(&fn->body, 2, 4);
+        wasm_buf_append_u8(&fn->body, WASM_OP_GLOBAL_SET);
+        wasm_buf_append_uleb128(&fn->body, 0);
+        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+        wasm_buf_append_uleb128(&fn->body, (uint32_t)caught_env_loc);
+        wasm_buf_append_u8(&fn->body, WASM_OP_I32_LOAD);
+        wasm_emit_memarg_safe(&fn->body, 2, 12);
+        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+        wasm_buf_append_uleb128(&fn->body, (uint32_t)sj_val_loc);
+        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_GET);
+        wasm_buf_append_uleb128(&fn->body, (uint32_t)caught_env_loc);
+        wasm_buf_append_u8(&fn->body, WASM_OP_I32_LOAD);
+        wasm_emit_memarg_safe(&fn->body, 2, 8);
+        wasm_buf_append_u8(&fn->body, WASM_OP_LOCAL_SET);
+        wasm_buf_append_uleb128(&fn->body, (uint32_t)pc_loc);
+        wasm_buf_append_u8(&fn->body, WASM_OP_BR);
+        wasm_buf_append_uleb128(&fn->body, 0); /* loop $dispatch */
+    } else {
+        wasm_buf_append_u8(&fn->body, WASM_OP_BR);
+        wasm_buf_append_uleb128(&fn->body, 1); /* break $exit */
+    }
     wasm_buf_append_u8(&fn->body, WASM_OP_END); /* end loop $dispatch */
     wasm_buf_append_u8(&fn->body, WASM_OP_END); /* end block $exit */
+    lmap->sj_val_local_idx = -1;
     wasm_cfg_free(&cfg);
 }
 
@@ -4701,6 +5049,115 @@ static int wasm_ast_has_call_name(Node *node, const char *name) {
     return 0;
 }
 
+static int wasm_match_struct_zero_assign(Node *st, Symbol **out_sym, int *out_off, int *out_step, Node **out_df, Node **out_ck) {
+    if (!st || st->kind != ND_ASSIGN || !st->lhs || !st->rhs) return 0;
+    Node *df = st->lhs;
+    if (df->kind != ND_DEREF || !df->lhs || !df->type) return 0;
+    Node *ck = df->lhs;
+    if (ck->kind != ND_CAST || !ck->lhs) return 0;
+    Node *ad = ck->lhs;
+    if (ad->kind != ND_ADD || !ad->lhs || !ad->rhs || ad->rhs->kind != ND_NUM) return 0;
+    Node *cb = ad->lhs;
+    if (cb->kind != ND_CAST || !cb->lhs || cb->lhs->kind != ND_VAR || !cb->lhs->sym || !cb->lhs->type) return 0;
+    int vtk = cb->lhs->type->kind;
+    if (vtk != TY_STRUCT && vtk != TY_UNION) return 0;
+    Node *rv = st->rhs;
+    while (rv && rv->kind == ND_CAST) rv = rv->lhs;
+    if (!rv || rv->kind != ND_NUM || rv->int_val != 0) return 0;
+    int step = 0;
+    if (df->type->kind == TY_LONG || df->type->kind == TY_LONGLONG) step = 8;
+    else if (df->type->kind == TY_INT) step = 4;
+    else if (df->type->kind == TY_CHAR) step = 1;
+    else return 0;
+    *out_sym = cb->lhs->sym;
+    *out_off = (int)ad->rhs->int_val;
+    *out_step = step;
+    *out_df = df;
+    *out_ck = ck;
+    return 1;
+}
+
+static void wasm_fixup_local_struct_zero_inits(Compiler *cc, Node *node) {
+    if (!cc || !node) return;
+    if (node->kind == ND_BLOCK && node->stmts && node->num_stmts > 0) {
+        Symbol *seen_syms[64];
+        int n_seen = 0;
+        for (int i = 0; i < node->num_stmts; i++) {
+            Symbol *sym = NULL;
+            int off = -1, step = 0;
+            Node *df = NULL, *ck = NULL;
+            if (wasm_match_struct_zero_assign(node->stmts[i], &sym, &off, &step, &df, &ck) &&
+                off == 0 && step == 8 && sym && sym->type) {
+                int already_seen = 0;
+                for (int si = 0; si < n_seen; si++) {
+                    if (seen_syms[si] == sym) { already_seen = 1; break; }
+                }
+                int sz = type_size(sym->type);
+                if (!already_seen && sz >= 8) {
+                    int j = i, z = 0, ok_run = 1;
+                    while (z < sz) {
+                        if (j >= node->num_stmts) { ok_run = 0; break; }
+                        Symbol *jsym = NULL;
+                        int joff = -1, jstep = 0;
+                        Node *jdf = NULL, *jck = NULL;
+                        int exp_step = (z + 8 <= sz) ? 8 : ((z + 4 <= sz) ? 4 : 1);
+                        if (!wasm_match_struct_zero_assign(node->stmts[j], &jsym, &joff, &jstep, &jdf, &jck) ||
+                            jsym != sym || joff != z || jstep != exp_step) {
+                            ok_run = 0;
+                            break;
+                        }
+                        z += jstep;
+                        j++;
+                    }
+                    if (ok_run && z == sz) {
+                        if (n_seen < 64) seen_syms[n_seen++] = sym;
+                        Type *ll_ptr = type_ptr(cc, cc->ty_longlong);
+                        for (int k = i; k < j; k++) {
+                            Symbol *ksym = NULL;
+                            int koff = -1, kstep = 0;
+                            Node *kdf = NULL, *kck = NULL;
+                            if (wasm_match_struct_zero_assign(node->stmts[k], &ksym, &koff, &kstep, &kdf, &kck) &&
+                                kstep == 8) {
+                                node->stmts[k]->type = cc->ty_longlong;
+                                kdf->type = cc->ty_longlong;
+                                kck->type = ll_ptr;
+                                kck->cast_type = ll_ptr;
+                                if (node->stmts[k]->rhs) {
+                                    if (node->stmts[k]->rhs->kind == ND_CAST) {
+                                        node->stmts[k]->rhs->type = cc->ty_longlong;
+                                        node->stmts[k]->rhs->cast_type = cc->ty_longlong;
+                                    } else {
+                                        node->stmts[k]->rhs->type = cc->ty_longlong;
+                                    }
+                                }
+                            }
+                        }
+                        i = j - 1;
+                    }
+                }
+            }
+        }
+    }
+    if (node->lhs) wasm_fixup_local_struct_zero_inits(cc, node->lhs);
+    if (node->rhs) wasm_fixup_local_struct_zero_inits(cc, node->rhs);
+    if (node->cond) wasm_fixup_local_struct_zero_inits(cc, node->cond);
+    if (node->then_body) wasm_fixup_local_struct_zero_inits(cc, node->then_body);
+    if (node->else_body) wasm_fixup_local_struct_zero_inits(cc, node->else_body);
+    if (node->body) wasm_fixup_local_struct_zero_inits(cc, node->body);
+    if (node->init) wasm_fixup_local_struct_zero_inits(cc, node->init);
+    if (node->inc) wasm_fixup_local_struct_zero_inits(cc, node->inc);
+    if (node->stmts) {
+        for (int s = 0; s < node->num_stmts; s++) {
+            wasm_fixup_local_struct_zero_inits(cc, node->stmts[s]);
+        }
+    }
+    if (node->args) {
+        for (int a = 0; a < node->num_args; a++) {
+            wasm_fixup_local_struct_zero_inits(cc, node->args[a]);
+        }
+    }
+}
+
 static int wasm_eval_ginit_ptr_const(const WasmModule *mod, WasmGlobalMap *gmap, Node *n, int64_t *out_val) {
     while (n && n->kind == ND_CAST) n = n->lhs;
     if (!n) return 0;
@@ -4714,15 +5171,16 @@ static int wasm_eval_ginit_ptr_const(const WasmModule *mod, WasmGlobalMap *gmap,
         if (n->lhs->kind == ND_DEREF && n->lhs->lhs) {
             return wasm_eval_ginit_ptr_const(mod, gmap, n->lhs->lhs, out_val);
         }
-        if (n->lhs->kind == ND_MEMBER) {
-            Node *mbase = n->lhs->lhs;
-            if (mbase && mbase->kind == ND_DEREF && mbase->lhs) mbase = mbase->lhs;
-            if (wasm_eval_ginit_ptr_const(mod, gmap, mbase, out_val)) {
-                *out_val += (int64_t)n->lhs->member_offset;
-                return 1;
-            }
-        }
         return wasm_eval_ginit_ptr_const(mod, gmap, n->lhs, out_val);
+    }
+    if (n->kind == ND_MEMBER && n->lhs) {
+        Node *mbase = n->lhs;
+        if (mbase->kind == ND_DEREF && mbase->lhs) mbase = mbase->lhs;
+        if (wasm_eval_ginit_ptr_const(mod, gmap, mbase, out_val)) {
+            *out_val += (int64_t)n->member_offset;
+            return 1;
+        }
+        return 0;
     }
     if (n->kind == ND_VAR) {
         const char *nm = wasm_node_var_name(n);
@@ -4819,6 +5277,17 @@ static void wasm_fill_ginit(Compiler *cc, const WasmModule *mod, WasmGlobalMap *
                 }
                 int fsz = f->type ? type_size(f->type) : 0;
                 if (f->type && f->type->kind == TY_PTR) fsz = 4;
+                if (f->type && f->type->kind == TY_ARRAY && f->type->array_len <= 0 && foff >= 0 && foff < max_sz) {
+                    fsz = max_sz - foff;
+                    if (elem && elem->kind != ND_INIT_LIST && f->next == NULL) {
+                        Type *et = f->type->base;
+                        int esz = (et && et->kind == TY_PTR) ? 4 : ((et && type_size(et) > 0) ? type_size(et) : 4);
+                        for (int fi = 0; i < init->num_args && foff + (fi + 1) * esz <= max_sz; i++, fi++) {
+                            wasm_fill_ginit(cc, mod, gmap, init->args[i], et, dst + foff + fi * esz, esz);
+                        }
+                        break;
+                    }
+                }
                 if (f->type && foff >= 0 && fsz > 0 && foff + fsz <= max_sz) {
                     wasm_fill_ginit(cc, mod, gmap, elem, f->type, dst + foff, fsz);
                 }
@@ -4912,6 +5381,7 @@ static int wasm_name_in_csv(const char *csv, const char *name) {
 static int wasm_is_runtime_reserved_name(const char *name) {
     if (!name || !name[0]) return 1;
     if (strncmp(name, "__builtin_", 10) == 0 || strncmp(name, "__zcc_wasm_", 11) == 0) return 1;
+    if (wasm_is_setjmp_name(name) || wasm_is_longjmp_name(name)) return 1;
     return (strcmp(name, "puts") == 0 || strcmp(name, "putchar") == 0 ||
             strcmp(name, "write") == 0 || strcmp(name, "read") == 0 ||
             strcmp(name, "exit") == 0 || strcmp(name, "_start") == 0 ||
@@ -5144,6 +5614,27 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
     int has_wasi_calls = (needs_puts || needs_putchar || needs_write || needs_read || needs_exit);
     int synthesize_start = (!has_user_start && has_main && has_wasi_calls);
 
+    int needs_eh_tag = 0;
+    curr = prog;
+    while (curr) {
+        if (curr->kind == ND_FUNC_DEF && curr->body) {
+            if (wasm_ast_has_setjmp(curr->body)) needs_eh_tag = 1;
+            if (!wasm_is_longjmp_name(curr->func_def_name) &&
+                !wasm_is_setjmp_name(curr->func_def_name) &&
+                wasm_ast_has_longjmp(curr->body)) {
+                needs_eh_tag = 1;
+            }
+        }
+        curr = curr->next;
+    }
+    if (needs_eh_tag) {
+        uint8_t tag_params[1] = { WASM_TYPE_I32 };
+        int tag_tidx = wasm_module_add_type(&mod, tag_params, 1, NULL, 0);
+        if (tag_tidx < 0) goto fail_cleanup;
+        mod.has_longjmp_tag = 1;
+        mod.longjmp_tag_type_idx = tag_tidx;
+    }
+
     /* Declare WASI function imports if I/O or termination are needed */
     int fd_write_imp_idx = -1;
     int fd_read_imp_idx = -1;
@@ -5293,6 +5784,7 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
             lmap.tmp_f32_idx = -1;
             lmap.tmp_f64_idx = -1;
             lmap.tmp_v128_idx = -1;
+            lmap.sj_val_local_idx = -1;
 
             Type *ret_type = curr->func_type ? curr->func_type->ret : NULL;
             int is_var = (curr->func_type && curr->func_type->is_variadic && curr->num_params < MAX_PARAMS) ? 1 : 0;
@@ -5325,8 +5817,9 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
             }
             fn->num_params = (uint32_t)(curr->num_params + is_var + is_sret);
 
-            /* Scan AST for local variables & memory allocations */
+            /* Fix 4B-vs-8B ILP32 local struct/union zero-init stride & scan locals */
             if (curr->body) {
+                wasm_fixup_local_struct_zero_inits(cc, curr->body);
                 wasm_scan_ast_locals(&mod, curr->body, &lmap, &gmap);
             }
 
@@ -5351,9 +5844,11 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
             }
 
             /* Allocate frame pointer and temporary locals */
+            int fn_has_sj = (curr->body && wasm_ast_has_setjmp(curr->body)) ? 1 : 0;
             if (wasm_func_reserve_locals(fn, fn->num_locals + 6U) < 0) goto fail_cleanup;
             if (frame_size <= 0 && curr->body &&
-                (wasm_ast_has_call_name(curr->body, "alloca") ||
+                (fn_has_sj ||
+                 wasm_ast_has_call_name(curr->body, "alloca") ||
                  wasm_ast_has_call_name(curr->body, "__builtin_alloca"))) {
                 frame_size = 16;
             }
@@ -5422,7 +5917,7 @@ int wasm_lower_program(Compiler *cc, Node *prog, const char *output_file) {
             wasm_cur_break_depth = -1;
             wasm_cur_cont_depth = -1;
             if (curr->body) {
-                if (wasm_ast_has_goto(curr->body)) {
+                if (wasm_ast_has_goto(curr->body) || fn_has_sj) {
                     wasm_lower_stmt_cfg(cc, &mod, fn, &lmap, &gmap, curr->body, ret_type);
                 } else {
                     wasm_lower_stmt(cc, &mod, fn, &lmap, &gmap, curr->body, ret_type);

@@ -174,6 +174,8 @@ void wasm_module_init(WasmModule *mod) {
     mod->table_max_elems = 0;
     mod->heap_base_init = 131072U;
     mod->free_head_global_idx = -1;
+    mod->has_longjmp_tag = 0;
+    mod->longjmp_tag_type_idx = -1;
     /* Global 0: mutable __stack_pointer initialized at 128KB */
     wasm_module_add_global(mod, WASM_TYPE_I32, 1, 131072);
 }
@@ -205,6 +207,7 @@ void wasm_module_free(WasmModule *mod) {
     free(mod->table_func_indices);
     memset(mod, 0, sizeof(WasmModule));
     mod->free_head_global_idx = -1;
+    mod->longjmp_tag_type_idx = -1;
 }
 
 int wasm_local_alloc_entry(WasmLocalMap *map) {
@@ -1583,6 +1586,17 @@ int wasm_module_emit_binary(const WasmModule *mod, WASMBuffer *out) {
         }
         wasm_emit_section(out, WASM_SEC_MEMORY, &mem_sec);
         wasm_buf_free(&mem_sec);
+    }
+
+    /* 5b. Tag Section (13) — Standard WebAssembly Exception Handling (only when setjmp/longjmp used) */
+    if (mod->has_longjmp_tag && mod->longjmp_tag_type_idx >= 0) {
+        WASMBuffer tag_sec;
+        wasm_buf_init(&tag_sec);
+        wasm_buf_append_uleb128(&tag_sec, 1); /* tag 0: (i32) -> () */
+        wasm_buf_append_u8(&tag_sec, 0x00);   /* attribute = exception */
+        wasm_buf_append_uleb128(&tag_sec, (uint32_t)mod->longjmp_tag_type_idx);
+        wasm_emit_section(out, WASM_SEC_TAG, &tag_sec);
+        wasm_buf_free(&tag_sec);
     }
 
     /* 6. Global Section (6) */
