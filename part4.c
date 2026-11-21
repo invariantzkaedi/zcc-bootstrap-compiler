@@ -4263,6 +4263,14 @@ void codegen_expr(Compiler *cc, Node *node) {
       return;
     }
 
+    if (!backend_ops && node->func_name[0] && nargs == 1 && (strcmp(node->func_name, "alloca") == 0 || strcmp(node->func_name, "__builtin_alloca") == 0)) {
+      int lbl = new_label(cc); codegen_expr_checked(cc, node->args[0]);
+      fprintf(cc->out, "    addq $15, %%rax\n    andq $-16, %%rax\n    cmpq $16, %%rax\n    jae .Lalloca_ok_%d\n    movq $16, %%rax\n.Lalloca_ok_%d:\n    movq %%rsp, %%r11\n    subq %%rax, %%r11\n.Lalloca_probe_%d:\n    cmpq %%r11, %%rsp\n    jbe .Lalloca_done_%d\n", lbl, lbl, lbl, lbl);
+      fprintf(cc->out, "    subq $4096, %%rsp\n    cmpq %%r11, %%rsp\n    jb .Lalloca_clamp_%d\n    orq $0, (%%rsp)\n    jmp .Lalloca_probe_%d\n.Lalloca_clamp_%d:\n    movq %%r11, %%rsp\n    orq $0, (%%rsp)\n.Lalloca_done_%d:\n    movq %%rsp, %%rax\n", lbl, lbl, lbl, lbl);
+      { char *dst = ir_bridge_fresh_tmp(); ZCC_EMIT_CALL(ir_map_type(node->type), dst, node->func_name, node->line); }
+      return;
+    }
+
     int has_sret = 0;
     int sret_size = 0;
     int sret_frame_offset = 0;
@@ -4303,7 +4311,7 @@ void codegen_expr(Compiler *cc, Node *node) {
                 if (type_size(at) > 8) {
                     if (eb[1] == CLASS_SSE) needed_fp++; else needed_gp++;
                 }
-                if (temp_gp + needed_gp <= 6 && temp_fp + needed_fp <= 8) {
+                if (temp_gp + needed_gp <= max_gp_args && temp_fp + needed_fp <= 8) {
                     temp_gp += needed_gp;
                     temp_fp += needed_fp;
                 } else {
@@ -4503,12 +4511,12 @@ void codegen_expr(Compiler *cc, Node *node) {
                     target_fp[i] = fp_idx++;
                     if (type_size(atype) > 8 && eb[1] == CLASS_SSE && fp_idx < 8) {
                         fp_idx++;
-                    } else if (type_size(atype) > 8 && eb[1] == CLASS_INTEGER && gp_idx < 6) {
+                    } else if (type_size(atype) > 8 && eb[1] == CLASS_INTEGER && gp_idx < max_gp_args) {
                         target_gp[i] = gp_idx++;
                     }
                 }
             } else if (eb[0] == CLASS_INTEGER && type_size(atype) > 8 && eb[1] == CLASS_SSE) {
-                if (gp_idx < 6 && fp_idx < 8) {
+                if (gp_idx < max_gp_args && fp_idx < 8) {
                     target_gp[i] = gp_idx++;
                     target_fp[i] = fp_idx++;
                 }
@@ -4517,7 +4525,7 @@ void codegen_expr(Compiler *cc, Node *node) {
                 if (type_size(atype) > 8 && eb[1] != CLASS_SSE) {
                     needed_gp = 2;
                 }
-                if (gp_idx + needed_gp <= 6) {
+                if (gp_idx + needed_gp <= max_gp_args) {
                     target_gp[i] = gp_idx;
                     gp_idx += needed_gp;
                 }
@@ -4603,7 +4611,7 @@ void codegen_expr(Compiler *cc, Node *node) {
             if (atype && (atype->kind == TY_STRUCT || atype->kind == TY_UNION) && type_size(atype) > 8) {
                 if (eb[0] == CLASS_INTEGER && eb[1] == CLASS_INTEGER) {
                     pop_reg(cc, argregs[target_gp[i]]);
-                    if (target_gp[i] + 1 < 6) {
+                    if (target_gp[i] + 1 < max_gp_args) {
                         pop_reg(cc, argregs[target_gp[i] + 1]);
                     }
                 } else if (eb[0] == CLASS_INTEGER) {
@@ -4679,7 +4687,7 @@ void codegen_expr(Compiler *cc, Node *node) {
                       if (fits) {
                           if (eb[0] == CLASS_SSE) needed_fp++; else needed_gp++;
                           if (sz > 8) { if (eb[1] == CLASS_SSE) needed_fp++; else needed_gp++; }
-                          if (gp_idx + needed_gp > 6 || f_idx + needed_fp > 8) fits = 0;
+                          if (gp_idx + needed_gp > max_gp_args || f_idx + needed_fp > 8) fits = 0;
                       }
                       if (fits) {
                           gp_idx += needed_gp;
@@ -5768,7 +5776,7 @@ void codegen_stmt(Compiler *cc, Node *node) {
 
 static int pseudo_pc = 0;
 static Symbol *ra_locals[1024];
-static int num_ra_locals = 0;
+static int num_ra_locals = 0, ra_has_setjmp = 0;
 static char *get_callee_reg(int i) {
   if (backend_ops) {
     if (i == 0) return "r4";
@@ -5824,6 +5832,7 @@ static void compute_liveness(Node *n) {
     return;
   }
 
+  if (n->kind == ND_CALL && n->func_name[0] && (strcmp(n->func_name, "setjmp") == 0 || strcmp(n->func_name, "_setjmp") == 0 || strcmp(n->func_name, "sigsetjmp") == 0)) ra_has_setjmp = 1;
   if (n->kind == ND_ADDR && n->lhs && n->lhs->kind == ND_VAR && n->lhs->sym) {
     n->lhs->sym->live_start = -1; /* disable alloc */
   }
@@ -5905,9 +5914,9 @@ static int allocate_registers(Node *func) {
     active_ends[r] = 0;
   }
 
-  num_ra_locals = 0;
+  num_ra_locals = 0; ra_has_setjmp = 0;
   pseudo_pc = 1;
-  compute_liveness(func->body);
+  compute_liveness(func->body); if (ra_has_setjmp) return 0;
 
   for (i = 0; i < num_ra_locals; i++) {
     Symbol *sym = ra_locals[i];
@@ -6426,7 +6435,7 @@ void codegen_func(Compiler *cc, Node *func) {
             int needed_gp = 0, needed_fp = 0;
             if (eb[0] == CLASS_SSE) needed_fp++; else needed_gp++;
             if (sz > 8) { if (eb[1] == CLASS_SSE) needed_fp++; else needed_gp++; }
-            if (gp_idx + needed_gp > 6 || f_idx + needed_fp > 8) fits = 0;
+            if (gp_idx + needed_gp > max_gp_args || f_idx + needed_fp > 8) fits = 0;
         }
 
         if (fits) {
@@ -7258,8 +7267,18 @@ static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int
             }
         }
     } else if (type->kind == TY_STRUCT || type->kind == TY_UNION) {
-        StructField *f = type->fields;
-        for (int i = 0; i < init_list->num_args && f != NULL; i++, f = f->next) {
+        StructField *f = type->fields; int use_sorted = 0, s_cnt = 0; StructField **s_sf = NULL; int *s_fo = NULL; Node **s_el = NULL;
+        if (type->kind == TY_STRUCT && init_list->num_args > 1) {
+            int n = init_list->num_args, prev_off = -1, ooo = 0, has_bf = 0; StructField *cf = type->fields; s_sf = cc_alloc(cc, n * sizeof(*s_sf)); s_fo = cc_alloc(cc, n * sizeof(int)); s_el = cc_alloc(cc, n * sizeof(*s_el));
+            for (int k = 0; k < n; k++) {
+                Node *el = init_list->args[k]; StructField *sf = cf; int fo = sf ? sf->offset : 0; int doff = 0;
+                if (el && el->member_name[0]) { StructField *fn = find_struct_member(type, el->member_name, &doff); if (fn) { sf = fn; fo = doff; } }
+                if (!sf || sf->is_bitfield) { has_bf = 1; break; }
+                if (fo <= prev_off) ooo = 1; prev_off = fo; cf = sf->next;
+                int dup = -1; for (int q = 0; q < s_cnt; q++) if (s_fo[q] == fo) { dup = q; break; }
+                if (dup >= 0) { s_sf[dup] = sf; s_el[dup] = el; } else { s_sf[s_cnt] = sf; s_fo[s_cnt] = fo; s_el[s_cnt] = el; s_cnt++; } }
+            if (ooo && !has_bf) { use_sorted = 1; for (int a = 1; a < s_cnt; a++) for (int b = a - 1; b >= 0 && s_fo[b] > s_fo[b + 1]; b--) { StructField *tsf = s_sf[b]; s_sf[b] = s_sf[b + 1]; s_sf[b + 1] = tsf; int tfo = s_fo[b]; s_fo[b] = s_fo[b + 1]; s_fo[b + 1] = tfo; Node *tel = s_el[b]; s_el[b] = s_el[b + 1]; s_el[b + 1] = tel; } } }
+        for (int i = 0; i < (use_sorted ? s_cnt : init_list->num_args) && (use_sorted || f != NULL); i++, f = use_sorted ? f : f->next) { if (use_sorted) f = s_sf[i];
             if (f->is_bitfield) {
                 unsigned long long bit_accum = 0;
                 int c_sz = type_size(f->type) <= 0 ? 4 : type_size(f->type), c_off = f->offset, f_abs = base_offset + c_off;
@@ -7276,9 +7295,8 @@ static void emit_global_init_list(Compiler *cc, Type *type, Node *init_list, int
                 *emitted += c_sz;
                 continue;
             }
-            Node *elem = init_list->args[i];
-            int field_off = f->offset;
-            if (elem && elem->member_name[0]) {
+            Node *elem = use_sorted ? s_el[i] : init_list->args[i]; int field_off = use_sorted ? s_fo[i] : f->offset;
+            if (!use_sorted && elem && elem->member_name[0]) {
                 int dummy_off = 0;
                 StructField *sf = find_struct_member(type, elem->member_name, &dummy_off);
                 if (sf) {

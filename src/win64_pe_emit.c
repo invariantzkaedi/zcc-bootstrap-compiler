@@ -184,14 +184,31 @@ const char *zcc_win64_pe_resolve_dll_for_symbol(const char *sym) {
         strncmp(sym, "UpdateWindow", 12) == 0 ||
         strncmp(sym, "GetDesktopWindow", 16) == 0 ||
         strncmp(sym, "GetSystemMetrics", 16) == 0 ||
-        strncmp(sym, "MessageBeep", 11) == 0) {
+        strncmp(sym, "MessageBeep", 11) == 0 ||
+        strcmp(sym, "RegisterClassExA") == 0 ||
+        strcmp(sym, "RegisterClassA") == 0 ||
+        strcmp(sym, "GetDC") == 0 ||
+        strcmp(sym, "ReleaseDC") == 0 ||
+        strcmp(sym, "BeginPaint") == 0 ||
+        strcmp(sym, "EndPaint") == 0 ||
+        strcmp(sym, "InvalidateRect") == 0 ||
+        strcmp(sym, "AdjustWindowRect") == 0 ||
+        strcmp(sym, "SetWindowTextA") == 0 ||
+        strcmp(sym, "LoadCursorA") == 0 ||
+        strcmp(sym, "GetClientRect") == 0 ||
+        strcmp(sym, "GetAsyncKeyState") == 0) {
         return "USER32.dll";
     }
     /* GDI32 functions */
     if (strncmp(sym, "CreateSolidBrush", 16) == 0 ||
         strncmp(sym, "SelectObject", 12) == 0 ||
         strncmp(sym, "DeleteObject", 12) == 0 ||
-        strncmp(sym, "TextOut", 7) == 0) {
+        strncmp(sym, "TextOut", 7) == 0 ||
+        strcmp(sym, "StretchDIBits") == 0 ||
+        strcmp(sym, "SetDIBitsToDevice") == 0 ||
+        strcmp(sym, "CreateCompatibleDC") == 0 ||
+        strcmp(sym, "DeleteDC") == 0 ||
+        strcmp(sym, "GetStockObject") == 0) {
         return "GDI32.dll";
     }
     /* MSVCRT C runtime standard library functions */
@@ -353,20 +370,30 @@ const char *zcc_win64_pe_resolve_dll_for_symbol(const char *sym) {
         strcmp(sym, "_unlink") == 0 ||
         strcmp(sym, "_setjmp") == 0 ||
         strcmp(sym, "setjmp") == 0 ||
-        strcmp(sym, "longjmp") == 0) {
+        strcmp(sym, "longjmp") == 0 ||
+        strcmp(sym, "_hypot") == 0 ||
+        strcmp(sym, "_copysign") == 0 ||
+        strcmp(sym, "_open") == 0 ||
+        strcmp(sym, "_close") == 0 ||
+        strcmp(sym, "_read") == 0 ||
+        strcmp(sym, "_write") == 0 ||
+        strcmp(sym, "_lseek") == 0 ||
+        strcmp(sym, "_fstat64") == 0 ||
+        strcmp(sym, "_stat64") == 0 ||
+        strcmp(sym, "_mkdir") == 0 ||
+        strcmp(sym, "_stricmp") == 0 ||
+        strcmp(sym, "_strnicmp") == 0 ||
+        strcmp(sym, "_ftime64") == 0 ||
+        strcmp(sym, "setbuf") == 0 ||
+        strcmp(sym, "_isnan") == 0 ||
+        strcmp(sym, "_finite") == 0 ||
+        strcmp(sym, "_msize") == 0) {
         return "msvcrt.dll";
     }
     if (strncmp(sym, "Reg", 3) == 0 ||
         strncmp(sym, "Crypt", 5) == 0 ||
         strncmp(sym, "OpenProcessToken", 16) == 0) {
         return "advapi32.dll";
-    }
-    if (strncmp(sym, "MessageBox", 10) == 0 ||
-        strcmp(sym, "ShowWindow") == 0 ||
-        strcmp(sym, "UpdateWindow") == 0 ||
-        strcmp(sym, "GetMessageA") == 0 ||
-        strcmp(sym, "DispatchMessageA") == 0) {
-        return "user32.dll";
     }
     /* Default to KERNEL32.dll for base system services */
     return "KERNEL32.dll";
