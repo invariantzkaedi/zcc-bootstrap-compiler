@@ -106,20 +106,82 @@ static inline uint64_t gl_mul(uint64_t a, uint64_t b) {
     return (uint64_t)(prod % GOLDILOCKS_PRIME);
 }
 
+static int zcc_stark_is_prelude_fn(const char *name) {
+    if (!name || !name[0]) return 1;
+    if (strcmp(name, "platform_main_begin") == 0) return 1;
+    if (strcmp(name, "platform_main_end") == 0) return 1;
+    if (strcmp(name, "__stdio_init") == 0) return 1;
+    return 0;
+}
+
+static uint64_t zcc_stark_fnv1a(const char *s) {
+    uint64_t h = 14695981039346656037ULL;
+    if (!s) return 0ULL;
+    while (*s) {
+        h ^= (uint8_t)(*s++);
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+static void zcc_stark_put_le64(uint8_t *dst, uint64_t v) {
+    for (int b = 0; b < 8; b++) {
+        dst[b] = (uint8_t)(v >> (b * 8));
+    }
+}
+
+static void zcc_stark_put_le32(uint8_t *dst, uint32_t v) {
+    for (int b = 0; b < 4; b++) {
+        dst[b] = (uint8_t)(v >> (b * 8));
+    }
+}
+
 int zcc_stark_synthesize_proof(ir_module_t *mod, const char *output_path) {
     if (!output_path) return -1;
 
-    /* 1. Extract evaluation parameters from IR functions */
+    /* 1. Extract evaluation parameters across full IR module (skipping synthesized stdio preludes) */
     uint64_t l0 = 4ULL; /* Default canonical trace evaluation base */
     uint64_t deg = 3ULL;
 
     if (mod && mod->func_count > 0) {
-        ir_func_t *fn = mod->funcs[0];
-        for (ir_node_t *n = fn->head; n; n = n->next) {
-            if (n->op == IR_CONST && n->imm > 0 && n->imm < (long)GOLDILOCKS_PRIME) {
-                l0 = (uint64_t)n->imm;
-                break;
+        uint8_t ir_digest[32];
+        int user_nodes = 0;
+        keccak256((const uint8_t *)"ZCC-STARK-IR-V2", 15, ir_digest);
+
+        for (int pass = 0; pass < 2 && user_nodes == 0; pass++) {
+            for (int fi = 0; fi < mod->func_count; fi++) {
+                ir_func_t *fn = mod->funcs[fi];
+                if (!fn) continue;
+                if (pass == 0 && zcc_stark_is_prelude_fn(fn->name)) continue;
+
+                uint8_t fbuf[44];
+                memcpy(fbuf, ir_digest, 32);
+                zcc_stark_put_le64(fbuf + 32, zcc_stark_fnv1a(fn->name));
+                zcc_stark_put_le32(fbuf + 40, (uint32_t)fn->ret_type);
+                keccak256(fbuf, sizeof(fbuf), ir_digest);
+
+                for (ir_node_t *n = fn->head; n; n = n->next) {
+                    uint8_t nbuf[80];
+                    memcpy(nbuf, ir_digest, 32);
+                    zcc_stark_put_le32(nbuf + 32, (uint32_t)n->op);
+                    zcc_stark_put_le32(nbuf + 36, (uint32_t)n->type);
+                    zcc_stark_put_le64(nbuf + 40, (uint64_t)(int64_t)n->imm);
+                    zcc_stark_put_le64(nbuf + 48, zcc_stark_fnv1a(n->dst));
+                    zcc_stark_put_le64(nbuf + 56, zcc_stark_fnv1a(n->src1));
+                    zcc_stark_put_le64(nbuf + 64, zcc_stark_fnv1a(n->src2));
+                    zcc_stark_put_le64(nbuf + 72, zcc_stark_fnv1a(n->label));
+                    keccak256(nbuf, sizeof(nbuf), ir_digest);
+                    user_nodes++;
+                }
             }
+        }
+
+        if (user_nodes > 0) {
+            uint64_t raw_l0 = 0ULL;
+            for (int b = 0; b < 8; b++) {
+                raw_l0 |= ((uint64_t)ir_digest[b]) << (b * 8);
+            }
+            l0 = (raw_l0 % (GOLDILOCKS_PRIME - 2ULL)) + 2ULL;
         }
     }
 

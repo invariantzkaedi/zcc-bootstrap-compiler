@@ -357,6 +357,19 @@ int zcc_emit_win64_pe_dll_v8(const char *filename, const char *dll_name,
                              const win64_pe_cert_info_t *cert_info,
                              const win64_pe_delay_info_t *delay_info);
 
+int zcc_emit_win64_pe_dll_v9(const char *filename, const char *dll_name,
+                             const uint8_t *code_bytes, size_t code_len,
+                             uint32_t entry_offset,
+                             const char **imported_funcs, size_t num_imported_funcs,
+                             const win64_pe_export_t *exports, size_t num_exports,
+                             const uint8_t *data_bytes, size_t data_len,
+                             size_t bss_size, int has_entry,
+                             const uint32_t *reloc_rvas, size_t num_reloc_rvas,
+                             const win64_pe_func_extent_t *extents, size_t num_extents,
+                             const win64_pe_tls_info_t *tls_info,
+                             const win64_pe_cert_info_t *cert_info,
+                             const win64_pe_delay_info_t *delay_info);
+
 uint8_t *win64_pe_build_security_dir(const win64_pe_cert_info_t *cert_info,
                                      uint32_t *out_total_size);
 

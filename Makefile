@@ -10,7 +10,7 @@ endif
 FAST_CFLAGS = -O2 -DNDEBUG -w -fno-asynchronous-unwind-tables -g0 -DZCC_REAL_TELEMETRY -Iinclude -I.
 FORTIFY_PACK_DIR ?= fortify_zcc_clean
 
-PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c part6_riscv.c part6_wasm.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c
+PARTS = part1.c part0_pp.c part2.c part3.c ir.h ir_emit_dispatch.h sym_type_ast_ir.c part4.c zcc_ast_serializer.c part5.c part7_rust.c part6_arm.c part6_riscv.c part6_wasm.c part6_ptx.c ir.c ir_to_x86.c regalloc.c ir_telemetry_stub.c forgezero_receipt_stub.c zcc_layout.c zcc_layout_dump.c zcc_static_assert.c
 PASSES = compiler_passes.c compiler_passes_ir.c ir_pass_manager.c ir_pass_warden.c ir_pass_taint.c ir_pass_healer.c ir_symbolic_cfg.c ir_dominance.c ir_ssa.c evm_lifter.c ir_vuln_tag.c ir_to_evm.c ir_evm_stack.c src/ir_lower_float.c src/x86_codegen_sse.c src/evm/decompiler.c src/evm/jit.c src/evm/symbolic.c src/evm/memory_v2.c src/evm/abi_extractor.c src/evm/jit_memory.c src/evm/proof_export.c src/evm/ipc_bridge.c src/evm/yul_weaver.c src/evm/yul_fixed_point.c src/evm/yul_frontend.c src/gfx/sdf_compiler.c src/gfx/mesh_warden.c src/evm/evm_symbolic_harness.c ir_telemetry.c zcc_telemetry.c src/zcc_oracle_substrate.c src/elf_emit.c src/codegen.c src/ir_serialization.c src/zcc_smt_prover.c src/gguf_emit.c src/zld.c src/zcc_resource_oracle.c transient_state.c zcc_lucky_alert_injector.c src/opt/ir_verify.c src/opt/zcc_ir_opt_helpers.c src/opt/instcombine_pass.c src/opt/instcombine_rules.c src/opt/instcombine_dispatch.c src/opt/sccp_pass.c src/opt/cfg_simplify_pass.c src/opt/clone_remap.c src/opt/loop_validator.c src/opt/loop_unroll_pass.c src/opt/inline_pass.c src/opt/pointer_ssa.c src/opt/prime_v2_regalloc_opt.c src/opt/q_licm_pass.c src/opt/cap_tripwire.c src/evm/evm2native_pass.c src/evm/evm2native_fuzzer.c src/zk/zk_air_trace.c src/zk/zk_witness_bridge.c src/zk/zk_stark_emit.c src/codegen/avxzkd_jit_x86.c src/engine/zcc_hyper_engine.c src/ai/bare_gguf_jit.c src/optics/optiqpu_emitter.c src/dynamic/oneiro_kernel.c src/crypto/fhe_encrypted_ssa.c src/crypto/lattice_guard.c src/concurrency/chrono_spec.c src/neuromorphic/zcc_neuromorphic.c src/vector/zcc_hyper_vector_db.c src/quantum/zcc_topological_qpu.c src/physics/zcc_celestial_nbody.c src/zk/zcc_pq_light_client.c src/security/zcc_enclave_seal.c src/wasm_emit.c src/arm64_codegen.c src/riscv_codegen.c src/win64_pe_emit.c src/quantum/zcc_qasm_parser.c src/quantum/zcc_qasm_sim.c src/quantum/zcc_qasm_stabilizer.c src/quantum/zcc_qasm_opt.c src/quantum/zcc_qasm_c_emit.c src/quantum/zcc_qasm_clifford_t.c src/zcc_binary_vector_engine.c
 COMPAT_SMOKE_SRCS = \
 	exp1_raytracer_simd.c \
@@ -1854,7 +1854,7 @@ test-quad-isa:
 test-quad-elf-sovereign: zcc
 	python3 tests/test_arm64_riscv64_direct_elf.py
 
-.PHONY: selfhost-win64-sovereign selfhost-wasm test-quad-elf-sovereign build-lua-wasm build-sqlite-wasm test-wasm-lua-sqlite build-wasm-playground test-wasm-playground build-doom-wasm test-wasm-doom build-quickjs-wasm test-wasm-quickjs test-wasm-setjmp build-micropython-wasm test-wasm-micropython build-lua-win64 build-sqlite-win64 test-win64-lua-sqlite build-quickjs-win64 build-micropython-win64 build-doom-win64 test-win64-quickjs-micropython test-win64-doom test-win64-sovereign-suite
+.PHONY: selfhost-win64-sovereign selfhost-wasm test-quad-elf-sovereign build-lua-wasm build-sqlite-wasm test-wasm-lua-sqlite build-wasm-playground test-wasm-playground build-doom-wasm test-wasm-doom build-quickjs-wasm test-wasm-quickjs test-wasm-setjmp build-micropython-wasm test-wasm-micropython build-lua-win64 build-sqlite-win64 test-win64-lua-sqlite build-quickjs-win64 build-micropython-win64 build-doom-win64 test-win64-quickjs-micropython test-win64-doom build-gpu-win64 test-win64-gpu-ptx build-gpu-llm-win64 test-win64-gpu-llm test-win64-gpu-aot-gguf build-gpu-llm-dll-win64 test-win64-gpu-track17 build-gpu-llm-server-win64 test-win64-gpu-track18 build-gpu-lora-win64 test-win64-gpu-track19 build-gpu-lora-studio-win64 test-win64-gpu-track20 build-gpu-qllm-win64 test-win64-gpu-qllm test-win64-gpu-qllm-v2 test-win64-gpu-qllm-v3 test-win64-gpu-qllm-v4 test-win64-sovereign-suite
 
 selfhost-win64-sovereign: zcc
 	python3 tools/win64_selfhost_sovereign.py
@@ -1922,6 +1922,88 @@ test-win64-quickjs-micropython: zcc
 test-win64-doom: zcc
 	python3 tests/test_win64_doom.py
 
+build-gpu-win64: zcc
+	python3 tools/build_gpu_win64.py
+
+test-win64-gpu-ptx: zcc
+	python3 tests/test_win64_gpu_ptx.py
+
+build-gpu-llm-win64: zcc
+	python3 tools/build_gpu_llm_win64.py
+
+test-win64-gpu-llm: zcc
+	python3 tests/test_win64_gpu_llm.py
+
+test-win64-gpu-aot-gguf: zcc
+	python3 tests/test_win64_gpu_aot_gguf.py
+
+build-gpu-gguf-v2-win64: zcc
+	python3 tools/generate_gguf_v2_fixtures.py
+	python3 tools/compile_gguf_exe.py --ptx-only --model build_win64/zcc_hf_qwen2_20l_q4km.gguf -o build_win64/zcc_hf_qwen2_20l_q4km_sm120.ptx
+	python3 tools/compile_gguf_exe.py --ptx-only --model build_win64/zcc_hf_llama_spm_q4_0.gguf -o build_win64/zcc_hf_llama_spm_q4_0_sm120.ptx
+	python3 tools/compile_gguf_exe.py --ptx-only --model build_win64/zcc_hf_llama_bf16.gguf -o build_win64/zcc_hf_llama_bf16_sm120.ptx
+	python3 tools/compile_gguf_exe.py --model build_win64/zcc_tiny_llama_f16.gguf --embed-weights -o build_win64/zcc_tiny_llama_standalone.exe
+
+test-win64-gpu-gguf-v2: zcc
+	python3 tests/test_win64_gpu_gguf_v2.py
+
+build-gpu-track10-win64: zcc
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tools/generate_gguf_track10_bench.py
+	python3 tools/compile_gguf_exe.py --ptx-only --model build_win64/zcc_hf_qwen2_real_scale_q4km.gguf -o build_win64/zcc_hf_qwen2_real_scale_q4km_sm120.ptx
+
+test-win64-gpu-track10: zcc
+	python3 tests/test_win64_gpu_track10.py
+
+build-gpu-real-qwen2-win64: zcc
+	./zcc --target=ptx --gpu-arch=sm_120 --model /mnt/h/models/zkaedi-prime-dpo-q4_k_m.gguf -o build_win64/zkaedi_prime_1_5b_sm120.ptx
+	./zcc --target=ptx --gpu-arch=sm_120 --model /mnt/h/models/zkaedi-trinity-dpo-f16.gguf -o build_win64/zkaedi_trinity_1_5b_f16_sm120.ptx
+	./zcc --target=ptx --gpu-arch=sm_120 --model /mnt/h/models/zcc-mini-v7-q4_k_m.gguf -o build_win64/zcc_mini_7b_sm120.ptx
+
+test-win64-gpu-real-qwen2: zcc
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tests/test_win64_gpu_real_qwen2.py -v
+
+test-win64-gpu-track12-spec: zcc
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tests/test_win64_gpu_track12_spec.py -v
+
+build-gpu-llm-dll-win64: zcc
+	python3 tools/build_gpu_llm_dll_win64.py
+
+test-win64-gpu-track17: zcc build-gpu-llm-dll-win64
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tests/test_win64_gpu_track17_overlay_dll.py -v
+
+build-gpu-llm-server-win64: zcc
+	python3 tools/build_gpu_llm_server_win64.py
+
+test-win64-gpu-track18: zcc build-gpu-llm-server-win64
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tests/test_win64_gpu_track18_openai_server.py -v
+
+build-gpu-lora-win64: zcc
+	python3 tools/build_gpu_lora_win64.py
+
+test-win64-gpu-track19: zcc build-gpu-lora-win64
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tests/test_win64_gpu_track19_lora.py -v
+
+build-gpu-lora-studio-win64: zcc
+	python3 tools/build_gpu_lora_studio_win64.py
+
+test-win64-gpu-track20: zcc build-gpu-lora-studio-win64
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tests/test_win64_gpu_track20_lora_studio.py -v
+
+build-gpu-qllm-win64: zcc
+	python3 tools/build_gpu_qllm_win64.py
+
+test-win64-gpu-qllm: zcc build-gpu-qllm-win64
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tests/test_win64_gpu_qllm.py -v
+
+test-win64-gpu-qllm-v2: zcc build-gpu-qllm-win64
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tests/test_win64_gpu_qllm_v2.py -v
+
+test-win64-gpu-qllm-v3: zcc build-gpu-qllm-win64
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tests/test_win64_gpu_qllm_v3.py -v
+
+test-win64-gpu-qllm-v4: zcc build-gpu-qllm-win64
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tests/test_win64_gpu_qllm_v4.py -v
+
 test-win64-sovereign-suite: zcc
 	python3 tools/win64_selfhost_sovereign.py
 	python3 tools/build_lua_win64.py
@@ -1929,9 +2011,23 @@ test-win64-sovereign-suite: zcc
 	python3 tools/build_quickjs_win64.py
 	python3 tools/build_micropython_win64.py
 	python3 tools/build_doom_win64.py
+	python3 tools/build_gpu_win64.py
+	python3 tools/build_gpu_llm_win64.py
+	python3 tools/generate_gguf_v2_fixtures.py
+	python3 tools/compile_gguf_exe.py --ptx-only --model build_win64/zcc_hf_qwen2_20l_q4km.gguf -o build_win64/zcc_hf_qwen2_20l_q4km_sm120.ptx
+	python3 tools/compile_gguf_exe.py --ptx-only --model build_win64/zcc_hf_llama_spm_q4_0.gguf -o build_win64/zcc_hf_llama_spm_q4_0_sm120.ptx
+	python3 tools/compile_gguf_exe.py --ptx-only --model build_win64/zcc_hf_llama_bf16.gguf -o build_win64/zcc_hf_llama_bf16_sm120.ptx
+	python3 tools/compile_gguf_exe.py --model build_win64/zcc_tiny_llama_f16.gguf --embed-weights -o build_win64/zcc_tiny_llama_standalone.exe
+	$(if $(wildcard /home/ZKAEDI/.venv/bin/python),/home/ZKAEDI/.venv/bin/python,python3) tools/generate_gguf_track10_bench.py
+	python3 tools/compile_gguf_exe.py --ptx-only --model build_win64/zcc_hf_qwen2_real_scale_q4km.gguf -o build_win64/zcc_hf_qwen2_real_scale_q4km_sm120.ptx
 	python3 tests/test_win64_lua_sqlite.py
 	python3 tests/test_win64_quickjs_micropython.py
 	python3 tests/test_win64_doom.py
+	python3 tests/test_win64_gpu_ptx.py
+	python3 tests/test_win64_gpu_llm.py
+	python3 tests/test_win64_gpu_aot_gguf.py
+	python3 tests/test_win64_gpu_gguf_v2.py
+	python3 tests/test_win64_gpu_track10.py
 
 # ─── Gate 4 Target Harnesses (SQLite, QuickJS, MicroPython, DOOM, QEMU, Valgrind) ─
 .PHONY: test-sqlite test-quickjs test-micropython test-doom qemu valgrind

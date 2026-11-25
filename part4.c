@@ -6222,6 +6222,8 @@ static void traverse_and_adjust_node(Node *n, Compiler *cc, Node *func, int pars
   traverse_and_adjust_node(n->case_body, cc, func, parser_param_limit, shift, param_offsets);
 }
 
+int g_codegen_max_stack = 0;
+
 void codegen_func(Compiler *cc, Node *func) {
   char *argregs[6];
   int i;
@@ -6330,6 +6332,7 @@ void codegen_func(Compiler *cc, Node *func) {
 
   if (backend_ops && backend_ops->emit_prologue) {
       backend_ops->emit_prologue(cc, func);
+      { int b_est = (func->stack_size + 31) & ~15; if (b_est > g_codegen_max_stack) g_codegen_max_stack = b_est; }
   } else {
       int local_bytes = (func->stack_size + 15) & ~15;
       stack_size = local_bytes + 40; /* reserve 5x8 byte push slots */
@@ -6342,6 +6345,7 @@ void codegen_func(Compiler *cc, Node *func) {
       if (stack_size < 256)
         stack_size = 256;
       stack_size = (stack_size + 15) & ~15;
+      if (stack_size > g_codegen_max_stack) g_codegen_max_stack = stack_size;
 
       fprintf(cc->out, "    .text\n");
       if (g_win64_abi_mode) {

@@ -69,7 +69,11 @@ static void cleanup_temp_files(void) {
 AssemblerFile g_asm_files[512];
 size_t g_asm_file_count = 0;
 
-AssemblerLoc g_asm_locs[131072];
+#ifndef ZCC_ASM_MAX_ENTRIES
+#define ZCC_ASM_MAX_ENTRIES 262144
+#endif
+
+AssemblerLoc g_asm_locs[ZCC_ASM_MAX_ENTRIES];
 size_t g_asm_loc_count = 0;
 
 int g_current_file_idx = 1;
@@ -108,7 +112,7 @@ typedef struct {
 static Label *labels = NULL;
 static size_t label_count = 0;
 
-#define LABEL_HASH_BUCKETS 262144
+#define LABEL_HASH_BUCKETS 524288
 static int label_hash_slot[LABEL_HASH_BUCKETS];
 
 static unsigned int code_fnv1a(const char *s) {
@@ -155,9 +159,9 @@ static size_t reloc_count = 0;
 static void ensure_codegen_tables(void) {
   if (!labels) {
     /* Simultaneous single-slab allocation for labels + relocs */
-    void *slab = calloc(1, 131072 * (sizeof(Label) + sizeof(Reloc)));
+    void *slab = calloc(1, (size_t)ZCC_ASM_MAX_ENTRIES * (sizeof(Label) + sizeof(Reloc)));
     labels = (Label *)slab;
-    relocs = (Reloc *)((char *)slab + 131072 * sizeof(Label));
+    relocs = (Reloc *)((char *)slab + (size_t)ZCC_ASM_MAX_ENTRIES * sizeof(Label));
   }
 }
 
@@ -213,9 +217,10 @@ static void add_reloc(Reloc r) {
       }
     }
   }
-  if (reloc_count >= 131072) {
+  if (reloc_count >= ZCC_ASM_MAX_ENTRIES) {
     fprintf(stderr,
-            "error: assembler relocation table limit exceeded (max 131072)\n");
+            "error: assembler relocation table limit exceeded (max %d)\n",
+            ZCC_ASM_MAX_ENTRIES);
     exit(1);
   }
   relocs[reloc_count++] = r;
@@ -2936,9 +2941,10 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
       int found_idx = find_label_idx(lbl_name);
       size_t idx;
       if (found_idx < 0) {
-        if (label_count >= 131072) {
+        if (label_count >= ZCC_ASM_MAX_ENTRIES) {
           fprintf(stderr,
-                  "error: assembler label table limit exceeded (max 131072)\n");
+                  "error: assembler label table limit exceeded (max %d)\n",
+                  ZCC_ASM_MAX_ENTRIES);
           exit(1);
         }
         idx = label_count++;
@@ -2982,10 +2988,11 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
         if (found_idx >= 0) {
           labels[found_idx].is_global = 1;
         } else {
-          if (label_count >= 131072) {
+          if (label_count >= ZCC_ASM_MAX_ENTRIES) {
             fprintf(
                 stderr,
-                "error: assembler label table limit exceeded (max 131072)\n");
+                "error: assembler label table limit exceeded (max %d)\n",
+                ZCC_ASM_MAX_ENTRIES);
             exit(1);
           }
           size_t idx = label_count++;
@@ -3016,10 +3023,11 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
           if (existing_idx >= 0) {
             idx = (size_t)existing_idx;
           } else {
-            if (label_count >= 131072) {
+            if (label_count >= ZCC_ASM_MAX_ENTRIES) {
               fprintf(
                   stderr,
-                  "error: assembler label table limit exceeded (max 131072)\n");
+                  "error: assembler label table limit exceeded (max %d)\n",
+                  ZCC_ASM_MAX_ENTRIES);
               exit(1);
             }
             idx = label_count++;
@@ -3190,7 +3198,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
 
     /* Instruction parsing */
     if (g_loc_pending) {
-      if (g_asm_loc_count < 131072) {
+      if (g_asm_loc_count < ZCC_ASM_MAX_ENTRIES) {
         g_asm_locs[g_asm_loc_count].address = text_seg.size;
         g_asm_locs[g_asm_loc_count].file_idx = g_current_file_idx;
         g_asm_locs[g_asm_loc_count].line = g_current_line;
@@ -4844,9 +4852,10 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
       if (find_label_idx(relocs[i].target_name) < 0) {
         /* Add external target as an undefined global symbol */
         size_t idx;
-        if (label_count >= 131072) {
+        if (label_count >= ZCC_ASM_MAX_ENTRIES) {
           fprintf(stderr,
-                  "error: assembler label table limit exceeded (max 131072)\n");
+                  "error: assembler label table limit exceeded (max %d)\n",
+                  ZCC_ASM_MAX_ENTRIES);
           free(text_seg.data);
           free(data_seg.data);
           if (tls_seg.data)
@@ -4871,7 +4880,8 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
   size_t win_import_count = 0;
   size_t win_stub_offsets[512];
   size_t win_bss_size = 0;
-  int is_win64_exe = (is_win64_pe && !g_win64_is_shared);
+  int use_win64_sep_data = is_win64_pe;
+  size_t pre_synth_text_end = text_seg.size;
   int win_stdio_stdin_idx = -1;
   int win_stdio_stdout_idx = -1;
   int win_stdio_stderr_idx = -1;
@@ -4879,14 +4889,14 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
 
   if (is_win64_pe) {
     size_t k;
-    /* 1. Allocate .comm symbols (segment == 3): virtual BSS for .exe (v9), or data_seg for DLL (v8) */
+    /* 1. Allocate .comm symbols (segment == 3): virtual BSS for .exe and .dll (v9) */
     for (k = 0; k < label_count; k++) {
       if (labels[k].segment == 3) {
         size_t align = (labels[k].offset > 0 && labels[k].offset <= 64)
                            ? (size_t)labels[k].offset
                            : 8;
         size_t sz = (labels[k].size > 0) ? (size_t)labels[k].size : 8;
-        if (is_win64_exe) {
+        if (use_win64_sep_data) {
           win_bss_size = (win_bss_size + align - 1) & ~(align - 1);
           labels[k].offset = win_bss_size;
           win_bss_size += sz;
@@ -4976,7 +4986,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
       int found_iob = find_label_idx("__iob_func");
       if (found_iob >= 0) {
         win_iob_func_idx = found_iob;
-      } else if (label_count < 131072) {
+      } else if (label_count < ZCC_ASM_MAX_ENTRIES) {
         size_t idx = label_count++;
         strcpy(labels[idx].name, "__iob_func");
         labels[idx].is_global = 1;
@@ -5317,8 +5327,8 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
   }
 
   size_t orig_text_size = text_seg.size;
-  if (!is_win64_exe) {
-    /* Legacy merge of data_seg into text_seg (ELF and Win64 DLL v8) */
+  if (!use_win64_sep_data) {
+    /* Legacy merge of data_seg into text_seg (ELF) */
     if (data_seg.size > 0) {
       size_t pad_size = (16 - (text_seg.size % 16)) % 16;
       if (pad_size > 0) {
@@ -5347,40 +5357,52 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
     uint32_t *win_reloc_rvas =
         (uint32_t *)malloc(sizeof(uint32_t) * max_win_relocs);
     size_t win_reloc_count = 0;
-    uint64_t image_base = 0x140000000ULL;
+    uint64_t image_base = g_win64_is_shared ? 0x180000000ULL : 0x140000000ULL;
     uint32_t text_rva = 0x1000;
 
-    /* Determine entry point offset: GUI WinMain, then mainCRTStartup, then main */
+    /* Determine entry point offset: DllMain for shared DLLs; GUI WinMain, mainCRTStartup, then main for EXEs */
     uint32_t entry_offset = 0;
     int found_entry = 0;
-    if (g_win64_gui_subsystem) {
+    if (g_win64_is_shared) {
       for (i = 0; i < label_count; i++) {
-        if (strcmp(labels[i].name, "WinMain") == 0 ||
-            strcmp(labels[i].name, "_WinMain") == 0 ||
-            strcmp(labels[i].name, "wWinMain") == 0 ||
-            strcmp(labels[i].name, "_wWinMain") == 0) {
+        if (labels[i].segment == 1 &&
+            (strcmp(labels[i].name, "DllMain") == 0 ||
+             strcmp(labels[i].name, "_DllMain") == 0)) {
           entry_offset = (uint32_t)labels[i].offset;
           found_entry = 1;
           break;
         }
       }
-    }
-    if (!found_entry) {
-      for (i = 0; i < label_count; i++) {
-        if (strcmp(labels[i].name, "mainCRTStartup") == 0 ||
-            strcmp(labels[i].name, "_mainCRTStartup") == 0) {
-          entry_offset = (uint32_t)labels[i].offset;
-          found_entry = 1;
-          break;
+    } else {
+      if (g_win64_gui_subsystem) {
+        for (i = 0; i < label_count; i++) {
+          if (strcmp(labels[i].name, "WinMain") == 0 ||
+              strcmp(labels[i].name, "_WinMain") == 0 ||
+              strcmp(labels[i].name, "wWinMain") == 0 ||
+              strcmp(labels[i].name, "_wWinMain") == 0) {
+            entry_offset = (uint32_t)labels[i].offset;
+            found_entry = 1;
+            break;
+          }
         }
       }
-    }
-    if (!found_entry) {
-      for (i = 0; i < label_count; i++) {
-        if (strcmp(labels[i].name, "main") == 0 ||
-            strcmp(labels[i].name, "_main") == 0) {
-          entry_offset = (uint32_t)labels[i].offset;
-          break;
+      if (!found_entry) {
+        for (i = 0; i < label_count; i++) {
+          if (strcmp(labels[i].name, "mainCRTStartup") == 0 ||
+              strcmp(labels[i].name, "_mainCRTStartup") == 0) {
+            entry_offset = (uint32_t)labels[i].offset;
+            found_entry = 1;
+            break;
+          }
+        }
+      }
+      if (!found_entry) {
+        for (i = 0; i < label_count; i++) {
+          if (strcmp(labels[i].name, "main") == 0 ||
+              strcmp(labels[i].name, "_main") == 0) {
+            entry_offset = (uint32_t)labels[i].offset;
+            break;
+          }
         }
       }
     }
@@ -5444,7 +5466,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
     size_t bss_start = 0;
     size_t data_vsize = 0;
     uint32_t sep_data_rva = text_rva + (uint32_t)data_start_v8;
-    if (is_win64_exe) {
+    if (use_win64_sep_data) {
       size_t dpad = (16 - (data_seg.size % 16)) % 16;
       if (dpad > 0) {
         unsigned char z16[16] = {0};
@@ -5474,12 +5496,12 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
       memcpy(&text_seg.data[win_crt_err_patch], &d, 4);
     }
 
-    /* Resolve relocations against separated .data/.bss (exe v9) or merged .text (dll v8) */
+    /* Resolve relocations against separated .data/.bss (exe v9 / dll v9) */
     for (i = 0; i < reloc_count; i++) {
       if (relocs[i].type == R_X86_64_64) {
         int j = find_label_idx(relocs[i].target_name);
         if (j >= 0) {
-          if (is_win64_exe) {
+          if (use_win64_sep_data) {
             uint64_t tgt_rva = 0;
             if (labels[j].segment == 1)
               tgt_rva = (uint64_t)(text_rva + labels[j].offset);
@@ -5517,7 +5539,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
         int j = find_label_idx(relocs[i].target_name);
         if (j >= 0 && (labels[j].segment == 2 || labels[j].segment == 3)) {
           long long disp = 0;
-          if (is_win64_exe) {
+          if (use_win64_sep_data) {
             uint64_t tgt_rva = (labels[j].segment == 3)
                                    ? (uint64_t)(sep_data_rva + bss_start + labels[j].offset)
                                    : (uint64_t)(sep_data_rva + labels[j].offset);
@@ -5541,7 +5563,7 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
     /* If imports present, calculate IAT RVAs and patch stub call displacements */
     if (win_import_count > 0) {
       uint32_t iat_rvas[512];
-      zcc_win64_pe_calc_iat_rvas_ex(text_seg.size, is_win64_exe ? data_vsize : 0,
+      zcc_win64_pe_calc_iat_rvas_ex(text_seg.size, use_win64_sep_data ? data_vsize : 0,
                                     win_import_funcs, win_import_count, iat_rvas);
       size_t k;
       for (k = 0; k < win_import_count; k++) {
@@ -5704,19 +5726,27 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
 
     int ret = 0;
     if (g_win64_is_shared) {
-      /* Gather exported functions from labels */
+      /* Gather exported global text functions from pre-synthesis user code */
       size_t max_exp = label_count + 1;
       win64_pe_export_t *win_exports =
           (win64_pe_export_t *)malloc(sizeof(win64_pe_export_t) * max_exp);
       size_t win_export_count = 0;
       if (win_exports) {
         for (i = 0; i < label_count; i++) {
-          if (labels[i].segment == 1 && labels[i].name[0] != '.' &&
-              labels[i].name[0] != '\0' &&
+          if (labels[i].segment == 1 && labels[i].is_global &&
+              labels[i].offset < pre_synth_text_end &&
+              labels[i].name[0] != '.' && labels[i].name[0] != '\0' &&
               strcmp(labels[i].name, "DllMain") != 0 &&
               strcmp(labels[i].name, "_DllMain") != 0 &&
               strcmp(labels[i].name, "main") != 0 &&
-              strcmp(labels[i].name, "_main") != 0) {
+              strcmp(labels[i].name, "_main") != 0 &&
+              strcmp(labels[i].name, "__zcc_win64_dll_init") != 0 &&
+              strcmp(labels[i].name, "strtoll") != 0 &&
+              strcmp(labels[i].name, "strtoull") != 0 &&
+              strcmp(labels[i].name, "atoll") != 0 &&
+              strcmp(labels[i].name, "getpid") != 0 &&
+              strcmp(labels[i].name, "getcwd") != 0 &&
+              strcmp(labels[i].name, "__errno_location") != 0) {
             win_exports[win_export_count].name = labels[i].name;
             win_exports[win_export_count].func_rva =
                 0x1000 + (uint32_t)labels[i].offset;
@@ -5739,10 +5769,11 @@ static int assemble(const char *in_s_filename, const char *out_o_filename,
         tls_info.zero_fill_size = (uint32_t)tls_zero_fill;
       }
 
-      ret = zcc_emit_win64_pe_dll_v8(
+      ret = zcc_emit_win64_pe_dll_v9(
           out_o_filename, dname, text_seg.data, text_seg.size, entry_offset,
           win_import_count > 0 ? win_import_funcs : NULL, win_import_count,
           win_exports, win_export_count,
+          data_seg.data, data_seg.size, win_bss_size, found_entry,
           win_reloc_count > 0 ? win_reloc_rvas : NULL, win_reloc_count,
           win_extent_count > 0 ? win_extents : NULL, win_extent_count,
           has_tls ? &tls_info : NULL, cert_info.cert_data ? &cert_info : NULL,
@@ -8471,6 +8502,7 @@ int main(int argc, char **argv) {
   int has_emit_gguf = 0;
   int has_frontend_dump = 0;
   int has_wasm_target = 0;
+  int has_ptx_target = 0;
   int has_yul_target = 0;
   int has_stark_proof_target = 0;
   int has_arm_target = 0;
@@ -8507,11 +8539,22 @@ int main(int argc, char **argv) {
                strcmp(argv[i], "--emit-wasm") == 0 ||
                strcmp(argv[i], "-emit-wasm") == 0) {
       has_wasm_target = 1;
+    } else if (strcmp(argv[i], "--target=ptx") == 0 ||
+               strcmp(argv[i], "-target=ptx") == 0 ||
+               strcmp(argv[i], "--target=nvptx") == 0 ||
+               strcmp(argv[i], "-target=nvptx") == 0 ||
+               strcmp(argv[i], "--emit-ptx") == 0 ||
+               strcmp(argv[i], "-emit-ptx") == 0) {
+      has_ptx_target = 1;
     } else if ((strcmp(argv[i], "-target") == 0 ||
                 strcmp(argv[i], "--target") == 0) &&
                i + 1 < argc) {
       if (strncmp(argv[i + 1], "wasm", 4) == 0) {
         has_wasm_target = 1;
+        i++;
+      } else if (strcmp(argv[i + 1], "ptx") == 0 ||
+                 strcmp(argv[i + 1], "nvptx") == 0) {
+        has_ptx_target = 1;
         i++;
       } else if (strncmp(argv[i + 1], "arm64", 5) == 0 ||
                  strncmp(argv[i + 1], "aarch64", 7) == 0) {
@@ -8731,7 +8774,8 @@ int main(int argc, char **argv) {
    * unless explicit -emit-obj requests native ELF object synthesis */
   int is_zcc_c = 0;
   if (input_c_file && !has_explicit_emit_obj && !has_win64_target &&
-      !has_wasm_target && !has_arm64_target && !has_riscv_target) {
+      !has_wasm_target && !has_ptx_target && !has_arm64_target &&
+      !has_riscv_target) {
     const char *p = input_c_file;
     int len = strlen(p);
     if (strcmp(p, "zcc.c") == 0 ||
@@ -9055,8 +9099,8 @@ int main(int argc, char **argv) {
       (has_lib_flag && !has_explicit_zld) ||
       (c_file_count > 1 && compile_only) || (!input_c_file && obj_count == 0) ||
       has_trace_abi || has_emit_gguf || has_frontend_dump || has_wasm_target ||
-      (has_arm_target && !has_arm64_target) || has_yul_target ||
-      has_stark_proof_target) {
+      has_ptx_target || (has_arm_target && !has_arm64_target) ||
+      has_yul_target || has_stark_proof_target) {
     if (temp_multi_c_filename[0] != '\0') {
       remove(temp_multi_c_filename);
       g_temp_multi_c_to_remove[0] = '\0';

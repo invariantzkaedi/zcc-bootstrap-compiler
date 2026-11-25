@@ -1256,6 +1256,8 @@ static int lex_operator(Compiler *cc, int c) {
     return 0;
 }
 
+int g_zcc_tokens_emitted = 0;
+
 void next_token(Compiler *cc) {
     int c;
     int kw;
@@ -1371,11 +1373,11 @@ again:
         goto again;
     }
 
-    if (is_digit(c)) { lex_number(cc, c); return; }
-    if (c == '\'') { lex_char(cc); return; }
-    if (c == '"') { lex_string(cc); return; }
-    if (is_alpha(c)) { if (lex_ident(cc)) return; else goto again; }
-    if (lex_operator(cc, c)) return;
+    if (is_digit(c)) { lex_number(cc, c); g_zcc_tokens_emitted++; return; }
+    if (c == '\'') { lex_char(cc); g_zcc_tokens_emitted++; return; }
+    if (c == '"') { lex_string(cc); g_zcc_tokens_emitted++; return; }
+    if (is_alpha(c)) { if (lex_ident(cc)) { g_zcc_tokens_emitted++; return; } else goto again; }
+    if (lex_operator(cc, c)) { g_zcc_tokens_emitted++; return; }
     goto again;
     goto again;
 

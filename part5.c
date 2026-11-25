@@ -723,6 +723,33 @@ static char *read_file(char *path, int *out_len) {
 
 static char *line_buffer = 0;
 static char **line_ptrs = 0;
+static int g_peep_instr_before = 0;
+static int g_peep_instr_after = 0;
+
+static int zcc_count_asm_instructions(char **ptrs, int count) {
+  int total = 0;
+  for (int i = 0; i < count; i++) {
+    const char *p = ptrs[i];
+    if (!p || !p[0]) continue;
+    while (*p) {
+      while (*p == ' ' || *p == '\t' || *p == '\r') p++;
+      if (!*p) break;
+      if (*p == '\n') { p++; continue; }
+      if (*p == '.' || *p == '#' || *p == ';' || (p[0] == '/' && p[1] == '/')) {
+        while (*p && *p != '\n') p++;
+        if (*p == '\n') p++;
+        continue;
+      }
+      const char *tok_start = p;
+      while (*p && *p != ' ' && *p != '\t' && *p != '\r' && *p != '\n') p++;
+      int is_label = (p > tok_start && p[-1] == ':');
+      while (*p && *p != '\n') p++;
+      if (*p == '\n') p++;
+      if (!is_label) total++;
+    }
+  }
+  return total;
+}
 
 static void peephole_optimize(char *filename) {
   FILE *fp;
@@ -764,6 +791,7 @@ static void peephole_optimize(char *filename) {
     nlines++;
   }
   fclose(fp);
+  g_peep_instr_before = zcc_count_asm_instructions(line_ptrs, nlines);
 
   int pass;
   if (backend_ops) {
@@ -1226,6 +1254,7 @@ static void peephole_optimize(char *filename) {
     extern int zcc_x86_peephole_boost(char **line_ptrs, int *nlines_ptr);
     eliminated += zcc_x86_peephole_boost(line_ptrs, &nlines);
   }
+  g_peep_instr_after = zcc_count_asm_instructions(line_ptrs, nlines);
 
   if (g_use_in_mem_asm) {
     char *new_buf = NULL;
@@ -1838,6 +1867,8 @@ int zcc_main(int argc, char **argv) {
   char *g_diff_ir_path_a = NULL;
   char *g_diff_ir_path_b = NULL;
   int g_emit_wasm = 0;
+  int g_emit_ptx = 0;
+  const char *g_ptx_arch = "sm_120", *g_ptx_gguf_model = NULL;
   zcc_wasm_export_minimal = 0;
   zcc_wasm_export_runtime = 0;
   zcc_wasm_max_pages = 0;
@@ -1879,12 +1910,18 @@ int zcc_main(int argc, char **argv) {
         return 1;
       }
       zcc_wasm_max_pages = (uint32_t)mp;
+    } else if (strcmp(argv[i], "--target=ptx") == 0 || strcmp(argv[i], "-target=ptx") == 0 || strcmp(argv[i], "--target=nvptx") == 0 || strcmp(argv[i], "-target=nvptx") == 0 || strcmp(argv[i], "--emit-ptx") == 0 || strcmp(argv[i], "-emit-ptx") == 0) {
+      g_emit_ptx = 1; ZCC_POINTER_WIDTH = 8;
+    } else if (strncmp(argv[i], "--ptx-arch=", 11) == 0 || strncmp(argv[i], "--gpu-arch=", 11) == 0) { g_ptx_arch = argv[i] + 11;
+    } else if (strcmp(argv[i], "--model") == 0 && i + 1 < argc) { g_ptx_gguf_model = argv[++i];
     } else if (strcmp(argv[i], "-target") == 0 || strcmp(argv[i], "--target") == 0) {
       i++;
       if (i < argc) {
         if (strncmp(argv[i], "wasm", 4) == 0) {
           g_emit_wasm = 1;
           ZCC_POINTER_WIDTH = 4;
+        } else if (strcmp(argv[i], "ptx") == 0 || strcmp(argv[i], "nvptx") == 0) {
+          g_emit_ptx = 1; ZCC_POINTER_WIDTH = 8;
         } else if (strcmp(argv[i], "arm") == 0 || strcmp(argv[i], "thumb") == 0 || strcmp(argv[i], "thumbv6m") == 0 ||
                    strcmp(argv[i], "cortex-m0plus") == 0) {
           backend_ops = &backend_thumbv6m;
@@ -2269,7 +2306,7 @@ int zcc_main(int argc, char **argv) {
       strncat(extra_link_args, argv[i], 4095 - (int)strlen(extra_link_args));
     } else {
       int len = strlen(argv[i]);
-      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || strcmp(argv[i] + len - 2, ".i") == 0 || (len > 3 && (strcmp(argv[i] + len - 3, ".ii") == 0 || strcmp(argv[i] + len - 3, ".cc") == 0)) || (len > 4 && (strcmp(argv[i] + len - 4, ".cpp") == 0 || strcmp(argv[i] + len - 4, ".cxx") == 0)) || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".html") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".css") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".svg") == 0) || (len > 7 && strcmp(argv[i] + len - 7, ".circom") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".qasm") == 0) || (qasm_canonical_mode && argv[i][0] != '-') || (qasm_validate_mode && argv[i][0] != '-') || (qasm_sim_mode && argv[i][0] != '-') || (qasm_stabilizer_mode && argv[i][0] != '-') || (qasm_opt_mode && argv[i][0] != '-') || (qasm_clifford_t_mode && argv[i][0] != '-') || (qasm_sim_c_mode && argv[i][0] != '-') || (svg_cli_mode && argv[i][0] != '-'))) {
+      if (len > 2 && (strcmp(argv[i] + len - 2, ".c") == 0 || strcmp(argv[i] + len - 2, ".i") == 0 || (len > 3 && (strcmp(argv[i] + len - 3, ".ii") == 0 || strcmp(argv[i] + len - 3, ".cc") == 0)) || (len > 4 && (strcmp(argv[i] + len - 4, ".cpp") == 0 || strcmp(argv[i] + len - 4, ".cxx") == 0)) || strcmp(argv[i] + len - 3, ".rs") == 0 || (len > 4 && strcmp(argv[i] + len - 4, ".yul") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".html") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".css") == 0) || (len > 4 && strcmp(argv[i] + len - 4, ".svg") == 0) || (len > 7 && strcmp(argv[i] + len - 7, ".circom") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".qasm") == 0) || (len > 5 && strcmp(argv[i] + len - 5, ".gguf") == 0) || (qasm_canonical_mode && argv[i][0] != '-') || (qasm_validate_mode && argv[i][0] != '-') || (qasm_sim_mode && argv[i][0] != '-') || (qasm_stabilizer_mode && argv[i][0] != '-') || (qasm_opt_mode && argv[i][0] != '-') || (qasm_clifford_t_mode && argv[i][0] != '-') || (qasm_sim_c_mode && argv[i][0] != '-') || (svg_cli_mode && argv[i][0] != '-'))) {
         input_file = argv[i];
       } else if (argv[i][0] != '-' && !(len > 2 && (strcmp(argv[i] + len - 2, ".s") == 0 || strcmp(argv[i] + len - 2, ".S") == 0 || strcmp(argv[i] + len - 2, ".o") == 0 || strcmp(argv[i] + len - 2, ".a") == 0 || (len > 3 && strcmp(argv[i] + len - 3, ".so") == 0)))) {
         fprintf(stderr, "zcc: unrecognized input file extension: '%s'\n", argv[i]);
@@ -2316,6 +2353,13 @@ int zcc_main(int argc, char **argv) {
           output_file = "a.wasm";
       }
       compile_only = 1;
+  }
+
+  if (g_emit_ptx) {
+      if (!output_file) output_file = "a.ptx"; compile_only = 1;
+      extern int ptx_try_compile_gguf(const char *m_opt, const char *in_file, const char *out_file, const char *arch, int quiet);
+      int gr = ptx_try_compile_gguf(g_ptx_gguf_model, input_file, output_file, g_ptx_arch, enable_telemetry_stdout);
+      if (gr >= 0) return gr;
   }
 
   if (g_emit_yul) {
@@ -3008,12 +3052,16 @@ int zcc_main(int argc, char **argv) {
 
   /* lex first token */
   if (!enable_telemetry_stdout && !trace_abi_mode && !dump_ast_json) printf("[Phase 1] Lexical Array Bootstrap... OK\n");
+  extern int g_zcc_tokens_emitted;
+  g_zcc_tokens_emitted = 0;
+  int p1_lines = (source_len > 0) ? 1 : 0;
+  for (int li = 0; li < source_len; li++) {
+    if (source[li] == '\n') p1_lines++;
+  }
   long p1_start = clock();
   next_token(cc);
   long p1_end = clock();
   int p1_us = (int)((double)(p1_end - p1_start) * 1000000.0 / CLOCKS_PER_SEC);
-  zcc_telem_phase(1, "lexer", "OK", p1_us, "tokens_emitted", 1, "lines_processed", 1, "errors", cc->errors);
-  zcc_oracle_log_pass("lexer", "_global", (double)(p1_end - p1_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
 
   /* parse */
   if (!enable_telemetry_stdout && !trace_abi_mode && !dump_ast_json) printf("[Phase 2] AST Topological Generation... ");
@@ -3021,6 +3069,8 @@ int zcc_main(int argc, char **argv) {
   prog = parse_program(cc);
   long p2_end = clock();
   int p2_us = (int)((double)(p2_end - p2_start) * 1000000.0 / CLOCKS_PER_SEC);
+  zcc_telem_phase(1, "lexer", "OK", p1_us, "tokens_emitted", g_zcc_tokens_emitted, "lines_processed", p1_lines, "errors", cc->errors);
+  zcc_oracle_log_pass("lexer", "_global", (double)(p1_end - p1_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
   extern int g_init_list_nodes;
   extern int g_max_init_depth;
   int remaining_headroom = 65536 - g_init_list_nodes;
@@ -3057,6 +3107,15 @@ int zcc_main(int argc, char **argv) {
     free(cc);
     ir_telem_shutdown();
     return emit_ret;
+  }
+
+  if (g_emit_ptx) {
+    extern int ptx_lower_program(Compiler *cc, Node *prog, const char *output_file, const char *ptx_arch);
+    int ptx_ret = ptx_lower_program(cc, prog, output_file, g_ptx_arch);
+    fclose(cc->out); if (!g_use_in_mem_asm && asm_file[0]) remove(asm_file);
+    free(source); free(cc); ir_telem_shutdown();
+    if (ptx_ret == 0) { if (!enable_telemetry_stdout) printf("[OK] PTX module emitted to %s\n", output_file); return 0; }
+    fprintf(stderr, "zcc: failed to emit PTX module to '%s'\n", output_file); return 1;
   }
 
   if (g_emit_wasm) {
@@ -3204,6 +3263,8 @@ int zcc_main(int argc, char **argv) {
   zcc_oracle_log_pass("constant_folding", "_global", (double)(p3_end - p3_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
   if (!enable_telemetry_stdout) printf("[Phase 4] SystemV ABI X86-64 Codegen... OK\n");
 
+  extern int g_codegen_max_stack;
+  g_codegen_max_stack = 0;
   long p4_start = clock();
   if (g_ir_primary && g_ir_module) {
       /* Dummy pass to generate IR. We write the AST codegen to a temp file or just let it overwrite.
@@ -3245,7 +3306,7 @@ int zcc_main(int argc, char **argv) {
   long p4_end = clock();
   int p4_us = (int)((double)(p4_end - p4_start) * 1000000.0 / CLOCKS_PER_SEC);
   extern unsigned long long next_alloc_id;
-  zcc_telem_phase(4, "codegen", (cc->errors > 0) ? "FAILED" : "OK", p4_us, "bytes_emitted", next_alloc_id * 8, "stack_size_max", 512, "errors", cc->errors);
+  zcc_telem_phase(4, "codegen", (cc->errors > 0) ? "FAILED" : "OK", p4_us, "bytes_emitted", next_alloc_id * 8, "stack_size_max", g_codegen_max_stack, "errors", cc->errors);
   zcc_oracle_log_pass("codegen", "_global", (double)(p4_end - p4_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
 
   /* HYGIENE-ASM-001: emit --asm-report JSON to stderr after codegen */
@@ -3330,6 +3391,8 @@ int zcc_main(int argc, char **argv) {
 
   /* peephole optimize the emitted assembly safely out-of-bounds */
   long p5_start = clock();
+  g_peep_instr_before = 0;
+  g_peep_instr_after = 0;
   int opt_peephole = 1;
   if (getenv("ZCC_OPT") && strcmp(getenv("ZCC_OPT"), "0") == 0) opt_peephole = 0;
   if (getenv("ZCC_OPT_PEEPHOLE") && strcmp(getenv("ZCC_OPT_PEEPHOLE"), "0") == 0) opt_peephole = 0;
@@ -3346,7 +3409,11 @@ int zcc_main(int argc, char **argv) {
   }
   long p5_end = clock();
   int p5_us = (int)((double)(p5_end - p5_start) * 1000000.0 / CLOCKS_PER_SEC);
-  zcc_telem_phase(5, "peephole", "OK", p5_us, "instructions_before", 400, "instructions_after", 350, "reduction_pct", 12);
+  int peep_red_pct = 0;
+  if (g_peep_instr_before > 0 && g_peep_instr_before >= g_peep_instr_after) {
+    peep_red_pct = (int)(((long long)(g_peep_instr_before - g_peep_instr_after) * 100LL) / (long long)g_peep_instr_before);
+  }
+  zcc_telem_phase(5, "peephole", "OK", p5_us, "instructions_before", g_peep_instr_before, "instructions_after", g_peep_instr_after, "reduction_pct", peep_red_pct);
   zcc_oracle_log_pass("peephole", "_global", (double)(p5_end - p5_start) * 1000.0 / CLOCKS_PER_SEC, 0, 0, 0, 0);
 
   /* security pass: sign-extension overflow detection */

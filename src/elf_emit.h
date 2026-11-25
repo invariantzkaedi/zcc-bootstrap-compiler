@@ -197,7 +197,8 @@ typedef struct {
 extern AssemblerFile g_asm_files[512];
 extern size_t g_asm_file_count;
 
-extern AssemblerLoc g_asm_locs[131072];
+#define ZCC_ASM_MAX_ENTRIES 262144
+extern AssemblerLoc g_asm_locs[ZCC_ASM_MAX_ENTRIES];
 extern size_t g_asm_loc_count;
 
 
