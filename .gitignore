@@ -710,6 +710,14 @@ docs/*
 !docs/postmortems/**
 !docs/releases/
 !docs/releases/**
+!docs/openapi.json
+!docs/qllm_quantum_visualizer.html
+!docs/zcc_api_docs_ui.html
+!docs/zcc_llm_server_ui.html
+!docs/zcc_lora_studio_ui.html
+!docs/zcc_mario_game.html
+!docs/zcc_runner_game.html
+!docs/zcc_svg_forge_ui.html
 
 
 
@@ -823,6 +831,26 @@ build_win64/
 releases/
 tests/embedded_quickjs/
 tests/embedded_micropython/
+
+# Blackwell GPU Studio SDK & P/Invoke scripts (exempt from prefix-based binary ignores)
+!sdk/zcc_client.mjs
+!sdk/zcc_client.py
+!tools/test_dll_csharp_pinvoke.ps1
+
+# Heavy model weights, WADs, datasets, backup copies & local scratch keys
+*.safetensors
+*.pth
+*.zcc_lora
+doom1.wad
+gpt2_base/
+models/
+outputs_dpo_rtx5070/
+artifacts - Copy/
+artifacts/real_world_private_key.json
+artifacts/*.jsonl
+buggz_extracted/
+buggzbountyz_symbolic_swarm_v3_0_1/
+h:/
 
 
 
