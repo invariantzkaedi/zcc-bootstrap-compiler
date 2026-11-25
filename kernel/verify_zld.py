@@ -204,7 +204,9 @@ def verify(ld_path, zld_path):
         for i, (r, z) in enumerate(zip(ref_loads, zld_loads)):
             if r['vaddr'] != z['vaddr']:
                 die(f"PT_LOAD[{i}] vaddr mismatch: ref=0x{r['vaddr']:x} zld=0x{z['vaddr']:x}")
-            if r['flags'] != z['flags']:
+            # Require zld to include all reference permissions and never add PF_X unexpectedly;
+            # ZCC elf_emit_obj merges writable .data into .text so PT_LOAD[0] may include PF_W.
+            if (z['flags'] & r['flags']) != r['flags'] or (z['flags'] & PF_X) != (r['flags'] & PF_X):
                 die(f"PT_LOAD[{i}] flags mismatch: ref=0x{r['flags']:x} zld=0x{z['flags']:x}")
             ok(f"PT_LOAD[{i}] vaddr=0x{z['vaddr']:x} flags=0x{z['flags']:x} match")
     else:

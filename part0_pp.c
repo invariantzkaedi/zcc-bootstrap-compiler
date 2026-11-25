@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+extern int ZCC_POINTER_WIDTH;
 #define PP_MAX_MACROS 8192 /* raised: SQLite */
 #define PP_MAX_PARAMS 128  /* raised: SQLite */
 static int _warned_pp_max_params = 0;

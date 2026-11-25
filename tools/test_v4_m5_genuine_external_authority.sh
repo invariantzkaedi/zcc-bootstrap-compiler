@@ -9,10 +9,10 @@
 #      governed, pre-existing external repository:
 #      https://github.com/invariantzkaedi/zcc-release-authority.git
 #    - Pinned to externally approved immutable commit:
-#      fa8249255d84f833f915426c57465e3ba0977280
+#      9a704206b9fe99bc480e615050939ba879ba719e
 #    - Strictly validates pre-approved cryptographic digests:
 #      Verifier SHA-256: 3f748bf392493d9d68981078829d3826656103e5cb85047c22ba2780ac95c5e9
-#      Policy SHA-256:   a325a13894b50599bbdac958a1798eecef7d6f008a520ff3c3d8e2c25f9f88a5
+#      Policy SHA-256:   26f7d2bca067f74aa69c82cd5ac52657d4d03134953e5b278e47b3031fda30ba
 # 2. Untrusted Evidence Bundle Ingestion (V4-M5-03 / V4-M5-05):
 #    - Authority operates in data-only mode against untrusted archive payloads.
 #    - Enforces strict archive security: path traversal ban, symlink ban, 50MB/250MB quotas.
@@ -51,9 +51,9 @@ echo "======================================================================"
 # STEP 1: FETCH INDEPENDENT RELEASE AUTHORITY FROM GITHUB
 # ==============================================================================
 EXT_AUTHORITY_URL="${EXTERNAL_AUTH_URL:-https://github.com/invariantzkaedi/zcc-release-authority.git}"
-PINNED_AUTH_COMMIT="${EXTERNAL_AUTH_COMMIT:-fa8249255d84f833f915426c57465e3ba0977280}"
+PINNED_AUTH_COMMIT="${EXTERNAL_AUTH_COMMIT:-9a704206b9fe99bc480e615050939ba879ba719e}"
 EXPECTED_VERIFIER_SHA="${EXTERNAL_VERIFIER_SHA:-3f748bf392493d9d68981078829d3826656103e5cb85047c22ba2780ac95c5e9}"
-EXPECTED_POLICY_SHA="${EXTERNAL_POLICY_SHA:-a325a13894b50599bbdac958a1798eecef7d6f008a520ff3c3d8e2c25f9f88a5}"
+EXPECTED_POLICY_SHA="${EXTERNAL_POLICY_SHA:-26f7d2bca067f74aa69c82cd5ac52657d4d03134953e5b278e47b3031fda30ba}"
 
 EXT_AUTHORITY_DIR="$(mktemp -d /tmp/zcc_sovereign_authority_v4m5_XXXXXX)"
 WORK_BASE="$(mktemp -d /tmp/zcc_v4_m5_work_XXXXXX)"

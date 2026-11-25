@@ -5842,6 +5842,17 @@ static void compute_liveness(Node *n) {
     if (ct != lt)
       n->lhs->sym->live_start = -1; /* disable alloc: ct != lt uses stack fallback */
   }
+  if (n->kind == ND_ASM && n->asm_operands) {
+    for (i = 0; i < n->num_asm_operands; i++) {
+      AsmOperand *op = &n->asm_operands[i];
+      if (op->expr && op->expr->kind == ND_VAR && op->expr->sym &&
+          (op->is_output || (op->constraint &&
+           (strchr(op->constraint, 'm') || strchr(op->constraint, 'o') || strchr(op->constraint, 'V'))))) {
+        op->expr->sym->live_start = -1; /* inline asm write-back / memory operands use stack slots */
+      }
+      compute_liveness(op->expr);
+    }
+  }
   if (n->kind == ND_VAR && n->sym && n->sym->is_local) {
     if (n->sym->live_start != -1) {
       if (n->sym->live_start == 0)
