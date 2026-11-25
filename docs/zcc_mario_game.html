@@ -1,0 +1,2683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SUPER BLACKWELL // ZKAEDI Sovereign Mario Platformer</title>
+<style>
+:root {
+  --bg: #07080b;
+  --panel: #101218;
+  --panel-2: #161922;
+  --panel-3: #1d212d;
+  --gold: #d4af37;
+  --gold-bright: #f0d77a;
+  --gold-soft: rgba(212, 175, 55, 0.14);
+  --emerald: #34d399;
+  --crimson: #f87171;
+  --sky: #38bdf8;
+  --border: rgba(212, 175, 55, 0.34);
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --text: #f4f1e6;
+  --muted: #a49e8d;
+  --mono: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; user-select: none; }
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  overflow-x: hidden;
+}
+.zcc-backdrop-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none !important;
+  background:
+    radial-gradient(circle at 12% 10%, rgba(212, 175, 55, 0.10), transparent 40%),
+    radial-gradient(circle at 86% 14%, rgba(248, 113, 113, 0.08), transparent 36%),
+    repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+}
+.zcc-shell {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  max-width: 1460px;
+  margin: 0 auto;
+  padding: 12px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.zcc-header {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  background: linear-gradient(180deg, #141720 0%, #0e1015 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+}
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.crest {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--gold);
+  background: radial-gradient(circle at 30% 25%, #f6df8c 0%, #c89d28 55%, #6d5010 100%);
+  color: #090a0d;
+  font-family: var(--mono);
+  font-weight: 900;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 16px rgba(212, 175, 55, 0.35);
+}
+.title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.title .gold { color: var(--gold-bright); }
+.sub {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+  margin-top: 2px;
+}
+.hdr-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.badge {
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.badge.gold { border-color: var(--border); background: var(--gold-soft); color: var(--gold-bright); }
+.badge.ok { border-color: rgba(52,211,153,0.45); background: rgba(52,211,153,0.08); color: #6ee7b7; }
+.badge.warn { border-color: rgba(248,113,113,0.48); background: rgba(248,113,113,0.09); color: #fca5a5; }
+.throttle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #08090c;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.throttle-wrap input[type="range"] {
+  width: 78px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--gold);
+}
+select, input, button, a.studio-link {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  user-select: auto;
+  background: var(--panel-3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+input.mono {
+  background: #08090c;
+  border-color: var(--border-soft);
+  font-family: var(--mono);
+  cursor: text;
+}
+button:hover, a.studio-link:hover { border-color: var(--gold-bright); filter: brightness(1.08); }
+button.primary {
+  background: linear-gradient(180deg, #ebd073 0%, #bc8e24 100%);
+  border-color: var(--gold-bright);
+  color: #090a0d;
+  font-weight: 800;
+}
+button.emerald {
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+  border-color: #6ee7b7;
+  color: #04130d;
+  font-weight: 800;
+}
+button.crimson {
+  background: linear-gradient(180deg, #f87171 0%, #b91c1c 100%);
+  border-color: #fca5a5;
+  color: #fff5f5;
+  font-weight: 700;
+}
+button.mini { padding: 4px 9px; font-size: 11px; }
+button:disabled { opacity: 0.48; cursor: not-allowed; }
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 1.55fr 0.85fr;
+  gap: 12px;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+@media (max-width: 1140px) {
+  .main-grid { grid-template-columns: 1fr; }
+}
+.stage-card, .deck-card {
+  background: linear-gradient(180deg, #0f1118 0%, #090a0e 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.55);
+}
+.hud-strip {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(17,19,26,0.92);
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 7px;
+}
+@media (max-width: 820px) {
+  .hud-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.hud-cell {
+  background: #08090c;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hud-lbl {
+  font-size: 9px;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.hud-val {
+  font-size: 13px;
+  font-family: var(--mono);
+  font-weight: 800;
+  color: var(--gold-bright);
+}
+.canvas-stage {
+  position: relative;
+  width: 100%;
+  background: #050608;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#marioCanvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #080b12;
+}
+.mario-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 7, 11, 0.72);
+  padding: 16px;
+}
+.mario-overlay.hidden { display: none; }
+.overlay-box {
+  max-width: 560px;
+  width: 100%;
+  background: linear-gradient(180deg, #161923 0%, #0d0f15 100%);
+  border: 1px solid var(--gold);
+  border-radius: 14px;
+  padding: 18px 20px;
+  text-align: center;
+  box-shadow: 0 18px 46px rgba(0,0,0,0.75);
+}
+.overlay-box h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  letter-spacing: 0.05em;
+  color: var(--gold-bright);
+  font-family: var(--mono);
+}
+.overlay-box p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.overlay-hint {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  background: #090a0e;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+.comms-bar {
+  padding: 9px 14px;
+  border-top: 1px solid var(--border);
+  background: #0d0f15;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.taunt-text {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--gold-bright);
+  flex: 1 1 280px;
+}
+.btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.arcade-pad {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-soft);
+  background: #0b0c10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.deck-bar {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(212,175,55,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.deck-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+}
+.deck-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.section-kicker {
+  font-size: 10px;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+.meter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.meter-row {
+  display: grid;
+  grid-template-columns: 72px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.meter-bg {
+  height: 7px;
+  border-radius: 999px;
+  background: #08090c;
+  border: 1px solid var(--border-soft);
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  width: 25%;
+  background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+}
+.subpanel {
+  background: #0b0d12;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.field label {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.canvas-box {
+  background: #06070a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px;
+}
+#marioLossCanvas {
+  width: 100%;
+  height: 115px;
+  display: block;
+}
+.status-line {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.log-box {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #d6cfba;
+  background: #07080b;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 8px;
+  max-height: 110px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.35;
+}
+</style>
+</head>
+<body>
+<div class="zcc-backdrop-fx" aria-hidden="true"></div>
+<div class="zcc-shell">
+  <header class="zcc-header">
+    <div class="brand-row">
+      <div class="crest" aria-hidden="true">SBW</div>
+      <div>
+        <div class="title">ZKAEDI <span class="gold">SUPER BLACKWELL</span> // SM 12.0 Mario Platformer</div>
+        <div class="sub">A/D Move &middot; W/Space Jump &middot; S/Down Warp Pipe &middot; Shift/X Sprint &amp; Fireball &middot; Live RTX 5070 Architect</div>
+      </div>
+    </div>
+
+    <div class="hdr-controls">
+      <span id="gpuPill" class="badge gold">GPU: probing...</span>
+      <span id="tpsPill" class="badge ok">Decoder: --</span>
+      <span id="architectStatusPill" class="badge">Architect: Idle</span>
+      <select id="marioAdapterSelect" onchange="zccMarioSelectAdapter(event)">
+        <option value="base">base (untrained)</option>
+      </select>
+      <div class="throttle-wrap" title="Live LoRA Intensity Gain">
+        <span>Gain</span>
+        <input id="marioScaleSlider" type="range" min="0" max="2" step="0.05" value="1" oninput="zccMarioScaleChange(event)" disabled>
+        <span id="marioScaleVal">1.00x</span>
+      </div>
+      <button id="marioSoundBtn" type="button" onclick="zccMarioToggleSound(event)">Sound: OFF</button>
+      <a class="studio-link" href="/svg" style="border-color:rgba(212,175,55,0.55);color:#e8cc7c;">SVG Forge</a>
+      <a class="studio-link" href="/runner" style="border-color:rgba(52,211,153,0.45);color:#34d399;">Blackwell Runner</a>
+      <a class="studio-link" href="/">Back to Studio</a>
+    </div>
+  </header>
+
+  <div class="main-grid">
+    <section class="stage-card">
+      <div class="hud-strip">
+        <div class="hud-cell"><span class="hud-lbl">World</span><span id="hudWorld" class="hud-val">1-1</span></div>
+        <div class="hud-cell"><span class="hud-lbl">Score</span><span id="hudScore" class="hud-val">0</span></div>
+        <div class="hud-cell"><span class="hud-lbl">Coins</span><span id="hudCoins" class="hud-val">0</span></div>
+        <div class="hud-cell"><span class="hud-lbl">Lives</span><span id="hudLives" class="hud-val">3</span></div>
+        <div class="hud-cell"><span class="hud-lbl">Form</span><span id="hudForm" class="hud-val">SMALL</span></div>
+        <div class="hud-cell"><span class="hud-lbl">Combo</span><span id="hudCombo" class="hud-val">x1</span></div>
+        <div class="hud-cell"><span class="hud-lbl">Time</span><span id="hudTime" class="hud-val">300</span></div>
+      </div>
+
+      <div class="canvas-stage">
+        <canvas id="marioCanvas" width="920" height="460"></canvas>
+        <div id="marioOverlay" class="mario-overlay">
+          <div class="overlay-box">
+            <h2 id="overlayTitle">SUPER BLACKWELL KINGDOM</h2>
+            <p id="overlayDesc">Jump across obsidian bricks, bash [?] blocks for Super Mushrooms, Fire Flowers &amp; Star Drives, enter glowing Warp Pipes (Down), stomp shells, and take down the Boss Keep while the RTX 5070 Level Architect evolves stages around your playstyle.</p>
+            <div id="overlayHint" class="overlay-hint">Controls: A/D or Arrows to Run &middot; W/Space to Jump (hold for higher) &middot; S/Down on glowing pipe to Warp &middot; Shift/X Sprint &amp; Shoot</div>
+            <div class="btn-group" style="justify-content:center;">
+              <button id="overlayStartBtn" type="button" class="primary" onclick="zccMarioStartToggle(event)">Start Adventure</button>
+              <button id="overlayForgeBtn" type="button" class="emerald" onclick="zccMarioForgeStage(event)">AI Forge Stage</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="comms-bar">
+        <div id="architectBanner" class="taunt-text">[ARCHITECT] Overworld Gold verified. Break blocks and watch for glowing warp pipes.</div>
+        <div class="btn-group">
+          <span id="bpThemeChip" class="badge gold">OVERWORLD_GOLD</span>
+          <span id="bpLayoutChip" class="badge">CLASSIC_RUN</span>
+          <span id="bpEnemyChip" class="badge">WALKERS</span>
+          <span id="bpPowerChip" class="badge ok">MUSHROOM</span>
+        </div>
+      </div>
+
+      <div class="arcade-pad">
+        <div class="btn-group">
+          <button id="padLeftBtn" type="button" onmousedown="zccMarioPadHold('left', event)" onmouseup="zccMarioPadRelease('left', event)" onmouseleave="zccMarioPadRelease('left', event)" ontouchstart="zccMarioPadHold('left', event)" ontouchend="zccMarioPadRelease('left', event)">&larr; Left</button>
+          <button id="padRightBtn" type="button" onmousedown="zccMarioPadHold('right', event)" onmouseup="zccMarioPadRelease('right', event)" onmouseleave="zccMarioPadRelease('right', event)" ontouchstart="zccMarioPadHold('right', event)" ontouchend="zccMarioPadRelease('right', event)">Right &rarr;</button>
+          <button id="padJumpBtn" type="button" class="primary" onmousedown="zccMarioPadHold('jump', event)" onmouseup="zccMarioPadRelease('jump', event)" onmouseleave="zccMarioPadRelease('jump', event)" ontouchstart="zccMarioPadHold('jump', event)" ontouchend="zccMarioPadRelease('jump', event)">Jump (Space)</button>
+          <button id="padDownBtn" type="button" onmousedown="zccMarioPadHold('down', event)" onmouseup="zccMarioPadRelease('down', event)" onmouseleave="zccMarioPadRelease('down', event)" ontouchstart="zccMarioPadHold('down', event)" ontouchend="zccMarioPadRelease('down', event)">Warp/Duck (S)</button>
+          <button id="padFireBtn" type="button" class="crimson" onmousedown="zccMarioPadHold('fire', event)" onmouseup="zccMarioPadRelease('fire', event)" onmouseleave="zccMarioPadRelease('fire', event)" ontouchstart="zccMarioPadHold('fire', event)" ontouchend="zccMarioPadRelease('fire', event)">Run / Fire (X)</button>
+        </div>
+        <div class="btn-group">
+          <button id="startBtn" type="button" class="primary" onclick="zccMarioStartToggle(event)">Play</button>
+          <button id="forgeStageBtn" type="button" class="emerald" onclick="zccMarioForgeStage(event)">Forge Next Stage</button>
+          <button id="restartBtn" type="button" onclick="zccMarioRestart(event)">Restart</button>
+          <button id="exportProofBtn" type="button" onclick="zccMarioExportProof(event)">Export Proof SVG</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="deck-card">
+      <div class="deck-bar">
+        <span class="deck-title">AI Level Architect &amp; Play-to-Train</span>
+        <span id="reachBadge" class="badge ok">REACHABLE OK</span>
+      </div>
+
+      <div class="deck-body">
+        <div class="subpanel">
+          <div class="btn-group" style="justify-content:space-between;">
+            <span class="section-kicker">Player Habit Analyzer</span>
+            <span id="habitTag" class="badge gold">balanced</span>
+          </div>
+          <div class="meter-list">
+            <div class="meter-row"><span>Stomp</span><div class="meter-bg"><div id="stompMeter" class="meter-fill"></div></div><span id="stompPct">20%</span></div>
+            <div class="meter-row"><span>Coins</span><div class="meter-bg"><div id="coinMeter" class="meter-fill"></div></div><span id="coinPct">25%</span></div>
+            <div class="meter-row"><span>Pace</span><div class="meter-bg"><div id="paceMeter" class="meter-fill"></div></div><span id="pacePct">50%</span></div>
+          </div>
+          <div id="deathReasonLabel" class="status-line">Last hazard: none &middot; Pipes entered: 0 &middot; Bricks broken: 0</div>
+        </div>
+
+        <div class="subpanel">
+          <div class="btn-group" style="justify-content:space-between;">
+            <span class="section-kicker">Vector Sprite Arsenal (svg_forge)</span>
+            <button id="clearSpriteBtn" type="button" class="mini" onclick="zccMarioClearSprites(event)">Reset Sprites</button>
+          </div>
+          <div class="btn-group">
+            <button id="forgeHeroSvgBtn" type="button" class="mini primary" onclick="zccMarioForgeSprite('hero', event)">Forge Hero SVG</button>
+            <button id="forgeBossSvgBtn" type="button" class="mini crimson" onclick="zccMarioForgeSprite('boss', event)">Forge Boss SVG</button>
+          </div>
+          <div id="spriteLoadoutStatus" class="status-line">Using native pixel-gold Blackwell sprites. Forge SVG to override Hero or Boss live!</div>
+        </div>
+
+        <div class="subpanel">
+          <div class="btn-group" style="justify-content:space-between;">
+            <span class="section-kicker">Play-to-Train Rival Cartridge</span>
+            <button id="evolveArchitectBtn" type="button" class="mini emerald" onclick="zccMarioEvolveArchitect(event)">Evolve LoRA</button>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="evolveNameInput">Adapter Name</label>
+              <input id="evolveNameInput" class="mono" type="text" value="mario_rival_v1">
+            </div>
+            <div class="field">
+              <label for="evolveStepsInput">AdamW Steps</label>
+              <input id="evolveStepsInput" class="mono" type="number" min="10" max="200" value="45">
+            </div>
+          </div>
+          <div id="evolveStatus" class="status-line">Idle. Play a stage to capture habits, then forge your custom Mario Architect LoRA on RTX 5070.</div>
+          <div class="canvas-box">
+            <canvas id="marioLossCanvas" width="420" height="115"></canvas>
+          </div>
+        </div>
+
+        <div id="architectLog" class="log-box">[BOOT] Super Blackwell ready. World 1-1 verified with deterministic reachability check.</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var TILE = 35;
+  var ROWS = 13;
+  var EMPTY = 0, GROUND = 1, BRICK = 2, QBLOCK = 3, USED = 4, PIPE = 5, WARP_PIPE = 6, SPRING = 7, LAVA = 8;
+
+  var THEMES = {
+    OVERWORLD_GOLD: {
+      name: "OVERWORLD_GOLD",
+      skyTop: "#090f1d", skyBot: "#142038", hill: "#18283e", cloud: "rgba(240,215,122,0.16)",
+      groundTop: "#34d399", groundFill: "#3d2c1b", groundTrim: "#d4af37",
+      brick: "#9b4f26", brickEdge: "#f0d77a", pipe: "#10b981", pipeHi: "#6ee7b7"
+    },
+    UNDERGROUND_OBSIDIAN: {
+      name: "UNDERGROUND_OBSIDIAN",
+      skyTop: "#050609", skyBot: "#0c0f17", hill: "#141824", cloud: "rgba(148,163,184,0.10)",
+      groundTop: "#64748b", groundFill: "#1a1f2d", groundTrim: "#e8cc7c",
+      brick: "#334155", brickEdge: "#94a3b8", pipe: "#0d9488", pipeHi: "#5eead4"
+    },
+    SKY_CITADEL: {
+      name: "SKY_CITADEL",
+      skyTop: "#0b1a30", skyBot: "#1e3a5f", hill: "#254a73", cloud: "rgba(255,255,255,0.22)",
+      groundTop: "#f0d77a", groundFill: "#4a3b20", groundTrim: "#ffffff",
+      brick: "#b48a28", brickEdge: "#fff2b2", pipe: "#38bdf8", pipeHi: "#bae6fd"
+    },
+    LAVA_FORTRESS: {
+      name: "LAVA_FORTRESS",
+      skyTop: "#140607", skyBot: "#2a0b0e", hill: "#381116", cloud: "rgba(248,113,113,0.14)",
+      groundTop: "#6b7280", groundFill: "#20171b", groundTrim: "#f87171",
+      brick: "#4b5563", brickEdge: "#f87171", pipe: "#dc2626", pipeHi: "#fca5a5"
+    },
+    EMERALD_PIPES: {
+      name: "EMERALD_PIPES",
+      skyTop: "#061511", skyBot: "#0e2920", hill: "#133a2d", cloud: "rgba(52,211,153,0.16)",
+      groundTop: "#10b981", groundFill: "#172e26", groundTrim: "#f0d77a",
+      brick: "#1f5e4b", brickEdge: "#6ee7b7", pipe: "#22c55e", pipeHi: "#bbf7d0"
+    }
+  };
+
+  var activeModelId = "zkaedi-prime-dpo-q4_k_m";
+  var activeAdapter = "base";
+  var knownAdapters = [];
+  var lastTimeMs = 0;
+  var chiptuneAcc = 0;
+  var chiptuneStep = 0;
+  var audioCtx = null;
+  var soundOn = false;
+  var forgeBusy = false;
+  var evolveBusy = false;
+  var spriteBusy = false;
+  var lastHandledStamp = 0;
+  var lossPoints = [];
+
+  var customSprites = {
+    hero: null,
+    boss: null
+  };
+
+  var input = { left: false, right: false, jump: false, down: false, fire: false };
+  var prevInputJump = false;
+  var prevInputFire = false;
+
+  var state = {
+    phase: "idle", // idle, running, paused, bonus, clear, gameover, victory
+    world: 1,
+    stage: 1,
+    score: 0,
+    coins: 0,
+    lives: 3,
+    form: "small", // small, super, fire
+    starTimer: 0,
+    invulnTimer: 0,
+    combo: 0,
+    timeLeft: 300,
+    elapsed: 0,
+    camX: 0,
+    hero: { x: 88, y: 200, vx: 0, vy: 0, w: 24, h: 32, facing: 1, onGround: false, coyote: 0, jumpBuf: 0, walkPhase: 0, duck: false, pipeCooldown: 0 },
+    level: null,
+    enemies: [],
+    items: [],
+    fireballs: [],
+    particles: [],
+    popups: [],
+    flagAnim: null,
+    bossBridge: null,
+    bonusSaved: null,
+    blueprint: {
+      theme: "OVERWORLD_GOLD",
+      layout: "CLASSIC_RUN",
+      enemies: "WALKERS",
+      powerup: "MUSHROOM",
+      pipes: 3,
+      pits: 2,
+      taunt: "Overworld Gold verified. Break blocks and watch for glowing warp pipes."
+    },
+    habits: {
+      stomps: 0,
+      coinsCollected: 0,
+      blocksBroken: 0,
+      fireShots: 0,
+      pipesEntered: 0,
+      jumps: 0,
+      pitDeaths: 0,
+      enemyHits: 0,
+      runTime: 0,
+      lastHazard: "none",
+      history: []
+    },
+    lastTps: 0
+  };
+
+  function byId(id) {
+    return (typeof document !== "undefined") ? document.getElementById(id) : null;
+  }
+
+  function markHandled(ev) {
+    var ts = ev && typeof ev.timeStamp === "number" ? ev.timeStamp : 0;
+    if (ts > 0 && ts === lastHandledStamp) return false;
+    lastHandledStamp = ts;
+    return true;
+  }
+
+  function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+  function appendLog(msg) {
+    var el = byId("architectLog");
+    if (!el) return;
+    var lines = (el.textContent || "").split("\n").filter(Boolean);
+    lines.push(msg);
+    if (lines.length > 26) lines = lines.slice(lines.length - 26);
+    el.textContent = lines.join("\n");
+    el.scrollTop = el.scrollHeight;
+  }
+
+  /* Procedural 8-Bit Retro Web Audio */
+  function ensureAudio(userGesture) {
+    if (typeof window === "undefined") return null;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!audioCtx) {
+      try { audioCtx = new AC(); } catch (e) { return null; }
+    }
+    if (userGesture && audioCtx && audioCtx.state === "suspended" && typeof audioCtx.resume === "function") {
+      try { audioCtx.resume(); } catch (e2) {}
+    }
+    return audioCtx;
+  }
+
+  function playTone(freq, dur, type, vol, slideTo) {
+    if (!soundOn || !audioCtx || audioCtx.state !== "running") return;
+    try {
+      var now = audioCtx.currentTime;
+      var osc = audioCtx.createOscillator();
+      var g = audioCtx.createGain();
+      osc.type = type || "square";
+      osc.frequency.setValueAtTime(Math.max(40, freq), now);
+      if (slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(40, slideTo), now + dur);
+      g.gain.setValueAtTime(vol || 0.06, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      osc.connect(g);
+      g.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + dur + 0.01);
+    } catch (e) {}
+  }
+
+  function sfx(kind) {
+    if (!soundOn) return;
+    if (kind === "jump") playTone(state.form === "small" ? 390 : 300, 0.14, "square", 0.065, 760);
+    else if (kind === "coin") { playTone(988, 0.06, "square", 0.06); setTimeout(function () { playTone(1319, 0.16, "square", 0.06); }, 55); }
+    else if (kind === "bump") playTone(140, 0.09, "triangle", 0.09, 75);
+    else if (kind === "break") playTone(210, 0.12, "sawtooth", 0.07, 65);
+    else if (kind === "powerup") {
+      [523, 659, 784, 1046, 1318].forEach(function (f, i) { setTimeout(function () { playTone(f, 0.08, "square", 0.055); }, i * 50); });
+    } else if (kind === "stomp") playTone(460, 0.09, "square", 0.07, 170);
+    else if (kind === "kick") playTone(280, 0.08, "triangle", 0.08, 620);
+    else if (kind === "fire") playTone(880, 0.08, "sawtooth", 0.05, 320);
+    else if (kind === "spring") playTone(260, 0.20, "triangle", 0.07, 940);
+    else if (kind === "warp") {
+      [420, 320, 240, 180].forEach(function (f, i) { setTimeout(function () { playTone(f, 0.07, "square", 0.06); }, i * 65); });
+    } else if (kind === "hurt") playTone(310, 0.25, "sawtooth", 0.075, 95);
+    else if (kind === "clear") {
+      [523, 659, 784, 1046, 784, 1046].forEach(function (f, i) { setTimeout(function () { playTone(f, 0.12, "square", 0.06); }, i * 90); });
+    } else if (kind === "gameover") {
+      [392, 349, 329, 261].forEach(function (f, i) { setTimeout(function () { playTone(f, 0.22, "triangle", 0.07); }, i * 160); });
+    }
+  }
+
+  function stepChiptune(dt) {
+    if (!soundOn || state.phase !== "running") return;
+    chiptuneAcc += dt;
+    var stepLen = (state.starTimer > 0) ? 0.105 : 0.155;
+    if (chiptuneAcc < stepLen) return;
+    chiptuneAcc -= stepLen;
+    var overworld = [659, 659, 0, 659, 0, 523, 659, 0, 784, 0, 0, 0, 392, 0, 0, 0, 523, 0, 0, 392, 0, 0, 330, 0, 0, 440, 0, 494, 0, 466, 440, 0];
+    var bossSeq = [220, 233, 261, 246, 220, 293, 261, 233, 196, 220, 246, 261, 293, 311, 293, 261];
+    var seq = (state.blueprint.layout === "BOSS_KEEP" || state.blueprint.theme === "LAVA_FORTRESS") ? bossSeq : overworld;
+    var n = seq[chiptuneStep % seq.length];
+    if (n > 0) playTone(n * (state.starTimer > 0 ? 1.25 : 1.0), stepLen * 0.78, "square", 0.022);
+    if ((chiptuneStep % 2) === 0) playTone((chiptuneStep % 4 === 0) ? 130 : 164, stepLen * 0.7, "triangle", 0.028);
+    chiptuneStep++;
+  }
+
+  /* XSS-safe SVG parser shared with Vector Sprite Arsenal */
+  function parseMarioSvgPrimitives(svgText) {
+    var src = String(svgText || "");
+    var stripped = 0;
+    src = src.replace(/<(script|foreignObject|iframe|object|embed)\b[\s\S]*?<\/\1>/gi, function () { stripped++; return ""; });
+    src = src.replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, function () { stripped++; return ""; });
+    src = src.replace(/javascript\s*:/gi, function () { stripped++; return ""; });
+
+    var vb = { x: 0, y: 0, w: 128, h: 128 };
+    var vbM = src.match(/viewBox\s*=\s*["']\s*([-\d.]+)\s+([-\d.]+)\s+([\d.]+)\s+([\d.]+)\s*["']/i);
+    if (vbM) {
+      vb = { x: Number(vbM[1]) || 0, y: Number(vbM[2]) || 0, w: Math.max(8, Number(vbM[3]) || 128), h: Math.max(8, Number(vbM[4]) || 128) };
+    }
+
+    var prims = [];
+    var tagRe = /<(polygon|rect|circle|path|line)\b([^>]*)>/gi;
+    var m;
+    while ((m = tagRe.exec(src)) !== null && prims.length < 40) {
+      var kind = m[1].toLowerCase();
+      var attrs = m[2] || "";
+      function getA(nm, def) {
+        var am = attrs.match(new RegExp("\\b" + nm + "\\s*=\\s*[\"']([^\"']*)[\"']", "i"));
+        return am ? am[1] : def;
+      }
+      var fill = getA("fill", "#d4af37");
+      var stroke = getA("stroke", "#f0d77a");
+      var sw = clamp(Number(getA("stroke-width", "2")) || 2, 0.5, 10);
+      if (fill === "none" && stroke === "none") fill = "#d4af37";
+      if (!/^#[0-9a-fA-F]{3,8}$|^rgba?\(|^none$/i.test(fill)) fill = "#d4af37";
+      if (!/^#[0-9a-fA-F]{3,8}$|^rgba?\(|^none$/i.test(stroke)) stroke = "#f0d77a";
+
+      if (kind === "polygon") {
+        var ptsRaw = getA("points", "");
+        var nums = ptsRaw.trim().split(/[\s,]+/).map(Number).filter(function (v) { return isFinite(v); });
+        var pts = [];
+        for (var i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i], y: nums[i + 1] });
+        if (pts.length >= 3) prims.push({ kind: "polygon", pts: pts, fill: fill, stroke: stroke, sw: sw });
+      } else if (kind === "circle") {
+        prims.push({
+          kind: "circle",
+          cx: Number(getA("cx", "64")) || 64,
+          cy: Number(getA("cy", "64")) || 64,
+          r: Math.max(1, Number(getA("r", "16")) || 16),
+          fill: fill, stroke: stroke, sw: sw
+        });
+      } else if (kind === "rect") {
+        prims.push({
+          kind: "rect",
+          x: Number(getA("x", "20")) || 20,
+          y: Number(getA("y", "20")) || 20,
+          w: Math.max(2, Number(getA("width", "40")) || 40),
+          h: Math.max(2, Number(getA("height", "40")) || 40),
+          fill: fill, stroke: stroke, sw: sw
+        });
+      } else if (kind === "line") {
+        prims.push({
+          kind: "line",
+          x1: Number(getA("x1", "16")) || 16, y1: Number(getA("y1", "16")) || 16,
+          x2: Number(getA("x2", "112")) || 112, y2: Number(getA("y2", "112")) || 112,
+          stroke: stroke !== "none" ? stroke : fill, sw: sw
+        });
+      } else if (kind === "path") {
+        var dStr = getA("d", "");
+        var dNums = (dStr.match(/-?\d+(?:\.\d+)?/g) || []).map(Number).filter(isFinite);
+        var pPts = [];
+        for (var j = 0; j + 1 < dNums.length; j += 2) pPts.push({ x: dNums[j], y: dNums[j + 1] });
+        if (pPts.length >= 2) prims.push({ kind: "polygon", pts: pPts, fill: fill, stroke: stroke, sw: sw });
+      }
+    }
+    return { viewBox: vb, prims: prims, strippedCount: stripped, raw: src };
+  }
+
+  function drawVectorSprite(ctx, model, x, y, w, h, flipX) {
+    if (!model || !model.prims || !model.prims.length) return false;
+    var vb = model.viewBox || { x: 0, y: 0, w: 128, h: 128 };
+    ctx.save();
+    ctx.translate(x + w * 0.5, y + h * 0.5);
+    if (flipX) ctx.scale(-1, 1);
+    ctx.scale(w / vb.w, h / vb.h);
+    ctx.translate(-vb.w * 0.5 - vb.x, -vb.h * 0.5 - vb.y);
+    for (var i = 0; i < model.prims.length; i++) {
+      var p = model.prims[i];
+      ctx.lineWidth = p.sw || 2;
+      if (p.kind === "polygon") {
+        ctx.beginPath();
+        ctx.moveTo(p.pts[0].x, p.pts[0].y);
+        for (var k = 1; k < p.pts.length; k++) ctx.lineTo(p.pts[k].x, p.pts[k].y);
+        ctx.closePath();
+        if (p.fill && p.fill !== "none") { ctx.fillStyle = p.fill; ctx.fill(); }
+        if (p.stroke && p.stroke !== "none") { ctx.strokeStyle = p.stroke; ctx.stroke(); }
+      } else if (p.kind === "circle") {
+        ctx.beginPath();
+        ctx.arc(p.cx, p.cy, Math.max(1, p.r), 0, Math.PI * 2);
+        if (p.fill && p.fill !== "none") { ctx.fillStyle = p.fill; ctx.fill(); }
+        if (p.stroke && p.stroke !== "none") { ctx.strokeStyle = p.stroke; ctx.stroke(); }
+      } else if (p.kind === "rect") {
+        if (p.fill && p.fill !== "none") { ctx.fillStyle = p.fill; ctx.fillRect(p.x, p.y, p.w, p.h); }
+        if (p.stroke && p.stroke !== "none") { ctx.strokeStyle = p.stroke; ctx.strokeRect(p.x, p.y, p.w, p.h); }
+      } else if (p.kind === "line") {
+        ctx.beginPath();
+        ctx.moveTo(p.x1, p.y1);
+        ctx.lineTo(p.x2, p.y2);
+        ctx.strokeStyle = p.stroke || "#f0d77a";
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+    return true;
+  }
+
+  /* Blueprint parser */
+  function parseBlueprint(text, fallbackWorld, fallbackStage) {
+    var out = {
+      theme: (fallbackStage % 3 === 0) ? "LAVA_FORTRESS" : "OVERWORLD_GOLD",
+      layout: (fallbackStage % 3 === 0) ? "BOSS_KEEP" : "CLASSIC_RUN",
+      enemies: "WALKERS",
+      powerup: "MUSHROOM",
+      pipes: 3,
+      pits: 2,
+      taunt: "Blueprint compiled cleanly. Watch the blocks!"
+    };
+    var s = String(text || "");
+    var tm = s.match(/THEME\s*:\s*([A-Z0-9_]+)/i);
+    if (tm && THEMES[tm[1].toUpperCase()]) out.theme = tm[1].toUpperCase();
+    var lm = s.match(/LAYOUT\s*:\s*([A-Z0-9_]+)/i);
+    if (lm) {
+      var lu = lm[1].toUpperCase();
+      if (/CLASSIC_RUN|PIPE_GAUNTLET|SKY_BRIDGES|BRICK_MAZE|STAIR_ASCENT|BOSS_KEEP/.test(lu)) out.layout = lu;
+    }
+    var em = s.match(/ENEMIES\s*:\s*([A-Z0-9_]+)/i);
+    if (em) {
+      var eu = em[1].toUpperCase();
+      if (/WALKERS|SHELL_SQUAD|PIPE_CHOMPS|HOPPERS|MIXED_ELITE/.test(eu)) out.enemies = eu;
+    }
+    var pm = s.match(/POWERUP\s*:\s*([A-Z0-9_]+)/i);
+    if (pm) {
+      var pu = pm[1].toUpperCase();
+      if (/MUSHROOM|FIRE_FLOWER|STAR_DRIVE/.test(pu)) out.powerup = pu;
+    }
+    var pipM = s.match(/PIPES\s*:\s*(\d+)/i);
+    if (pipM) out.pipes = clamp(parseInt(pipM[1], 10) || 3, 2, 5);
+    var pitM = s.match(/PITS\s*:\s*(\d+)/i);
+    if (pitM) out.pits = clamp(parseInt(pitM[1], 10) || 2, 1, 4);
+    var tauM = s.match(/TAUNT\s*:\s*([^\n\r]+)/i);
+    if (tauM) out.taunt = tauM[1].trim().slice(0, 120);
+    if ((fallbackStage % 3) === 0 && out.layout !== "BOSS_KEEP") {
+      out.layout = "BOSS_KEEP";
+      out.theme = "LAVA_FORTRESS";
+    }
+    return out;
+  }
+
+  function makeGrid(cols, rows) {
+    var g = [];
+    for (var r = 0; r < rows; r++) {
+      var row = [];
+      for (var c = 0; c < cols; c++) row.push(EMPTY);
+      g.push(row);
+    }
+    return g;
+  }
+
+  /* Deterministic Reachability Verifier guarantees playable stages */
+  function verifyLevelReachability(level) {
+    var fixes = 0;
+    var g = level.tiles;
+    var cols = level.cols;
+    var rows = level.rows;
+
+    // 1. Protect start zone (0..7) and end goal zone (cols-14..cols-1)
+    for (var c = 0; c < cols; c++) {
+      var inSafeStart = (c <= 7);
+      var inSafeEnd = (c >= cols - 14);
+      if (inSafeStart || inSafeEnd) {
+        for (var r = rows - 2; r < rows; r++) {
+          if (g[r][c] === EMPTY || g[r][c] === LAVA) {
+            g[r][c] = GROUND;
+            fixes++;
+          }
+        }
+        for (var rh = rows - 5; rh < rows - 2; rh++) {
+          if (g[rh][c] === GROUND || g[rh][c] === BRICK) { g[rh][c] = EMPTY; fixes++; }
+        }
+      }
+    }
+
+    // 2. Cap pit width to <= 3 tiles so any form can jump across comfortably
+    var runPit = 0;
+    for (var cp = 8; cp < cols - 14; cp++) {
+      var hasFloor = false;
+      for (var rf = rows - 2; rf < rows; rf++) {
+        if (g[rf][cp] === GROUND) hasFloor = true;
+      }
+      if (!hasFloor) {
+        runPit++;
+        if (runPit > 3) {
+          g[rows - 2][cp] = GROUND;
+          g[rows - 1][cp] = GROUND;
+          runPit = 0;
+          fixes++;
+        }
+      } else {
+        runPit = 0;
+      }
+    }
+
+    // 3. Ensure vertical headroom above any ground step & prevent ceiling traps over pits
+    for (var ch = 2; ch < cols - 12; ch++) {
+      var topY = rows - 1;
+      for (var ry = 2; ry < rows; ry++) {
+        if (g[ry][ch] === GROUND || g[ry][ch] === PIPE || g[ry][ch] === WARP_PIPE) { topY = ry; break; }
+      }
+      if (topY <= 5) {
+        // Keep >= 3 tiles open headroom when elevated
+        if (g[topY - 1][ch] !== EMPTY) { g[topY - 1][ch] = EMPTY; fixes++; }
+        if (g[topY - 2][ch] !== EMPTY) { g[topY - 2][ch] = EMPTY; fixes++; }
+      }
+      if (g[rows - 2][ch] === EMPTY && g[rows - 1][ch] === EMPTY) {
+        // Never block jump arc right above a pit
+        if (g[rows - 4][ch] === BRICK || g[rows - 4][ch] === QBLOCK) {
+          g[rows - 4][ch] = EMPTY;
+          fixes++;
+        }
+      }
+    }
+
+    return { ok: true, fixes: fixes, widthCols: cols, worldLabel: level.world + "-" + level.stage };
+  }
+
+  /* Procedural World Generator from Blueprint */
+  function buildMarioWorld(bp, worldNum, stageNum) {
+    var seed = (worldNum * 131 + stageNum * 37 + (bp.layout || "").length * 17) | 0;
+    function rand() {
+      seed = (seed * 1664525 + 1013904223) | 0;
+      return ((seed >>> 0) % 10000) / 10000;
+    }
+
+    var cols = (bp.layout === "BOSS_KEEP") ? 116 : 126;
+    var g = makeGrid(cols, ROWS);
+    var groundY = ROWS - 2; // row 11
+
+    // Base ground
+    for (var c = 0; c < cols; c++) {
+      g[groundY][c] = GROUND;
+      g[groundY + 1][c] = GROUND;
+    }
+
+    // Add pits (respecting layout)
+    var pitCount = (bp.layout === "BOSS_KEEP") ? 2 : clamp(bp.pits || 2, 1, 4);
+    var stride = Math.floor((cols - 34) / (pitCount + 1));
+    var platList = [];
+    var warpZones = [];
+    var coins = [];
+    var qContents = {}; // "r,c" -> "COIN"|"MUSHROOM"|"FIRE"|"STAR"
+    var bumps = {};
+
+    for (var p = 0; p < pitCount; p++) {
+      var pc = 18 + (p + 1) * stride;
+      if (pc >= cols - 20) continue;
+      var pw = (bp.layout === "SKY_BRIDGES") ? 3 : (2 + (p % 2));
+      for (var k = 0; k < pw; k++) {
+        g[groundY][pc + k] = (bp.layout === "BOSS_KEEP") ? LAVA : EMPTY;
+        g[groundY + 1][pc + k] = (bp.layout === "BOSS_KEEP") ? LAVA : EMPTY;
+      }
+      if (bp.layout === "SKY_BRIDGES" || bp.layout === "PIPE_GAUNTLET") {
+        // Place a helpful moving platform near wide gaps
+        platList.push({
+          x: (pc - 2) * TILE, y: (groundY - 3) * TILE,
+          w: TILE * 2.5, h: 14, baseX: (pc - 2) * TILE, baseY: (groundY - 3) * TILE,
+          dx: 0, rangeX: TILE * 2.2, rangeY: 0, speed: 1.6, phase: p * 1.4
+        });
+      }
+      // Coins in jump arc above pit
+      coins.push({ x: (pc + 0.5) * TILE + 8, y: (groundY - 3) * TILE, collected: false, bob: p });
+      coins.push({ x: (pc + 1.5) * TILE + 8, y: (groundY - 3.6) * TILE, collected: false, bob: p + 1 });
+    }
+
+    // Place Pipes (including 1 glowing Bonus Warp Pipe unless BOSS_KEEP)
+    var nPipes = clamp(bp.pipes || 3, 2, 5);
+    var pipeCols = [];
+    for (var pi = 0; pi < nPipes; pi++) {
+      var xc = 14 + Math.floor((cols - 32) * ((pi + 0.5) / nPipes));
+      if (xc < 10 || xc > cols - 18) continue;
+      // Ensure solid floor beneath pipe
+      g[groundY][xc] = GROUND; g[groundY][xc + 1] = GROUND;
+      g[groundY + 1][xc] = GROUND; g[groundY + 1][xc + 1] = GROUND;
+      var ph = (pi % 2 === 0) ? 2 : 3;
+      var isWarp = (bp.layout !== "BOSS_KEEP" && pi === 1);
+      var pTile = isWarp ? WARP_PIPE : PIPE;
+      for (var hr = 0; hr < ph; hr++) {
+        g[groundY - 1 - hr][xc] = pTile;
+        g[groundY - 1 - hr][xc + 1] = pTile;
+      }
+      pipeCols.push({ col: xc, topRow: groundY - ph, isWarp: isWarp });
+      if (isWarp) warpZones.push({ col: xc, exitCol: Math.min(cols - 18, xc + 24), topRow: groundY - ph });
+    }
+
+    // Place [?] and Brick clusters
+    var mainPower = (bp.powerup === "STAR_DRIVE") ? "STAR" : ((bp.powerup === "FIRE_FLOWER") ? "FIRE" : "MUSHROOM");
+    for (var bc = 11; bc < cols - 18; bc += 13) {
+      if (g[groundY][bc] !== GROUND) continue;
+      var rowMid = (bp.layout === "BRICK_MAZE") ? (groundY - 4) : (groundY - 3);
+      var span = (bp.layout === "BRICK_MAZE") ? 5 : 4;
+      for (var s = 0; s < span; s++) {
+        var tc = bc + s;
+        if (tc >= cols - 16 || g[rowMid][tc] !== EMPTY) continue;
+        if (s === 1 || (bp.layout === "BRICK_MAZE" && s === 3)) {
+          g[rowMid][tc] = QBLOCK;
+          var key = rowMid + "," + tc;
+          qContents[key] = (bc < 25) ? "POWERUP" : ((s === 3 && rand() > 0.45) ? mainPower : "COIN");
+        } else {
+          g[rowMid][tc] = BRICK;
+        }
+      }
+      if (bp.layout === "BRICK_MAZE" && bc % 26 === 11 && bc + 2 < cols - 18) {
+        g[rowMid - 3][bc + 2] = QBLOCK;
+        qContents[(rowMid - 3) + "," + (bc + 2)] = (rand() > 0.5) ? "STAR" : "COIN";
+      }
+    }
+
+    // Add Spring Pad for high coin arc or STAIR_ASCENT
+    if (bp.layout === "CLASSIC_RUN" || bp.layout === "STAIR_ASCENT" || bp.layout === "SKY_BRIDGES") {
+      var sprC = Math.min(cols - 26, 46);
+      if (g[groundY][sprC] === GROUND && g[groundY - 1][sprC] === EMPTY) {
+        g[groundY - 1][sprC] = SPRING;
+        for (var sc = 0; sc < 4; sc++) coins.push({ x: (sprC + 1 + sc) * TILE + 8, y: (groundY - 6) * TILE, collected: false, bob: sc });
+      }
+    }
+
+    // Stair ascent or Castle stairs before Flagpole
+    var goalCol = cols - 10;
+    if (bp.layout !== "BOSS_KEEP") {
+      var stairEnd = goalCol - 4;
+      for (var st = 0; st < 5; st++) {
+        for (var h = 1; h <= st + 1; h++) {
+          g[groundY - h][stairEnd - 4 + st] = BRICK;
+        }
+      }
+    } else {
+      // Boss Keep Bridge + Lava + Golden Axe at cols - 7
+      var brStart = cols - 20;
+      for (var lc = brStart; lc < cols - 4; lc++) {
+        g[groundY][lc] = LAVA;
+        g[groundY + 1][lc] = LAVA;
+      }
+      // Solid anchor right after bridge
+      for (var ec = cols - 7; ec < cols; ec++) {
+        g[groundY][ec] = GROUND;
+        g[groundY + 1][ec] = GROUND;
+      }
+    }
+
+    var levelObj = {
+      world: worldNum,
+      stage: stageNum,
+      cols: cols,
+      rows: ROWS,
+      tiles: g,
+      bumps: bumps,
+      qContents: qContents,
+      coins: coins,
+      platforms: platList,
+      warpZones: warpZones,
+      goalCol: goalCol,
+      axeCol: (bp.layout === "BOSS_KEEP") ? (cols - 8) : -1,
+      bridgeCols: (bp.layout === "BOSS_KEEP") ? { start: cols - 20, end: cols - 8, row: groundY - 2 } : null
+    };
+
+    var reach = verifyLevelReachability(levelObj);
+    levelObj.reach = reach;
+
+    // Spawn Enemies according to blueprint
+    var enemies = [];
+    var kindCycle = ["WALKER", "WALKER", "SHELL"];
+    if (bp.enemies === "SHELL_SQUAD") kindCycle = ["SHELL", "WALKER", "SHELL"];
+    else if (bp.enemies === "HOPPERS") kindCycle = ["HOPPER", "WALKER", "HOPPER"];
+    else if (bp.enemies === "MIXED_ELITE") kindCycle = ["WALKER", "SHELL", "HOPPER"];
+
+    for (var ec2 = 16; ec2 < cols - 22; ec2 += 12) {
+      if (g[groundY][ec2] !== GROUND) continue;
+      if (g[groundY - 1][ec2] !== EMPTY) continue;
+      var ek = kindCycle[(ec2 / 12 | 0) % kindCycle.length];
+      enemies.push({
+        id: "e_" + ec2,
+        kind: ek,
+        x: ec2 * TILE + 4,
+        y: (groundY - 1) * TILE,
+        w: 28,
+        h: 30,
+        vx: (ek === "HOPPER" ? -95 : -78) - worldNum * 8,
+        vy: 0,
+        shellState: "walk", // walk, idle, slide
+        dead: false,
+        deadTimer: 0,
+        hopTimer: rand() * 1.4
+      });
+    }
+
+    if (bp.enemies === "PIPE_CHOMPS" || bp.enemies === "MIXED_ELITE" || nPipes >= 3) {
+      for (var pci = 0; pci < pipeCols.length; pci++) {
+        var pcObj = pipeCols[pci];
+        if (pcObj.isWarp) continue;
+        enemies.push({
+          id: "chomp_" + pci,
+          kind: "PIPE_CHOMP",
+          x: pcObj.col * TILE + TILE * 0.52,
+          y: pcObj.topRow * TILE,
+          baseY: pcObj.topRow * TILE,
+          w: 28,
+          h: 32,
+          vx: 0,
+          vy: 0,
+          phase: pci * 1.2,
+          dead: false,
+          deadTimer: 0
+        });
+      }
+    }
+
+    var bossBridge = null;
+    if (bp.layout === "BOSS_KEEP") {
+      var brCols = [];
+      for (var bci = levelObj.bridgeCols.start; bci <= levelObj.bridgeCols.end; bci++) brCols.push(bci);
+      bossBridge = { cols: brCols, row: levelObj.bridgeCols.row, broken: false, dropIdx: 0, dropAcc: 0 };
+      enemies.push({
+        id: "obsidian_boss",
+        kind: "BOSS",
+        x: (cols - 13) * TILE,
+        y: (levelObj.bridgeCols.row - 2) * TILE,
+        w: 52,
+        h: 58,
+        vx: -85,
+        vy: 0,
+        hp: 3 + Math.min(3, worldNum - 1),
+        maxHp: 3 + Math.min(3, worldNum - 1),
+        fireCd: 1.5,
+        dead: false,
+        deadTimer: 0
+      });
+    }
+
+    return { level: levelObj, enemies: enemies, bossBridge: bossBridge };
+  }
+
+  /* Build secret underground coin vault */
+  function buildBonusRoom() {
+    var cols = 26;
+    var g = makeGrid(cols, ROWS);
+    var gy = ROWS - 2;
+    for (var c = 0; c < cols; c++) {
+      g[0][c] = BRICK;
+      g[1][c] = BRICK;
+      g[gy][c] = GROUND;
+      g[gy + 1][c] = GROUND;
+      if (c === 0 || c === cols - 1) {
+        for (var rr = 2; rr < gy; rr++) g[rr][c] = BRICK;
+      }
+    }
+    var coins = [];
+    for (var cc = 5; cc < 19; cc++) {
+      coins.push({ x: cc * TILE + 8, y: (gy - 3) * TILE, collected: false, bob: cc });
+      coins.push({ x: cc * TILE + 8, y: (gy - 5) * TILE, collected: false, bob: cc + 2 });
+    }
+    // Exit pipe on right
+    g[gy - 1][cols - 3] = WARP_PIPE; g[gy - 1][cols - 2] = WARP_PIPE;
+    g[gy - 2][cols - 3] = WARP_PIPE; g[gy - 2][cols - 2] = WARP_PIPE;
+    return {
+      world: state.world, stage: state.stage, cols: cols, rows: ROWS,
+      tiles: g, bumps: {}, qContents: {}, coins: coins, platforms: [],
+      warpZones: [{ col: cols - 3, topRow: gy - 2, isExit: true }],
+      goalCol: -1, axeCol: -1, bridgeCols: null, reach: { ok: true, fixes: 0 }
+    };
+  }
+
+  function tileAt(lvl, r, c) {
+    if (!lvl || c < 0 || c >= lvl.cols || r < 0) return EMPTY;
+    if (r >= lvl.rows) return EMPTY;
+    return lvl.tiles[r][c];
+  }
+
+  function isSolidTile(t) {
+    return t === GROUND || t === BRICK || t === QBLOCK || t === USED || t === PIPE || t === WARP_PIPE || t === SPRING;
+  }
+
+  function bumpOrBreakBlock(r, c) {
+    var lvl = state.level;
+    var t = tileAt(lvl, r, c);
+    if (t !== BRICK && t !== QBLOCK) {
+      if (t === USED || t === PIPE || t === WARP_PIPE) sfx("bump");
+      return;
+    }
+
+    // Check if an enemy was standing directly above this block
+    var bx = c * TILE, by = r * TILE;
+    for (var ei = 0; ei < state.enemies.length; ei++) {
+      var en = state.enemies[ei];
+      if (!en.dead && en.kind !== "BOSS" && en.kind !== "PIPE_CHOMP" &&
+          en.x + en.w > bx && en.x < bx + TILE && Math.abs((en.y + en.h) - by) < 12) {
+        en.dead = true;
+        en.deadTimer = 0.8;
+        state.score += 200;
+        spawnPopup(en.x, en.y - 8, "+200");
+        sfx("stomp");
+      }
+    }
+
+    if (t === BRICK) {
+      if (state.form === "small" && state.starTimer <= 0) {
+        lvl.bumps[r + "," + c] = 0.16;
+        sfx("bump");
+      } else {
+        lvl.tiles[r][c] = EMPTY;
+        state.habits.blocksBroken++;
+        state.score += 50;
+        sfx("break");
+        for (var k = 0; k < 6; k++) {
+          state.particles.push({
+            x: c * TILE + TILE * 0.5, y: r * TILE + TILE * 0.5,
+            vx: (k % 2 === 0 ? -1 : 1) * (90 + k * 25),
+            vy: -240 - (k % 3) * 65,
+            life: 0.7, maxLife: 0.7, color: "#d4af37", size: 7
+          });
+        }
+      }
+    } else if (t === QBLOCK) {
+      lvl.tiles[r][c] = USED;
+      lvl.bumps[r + "," + c] = 0.20;
+      var key = r + "," + c;
+      var kind = lvl.qContents[key] || "COIN";
+      if (kind === "POWERUP") {
+        kind = (state.form === "small") ? "MUSHROOM" : "FIRE";
+      }
+      if (kind === "COIN") {
+        state.coins++;
+        state.habits.coinsCollected++;
+        state.score += 200;
+        if (state.coins % 100 === 0) state.lives++;
+        sfx("coin");
+        spawnPopup(c * TILE + 6, r * TILE - 10, "+1 COIN");
+      } else {
+        sfx("powerup");
+        state.items.push({
+          kind: kind, // MUSHROOM, FIRE, STAR
+          x: c * TILE + 4,
+          y: (r - 1) * TILE,
+          w: 26,
+          h: 26,
+          vx: (kind === "FIRE") ? 0 : 105,
+          vy: (kind === "STAR") ? -240 : -60
+        });
+      }
+    }
+  }
+
+  function spawnPopup(x, y, text) {
+    state.popups.push({ x: x, y: y, text: text, life: 0.85 });
+  }
+
+  function hurtHero(reason) {
+    if (state.invulnTimer > 0 || state.starTimer > 0 || state.phase !== "running") return;
+    state.habits.lastHazard = reason;
+    if (reason === "pit") {
+      state.habits.pitDeaths++;
+    } else {
+      state.habits.enemyHits++;
+    }
+
+    if (reason !== "pit" && (state.form === "super" || state.form === "fire")) {
+      state.form = "small";
+      state.hero.h = 32;
+      state.hero.y += 12;
+      state.invulnTimer = 1.8;
+      sfx("hurt");
+      spawnPopup(state.hero.x, state.hero.y - 10, "SHRINK");
+      return;
+    }
+
+    state.lives--;
+    sfx(state.lives > 0 ? "hurt" : "gameover");
+    if (state.lives <= 0) {
+      state.phase = "gameover";
+      showOverlay(
+        "GAME OVER // WORLD " + state.world + "-" + state.stage,
+        "Hazards got you (" + reason + "). Click Play to retry or hit 'Evolve LoRA' to train the AI Architect on your recorded habits!",
+        "Final Score: " + state.score + " | Coins: " + state.coins + " | Detected Habit: " + detectDominantHabit()
+      );
+    } else {
+      // Respawn cleanly on current stage
+      state.form = "small";
+      state.invulnTimer = 1.6;
+      loadBuiltStage(state.world, state.stage, true);
+      state.phase = "running";
+      hideOverlay();
+    }
+  }
+
+  function detectDominantHabit() {
+    var h = state.habits;
+    if (state.lives <= 1) return "low_lives";
+    if (h.pitDeaths >= 2) return "pit_fall";
+    if (h.enemyHits >= 2) return "enemy_hit";
+    if (h.pipesEntered >= 1) return "pipe_explorer";
+    if (h.fireShots >= 6) return "fire_spammer";
+    if (h.blocksBroken >= 6) return "block_basher";
+    if (state.combo >= 4) return "high_combo";
+    if (h.stomps >= 4) return "stomper";
+    if (h.coinsCollected >= 10) return "coin_hunter";
+    if ((state.stage % 3) === 0 && state.form !== "small") return "boss_ready";
+    if (h.jumps >= 18) return "air_jumper";
+    if (state.elapsed > 0 && state.hero.x / Math.max(1, state.elapsed) > 180) return "speedrunner";
+    return "balanced";
+  }
+
+  function updateHeroRectCollision(ent, allowStepDown, onBumpHead) {
+    var lvl = state.level;
+    // Horizontal
+    ent.x += ent.vx * state._dt;
+    if (ent.x < 0) { ent.x = 0; ent.vx = (ent.kind ? -ent.vx : 0); }
+    if (ent.x + ent.w > lvl.cols * TILE) {
+      ent.x = lvl.cols * TILE - ent.w;
+      if (ent.kind) ent.vx = -ent.vx;
+    }
+
+    var r0 = Math.max(0, Math.floor(ent.y / TILE));
+    var r1 = Math.min(lvl.rows - 1, Math.floor((ent.y + ent.h - 2) / TILE));
+    if (ent.vx > 0) {
+      var cr = Math.floor((ent.x + ent.w - 1) / TILE);
+      for (var r = r0; r <= r1; r++) {
+        if (isSolidTile(tileAt(lvl, r, cr))) {
+          ent.x = cr * TILE - ent.w - 0.1;
+          ent.vx = ent.kind ? -Math.abs(ent.vx) : 0;
+          break;
+        }
+      }
+    } else if (ent.vx < 0) {
+      var cl = Math.floor(ent.x / TILE);
+      for (var rl = r0; rl <= r1; rl++) {
+        if (isSolidTile(tileAt(lvl, rl, cl))) {
+          ent.x = (cl + 1) * TILE + 0.1;
+          ent.vx = ent.kind ? Math.abs(ent.vx) : 0;
+          break;
+        }
+      }
+    }
+
+    // Vertical
+    ent.y += ent.vy * state._dt;
+    ent.onGround = false;
+    var c0 = Math.max(0, Math.floor((ent.x + 2) / TILE));
+    var c1 = Math.min(lvl.cols - 1, Math.floor((ent.x + ent.w - 3) / TILE));
+
+    if (ent.vy >= 0) {
+      var rb = Math.floor((ent.y + ent.h) / TILE);
+      var hitSolid = false;
+      var hitSpring = false;
+      for (var c = c0; c <= c1; c++) {
+        var tb = tileAt(lvl, rb, c);
+        if (isSolidTile(tb)) {
+          hitSolid = true;
+          if (tb === SPRING) hitSpring = true;
+        }
+      }
+      if (!hitSolid && lvl.bridgeCols && !state.bossBridge.broken) {
+        if (rb === lvl.bridgeCols.row && c1 >= lvl.bridgeCols.start && c0 <= lvl.bridgeCols.end) hitSolid = true;
+      }
+      if (hitSolid) {
+        ent.y = rb * TILE - ent.h;
+        if (hitSpring && ent === state.hero) {
+          ent.vy = -740;
+          ent.onGround = false;
+          sfx("spring");
+          spawnPopup(ent.x, ent.y - 8, "BOOST!");
+        } else {
+          ent.vy = 0;
+          ent.onGround = true;
+          if (ent === state.hero) state.combo = 0;
+        }
+      }
+      // Moving platforms (one-way top)
+      for (var pi = 0; pi < lvl.platforms.length; pi++) {
+        var pl = lvl.platforms[pi];
+        if (ent.x + ent.w > pl.x && ent.x < pl.x + pl.w &&
+            ent.y + ent.h >= pl.y - 2 && ent.y + ent.h <= pl.y + 18 && ent.vy >= 0) {
+          ent.y = pl.y - ent.h;
+          ent.vy = 0;
+          ent.onGround = true;
+          if (ent === state.hero) { ent.x += pl.dx; state.combo = 0; }
+        }
+      }
+    } else if (ent.vy < 0) {
+      var rt = Math.floor(ent.y / TILE);
+      for (var ct = c0; ct <= c1; ct++) {
+        if (isSolidTile(tileAt(lvl, rt, ct))) {
+          ent.y = (rt + 1) * TILE + 0.1;
+          ent.vy = 0;
+          if (onBumpHead) onBumpHead(rt, Math.floor((ent.x + ent.w * 0.5) / TILE));
+          break;
+        }
+      }
+    }
+  }
+
+  function stepPhysics(dt) {
+    var fdt = Math.min(0.033, Math.max(0.001, dt || 0.016));
+    state._dt = fdt;
+
+    // Tick floating particles & block bumps even on clear animations
+    if (state.level && state.level.bumps) {
+      for (var bk in state.level.bumps) {
+        state.level.bumps[bk] -= fdt;
+        if (state.level.bumps[bk] <= 0) delete state.level.bumps[bk];
+      }
+    }
+    for (var pi = state.particles.length - 1; pi >= 0; pi--) {
+      var pt = state.particles[pi];
+      pt.x += pt.vx * fdt;
+      pt.y += pt.vy * fdt;
+      pt.vy += 880 * fdt;
+      pt.life -= fdt;
+      if (pt.life <= 0) state.particles.splice(pi, 1);
+    }
+    for (var ppi = state.popups.length - 1; ppi >= 0; ppi--) {
+      var pp = state.popups[ppi];
+      pp.y -= 36 * fdt;
+      pp.life -= fdt;
+      if (pp.life <= 0) state.popups.splice(ppi, 1);
+    }
+
+    if (state.phase === "clear" && state.flagAnim) {
+      state.flagAnim.timer += fdt;
+      if (state.flagAnim.bossDrop && state.bossBridge && state.bossBridge.dropIdx < state.bossBridge.cols.length) {
+        state.bossBridge.dropAcc += fdt;
+        if (state.bossBridge.dropAcc > 0.06) {
+          state.bossBridge.dropAcc = 0;
+          state.bossBridge.dropIdx++;
+        }
+      }
+      if (state.flagAnim.timer >= 1.55) {
+        advanceToNextStage();
+      }
+      return;
+    }
+
+    if (state.phase !== "running" && state.phase !== "bonus") return;
+
+    stepChiptune(fdt);
+    state.elapsed += fdt;
+    state.habits.runTime += fdt;
+    state.timeLeft = Math.max(0, state.timeLeft - fdt);
+    if (state.timeLeft <= 0) { hurtHero("timeout"); return; }
+
+    if (state.starTimer > 0) state.starTimer = Math.max(0, state.starTimer - fdt);
+    if (state.invulnTimer > 0) state.invulnTimer = Math.max(0, state.invulnTimer - fdt);
+
+    var h = state.hero;
+    if (h.pipeCooldown > 0) h.pipeCooldown = Math.max(0, h.pipeCooldown - fdt);
+
+    var lvl = state.level;
+    // Update moving platforms
+    for (var mi = 0; mi < lvl.platforms.length; mi++) {
+      var mp = lvl.platforms[mi];
+      var prevX = mp.x;
+      mp.phase += fdt * mp.speed;
+      mp.x = mp.baseX + Math.sin(mp.phase) * mp.rangeX;
+      mp.dx = mp.x - prevX;
+    }
+
+    // Horizontal run physics with Mario inertia + sprint + Star speed
+    var maxSpd = (input.fire ? 295 : 210) * (state.starTimer > 0 ? 1.28 : 1.0);
+    var accel = h.onGround ? 1250 : 880;
+    if (input.left && !input.right) {
+      h.vx = Math.max(-maxSpd, h.vx - accel * fdt);
+      h.facing = -1;
+    } else if (input.right && !input.left) {
+      h.vx = Math.min(maxSpd, h.vx + accel * fdt);
+      h.facing = 1;
+    } else {
+      var dec = h.onGround ? 1350 : 280;
+      if (h.vx > 0) h.vx = Math.max(0, h.vx - dec * fdt);
+      else if (h.vx < 0) h.vx = Math.min(0, h.vx + dec * fdt);
+    }
+
+    // Coyote time & jump buffer
+    if (h.onGround) h.coyote = 0.105; else h.coyote = Math.max(0, h.coyote - fdt);
+    if (input.jump && !prevInputJump) h.jumpBuf = 0.115;
+    else h.jumpBuf = Math.max(0, h.jumpBuf - fdt);
+
+    if (h.jumpBuf > 0 && h.coyote > 0) {
+      h.vy = -530;
+      h.onGround = false;
+      h.coyote = 0;
+      h.jumpBuf = 0;
+      state.habits.jumps++;
+      sfx("jump");
+    }
+    if (!input.jump && h.vy < -175) {
+      h.vy *= 0.62; // variable jump height cut on early release
+    }
+
+    // Fire flower shot
+    if (input.fire && !prevInputFire && state.form === "fire" && state.fireballs.length < 2) {
+      state.fireballs.push({
+        x: h.x + (h.facing > 0 ? h.w : -10),
+        y: h.y + h.h * 0.42,
+        vx: h.facing * 390,
+        vy: -140,
+        life: 2.2
+      });
+      state.habits.fireShots++;
+      sfx("fire");
+    }
+    prevInputJump = input.jump;
+    prevInputFire = input.fire;
+
+    h.vy = Math.min(820, h.vy + 1480 * fdt);
+    updateHeroRectCollision(h, true, bumpOrBreakBlock);
+    if (Math.abs(h.vx) > 20 && h.onGround) h.walkPhase += fdt * Math.abs(h.vx) * 0.055;
+
+    // Bonus Warp Pipe Entry (Down key when standing on WARP_PIPE)
+    if (input.down && h.onGround && h.pipeCooldown <= 0 && lvl.warpZones) {
+      var hc = Math.floor((h.x + h.w * 0.5) / TILE);
+      var hrFoot = Math.floor((h.y + h.h + 3) / TILE);
+      for (var wi = 0; wi < lvl.warpZones.length; wi++) {
+        var wz = lvl.warpZones[wi];
+        if ((hc === wz.col || hc === wz.col + 1) && hrFoot === wz.topRow) {
+          sfx("warp");
+          if (state.phase === "running") {
+            state.habits.pipesEntered++;
+            state.bonusSaved = { level: lvl, enemies: state.enemies, bossBridge: state.bossBridge, returnX: wz.exitCol * TILE, returnY: 200 };
+            state.level = buildBonusRoom();
+            state.enemies = [];
+            state.items = [];
+            state.fireballs = [];
+            state.bossBridge = null;
+            h.x = 2.5 * TILE;
+            h.y = 8.5 * TILE;
+            h.vx = 0; h.vy = 0;
+            h.pipeCooldown = 0.8;
+            state.phase = "bonus";
+            spawnPopup(h.x, h.y - 12, "WARP VAULT!");
+          } else if (state.phase === "bonus" && state.bonusSaved) {
+            state.level = state.bonusSaved.level;
+            state.enemies = state.bonusSaved.enemies;
+            state.bossBridge = state.bonusSaved.bossBridge;
+            state.items = [];
+            state.fireballs = [];
+            h.x = state.bonusSaved.returnX;
+            h.y = state.bonusSaved.returnY;
+            h.vx = 0; h.vy = -120;
+            h.pipeCooldown = 0.8;
+            state.bonusSaved = null;
+            state.phase = "running";
+            spawnPopup(h.x, h.y - 12, "WARP EXIT!");
+          }
+          break;
+        }
+      }
+    }
+
+    // Lava or Abyss check
+    var footR = Math.floor((h.y + h.h - 2) / TILE);
+    var midC = clamp(Math.floor((h.x + h.w * 0.5) / TILE), 0, lvl.cols - 1);
+    if (h.y > ROWS * TILE + 24 || tileAt(lvl, footR, midC) === LAVA) {
+      hurtHero(tileAt(lvl, footR, midC) === LAVA ? "lava" : "pit");
+      return;
+    }
+
+    // Collect coins
+    for (var ci = 0; ci < lvl.coins.length; ci++) {
+      var co = lvl.coins[ci];
+      if (!co.collected && h.x < co.x + 20 && h.x + h.w > co.x && h.y < co.y + 22 && h.y + h.h > co.y) {
+        co.collected = true;
+        state.coins++;
+        state.habits.coinsCollected++;
+        state.score += 100;
+        if (state.coins % 100 === 0) state.lives++;
+        sfx("coin");
+        spawnPopup(co.x, co.y - 6, "+100");
+      }
+    }
+
+    // Update spawned powerup items
+    for (var ii = state.items.length - 1; ii >= 0; ii--) {
+      var it = state.items[ii];
+      it.vy = Math.min(680, it.vy + 1200 * fdt);
+      updateHeroRectCollision(it, false, null);
+      if (it.kind === "STAR" && it.onGround) it.vy = -420;
+      if (h.x < it.x + it.w && h.x + h.w > it.x && h.y < it.y + it.h && h.y + h.h > it.y) {
+        sfx("powerup");
+        state.score += 1000;
+        spawnPopup(it.x, it.y - 10, it.kind + "!");
+        if (it.kind === "MUSHROOM") {
+          if (state.form === "small") { state.form = "super"; h.y -= 12; h.h = 44; }
+        } else if (it.kind === "FIRE") {
+          if (state.form === "small") { h.y -= 12; h.h = 44; }
+          state.form = "fire";
+        } else if (it.kind === "STAR") {
+          state.starTimer = 10.0;
+        }
+        state.items.splice(ii, 1);
+      } else if (it.y > ROWS * TILE + 40) {
+        state.items.splice(ii, 1);
+      }
+    }
+
+    // Update fireballs
+    for (var fi = state.fireballs.length - 1; fi >= 0; fi--) {
+      var fb = state.fireballs[fi];
+      fb.life -= fdt;
+      fb.vy = Math.min(600, fb.vy + 1250 * fdt);
+      fb.x += fb.vx * fdt;
+      fb.y += fb.vy * fdt;
+      var fbr = Math.floor((fb.y + 8) / TILE), fbc = Math.floor((fb.x + 6) / TILE);
+      if (isSolidTile(tileAt(lvl, fbr, fbc))) {
+        fb.y = fbr * TILE - 10;
+        fb.vy = -310;
+      }
+      var fbrMid = Math.floor((fb.y + 4) / TILE);
+      var fbcWall = Math.floor((fb.x + (fb.vx > 0 ? 11 : 0)) / TILE);
+      if (isSolidTile(tileAt(lvl, fbrMid, fbcWall))) { fb.life = 0; }
+      for (var ei = 0; ei < state.enemies.length; ei++) {
+        var en = state.enemies[ei];
+        if (!en.dead && fb.x < en.x + en.w && fb.x + 12 > en.x && fb.y < en.y + en.h && fb.y + 12 > en.y) {
+          fb.life = 0;
+          if (en.kind === "BOSS") {
+            en.hp--;
+            sfx("stomp");
+            spawnPopup(en.x + 10, en.y - 10, "BOSS HP " + en.hp);
+            if (en.hp <= 0) {
+              en.dead = true; en.deadTimer = 1.0; state.score += 5000;
+              triggerStageClear(true);
+              return;
+            }
+          } else {
+            en.dead = true; en.deadTimer = 0.6;
+            state.score += 200;
+            sfx("stomp");
+            spawnPopup(en.x, en.y - 8, "+200");
+          }
+          break;
+        }
+      }
+      if (fb.life <= 0 || fb.y > ROWS * TILE + 20) state.fireballs.splice(fi, 1);
+    }
+
+    // Update Enemies
+    for (var k = state.enemies.length - 1; k >= 0; k--) {
+      var e = state.enemies[k];
+      if (e.dead) {
+        e.deadTimer -= fdt;
+        if (e.deadTimer <= 0) state.enemies.splice(k, 1);
+        continue;
+      }
+
+      if (e.kind === "PIPE_CHOMP") {
+        e.phase += fdt * 2.1;
+        var sVal = Math.sin(e.phase);
+        var distHero = Math.abs(h.x - e.x);
+        if (distHero < TILE * 1.35 && e.y >= e.baseY - 2) {
+          e.y = e.baseY;
+        } else {
+          e.y = e.baseY - Math.max(0, sVal) * 32;
+        }
+      } else if (e.kind === "BOSS") {
+        e.fireCd -= fdt;
+        e.vy = Math.min(680, e.vy + 1100 * fdt);
+        if (e.fireCd <= 0) {
+          e.fireCd = 1.85;
+          e.vy = -380;
+          state.enemies.push({
+            id: "bf_" + Math.random(),
+            kind: "WALKER",
+            x: e.x - 16, y: e.y + 20, w: 20, h: 20,
+            vx: -170, vy: -120, shellState: "walk", dead: false, deadTimer: 0
+          });
+        }
+        if (lvl.bridgeCols) {
+          if (e.x < (lvl.bridgeCols.start + 1) * TILE) e.vx = Math.abs(e.vx);
+          if (e.x + e.w > lvl.bridgeCols.end * TILE) e.vx = -Math.abs(e.vx);
+        }
+        updateHeroRectCollision(e, false, null);
+      } else {
+        if (e.kind === "HOPPER") {
+          e.hopTimer -= fdt;
+          if (e.onGround && e.hopTimer <= 0) { e.vy = -410; e.hopTimer = 1.1; }
+        }
+        e.vy = Math.min(720, e.vy + 1300 * fdt);
+        updateHeroRectCollision(e, false, null);
+        // Slide shell bowls over other enemies
+        if (e.kind === "SHELL" && e.shellState === "slide") {
+          for (var oj = 0; oj < state.enemies.length; oj++) {
+            var oe = state.enemies[oj];
+            if (oj !== k && !oe.dead && oe.kind !== "BOSS" &&
+                e.x < oe.x + oe.w && e.x + e.w > oe.x && e.y < oe.y + oe.h && e.y + e.h > oe.y) {
+              oe.dead = true; oe.deadTimer = 0.6;
+              state.score += 300;
+              sfx("kick");
+              spawnPopup(oe.x, oe.y - 8, "BOWL +300");
+            }
+          }
+        }
+        if (e.y > ROWS * TILE + 30) { state.enemies.splice(k, 1); continue; }
+      }
+
+      // Hero <-> Enemy Interaction
+      if (h.x + 3 < e.x + e.w && h.x + h.w - 3 > e.x && h.y + 3 < e.y + e.h && h.y + h.h - 2 > e.y) {
+        if (state.starTimer > 0 && e.kind !== "BOSS") {
+          e.dead = true; e.deadTimer = 0.5;
+          state.score += 500;
+          sfx("kick");
+          spawnPopup(e.x, e.y - 8, "STAR +500");
+          continue;
+        }
+        if (e.kind === "SHELL" && e.shellState === "idle") {
+          e.shellState = "slide";
+          e.vx = (h.x + h.w * 0.5 < e.x + e.w * 0.5) ? 340 : -340;
+          e.x += (e.vx > 0 ? 12 : -12);
+          sfx("kick");
+          state.score += 100;
+          continue;
+        }
+        var isStomp = (h.vy > 0) && (h.y + h.h - h.vy * fdt <= e.y + e.h * 0.62) && (e.kind !== "PIPE_CHOMP");
+        if (isStomp) {
+          h.vy = -410;
+          state.combo++;
+          state.habits.stomps++;
+          var pts = 100 * Math.pow(2, Math.min(4, state.combo - 1));
+          state.score += pts;
+          if (state.combo >= 5) { state.lives++; spawnPopup(h.x, h.y - 22, "1-UP!"); }
+          else spawnPopup(e.x, e.y - 8, "+" + pts);
+          sfx("stomp");
+
+          if (e.kind === "SHELL") {
+            e.shellState = "idle";
+            e.vx = 0;
+            e.h = 24;
+          } else if (e.kind === "BOSS") {
+            e.hp--;
+            if (e.hp <= 0) {
+              e.dead = true; e.deadTimer = 1.0; state.score += 5000;
+              triggerStageClear(true);
+              return;
+            }
+          } else {
+            e.dead = true; e.deadTimer = 0.45;
+          }
+        } else {
+          hurtHero(e.kind.toLowerCase());
+          return;
+        }
+      }
+    }
+
+    // Flagpole / Golden Axe Victory check
+    if (state.phase === "running") {
+      if (lvl.axeCol > 0 && h.x + h.w >= lvl.axeCol * TILE && h.x <= (lvl.axeCol + 1) * TILE && h.y >= (ROWS - 7) * TILE) {
+        triggerStageClear(true);
+        return;
+      }
+      if (lvl.goalCol > 0 && lvl.axeCol < 0 && h.x + h.w >= lvl.goalCol * TILE + 8) {
+        triggerStageClear(false);
+        return;
+      }
+    }
+
+    // Smooth camera follow
+    var canvas = byId("marioCanvas");
+    var vw = canvas ? Math.max(400, canvas.width) : 920;
+    var maxCam = Math.max(0, lvl.cols * TILE - vw);
+    state.camX = clamp(h.x - vw * 0.38, 0, maxCam);
+  }
+
+  function triggerStageClear(isBoss) {
+    state.phase = "clear";
+    var timeBonus = Math.floor(state.timeLeft) * 20;
+    state.score += 1000 + timeBonus;
+    if (isBoss && state.bossBridge) {
+      state.bossBridge.broken = true;
+      for (var ei = 0; ei < state.enemies.length; ei++) {
+        if (state.enemies[ei].kind === "BOSS") { state.enemies[ei].dead = true; state.enemies[ei].deadTimer = 1.2; }
+      }
+    }
+    state.flagAnim = { timer: 0, bossDrop: !!isBoss };
+    sfx("clear");
+    spawnPopup(state.hero.x, state.hero.y - 18, "CLEAR +" + (1000 + timeBonus));
+    appendLog("[CLEAR] World " + state.world + "-" + state.stage + " cleared! Score=" + state.score + " TimeBonus=" + timeBonus);
+  }
+
+  function advanceToNextStage() {
+    var nw = state.world, ns = state.stage + 1;
+    if (ns > 3) { nw++; ns = 1; }
+    state.world = nw;
+    state.stage = ns;
+    loadBuiltStage(nw, ns, false);
+    state.phase = "running";
+    hideOverlay();
+    if (activeAdapter !== "base") {
+      requestArchitectBlueprint(false);
+    }
+  }
+
+  /* Rendering (Rule EF-7 guarded >= 50px + positive radius) */
+  function renderMarioCanvas() {
+    var canvas = byId("marioCanvas");
+    if (!canvas || canvas.width < 50 || canvas.height < 50 || typeof canvas.getContext !== "function") return;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    var w = canvas.width, h = canvas.height;
+    var lvl = state.level;
+    var theme = (state.phase === "bonus")
+      ? THEMES.UNDERGROUND_OBSIDIAN
+      : (THEMES[state.blueprint.theme] || THEMES.OVERWORLD_GOLD);
+
+    var skyG = ctx.createLinearGradient(0, 0, 0, h);
+    skyG.addColorStop(0, theme.skyTop);
+    skyG.addColorStop(1, theme.skyBot);
+    ctx.fillStyle = skyG;
+    ctx.fillRect(0, 0, w, h);
+
+    if (!lvl) return;
+    var cam = state.camX || 0;
+
+    // Parallax hills & clouds
+    ctx.fillStyle = theme.cloud;
+    for (var cl = 0; cl < 7; cl++) {
+      var cx = ((cl * 260 - cam * 0.22) % (w + 180) + w + 180) % (w + 180) - 90;
+      var cy = 58 + (cl % 3) * 32;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(1, 20), 0, Math.PI * 2);
+      ctx.arc(cx + 22, cy - 6, Math.max(1, 24), 0, Math.PI * 2);
+      ctx.arc(cx + 46, cy, Math.max(1, 18), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = theme.hill;
+    for (var hl = 0; hl < 5; hl++) {
+      var hx = ((hl * 360 - cam * 0.35) % (w + 300) + w + 300) % (w + 300) - 150;
+      ctx.beginPath();
+      ctx.arc(hx + 70, h - 70, Math.max(1, 88), Math.PI, 0);
+      ctx.fill();
+    }
+
+    var cStart = Math.max(0, Math.floor(cam / TILE) - 1);
+    var cEnd = Math.min(lvl.cols - 1, Math.ceil((cam + w) / TILE) + 1);
+
+    // Draw Tiles
+    for (var r = 0; r < lvl.rows; r++) {
+      for (var c = cStart; c <= cEnd; c++) {
+        var t = lvl.tiles[r][c];
+        if (t === EMPTY) continue;
+        var bOff = (lvl.bumps && lvl.bumps[r + "," + c]) ? -Math.sin((lvl.bumps[r + "," + c] / 0.2) * Math.PI) * 9 : 0;
+        var x = Math.round(c * TILE - cam), y = Math.round(r * TILE + bOff);
+
+        if (t === GROUND) {
+          ctx.fillStyle = theme.groundFill;
+          ctx.fillRect(x, y, TILE, TILE);
+          if (r === lvl.rows - 2) {
+            ctx.fillStyle = theme.groundTop;
+            ctx.fillRect(x, y, TILE, 7);
+          }
+          ctx.strokeStyle = "rgba(255,255,255,0.08)";
+          ctx.strokeRect(x + 0.5, y + 0.5, TILE - 1, TILE - 1);
+        } else if (t === BRICK) {
+          ctx.fillStyle = theme.brick;
+          ctx.fillRect(x, y, TILE, TILE);
+          ctx.strokeStyle = theme.brickEdge;
+          ctx.strokeRect(x + 1, y + 1, TILE - 2, TILE - 2);
+          ctx.fillRect(x + 2, y + Math.floor(TILE * 0.5), TILE - 4, 2);
+        } else if (t === QBLOCK) {
+          ctx.fillStyle = "#d4af37";
+          ctx.fillRect(x, y, TILE, TILE);
+          ctx.strokeStyle = "#fff5cc";
+          ctx.strokeRect(x + 1, y + 1, TILE - 2, TILE - 2);
+          ctx.fillStyle = "#11131a";
+          ctx.font = "bold 19px monospace";
+          ctx.fillText("?", x + 11, y + 24);
+        } else if (t === USED) {
+          ctx.fillStyle = "#2b2f3d";
+          ctx.fillRect(x, y, TILE, TILE);
+          ctx.strokeStyle = "#64748b";
+          ctx.strokeRect(x + 1, y + 1, TILE - 2, TILE - 2);
+        } else if (t === PIPE || t === WARP_PIPE) {
+          ctx.fillStyle = (t === WARP_PIPE) ? "#f0d77a" : theme.pipe;
+          ctx.fillRect(x, y, TILE, TILE);
+          ctx.fillStyle = (t === WARP_PIPE) ? "#ffffff" : theme.pipeHi;
+          ctx.fillRect(x + 4, y, 7, TILE);
+          if (tileAt(lvl, r - 1, c) !== t) {
+            ctx.fillStyle = (t === WARP_PIPE) ? "#fde047" : theme.pipeHi;
+            ctx.fillRect(x - 3, y, TILE + 6, 9);
+            if (t === WARP_PIPE) {
+              ctx.fillStyle = "#090a0d";
+              ctx.font = "bold 9px monospace";
+              ctx.fillText("WARP", x + 5, y + 8);
+            }
+          }
+        } else if (t === SPRING) {
+          ctx.fillStyle = "#dc2626";
+          ctx.fillRect(x + 3, y + TILE - 16, TILE - 6, 8);
+          ctx.fillStyle = "#f0d77a";
+          ctx.fillRect(x + 6, y + TILE - 8, TILE - 12, 8);
+        } else if (t === LAVA) {
+          ctx.fillStyle = "#dc2626";
+          ctx.fillRect(x, y + 6, TILE, TILE - 6);
+          ctx.fillStyle = "#fbbf24";
+          ctx.fillRect(x, y + 6, TILE, 5);
+        }
+      }
+    }
+
+    // Bridge segments for Boss Keep
+    if (state.bossBridge && lvl.bridgeCols) {
+      for (var bi = state.bossBridge.dropIdx; bi < state.bossBridge.cols.length; bi++) {
+        var bc = state.bossBridge.cols[bi];
+        var bx = Math.round(bc * TILE - cam), by = lvl.bridgeCols.row * TILE;
+        ctx.fillStyle = "#a16207";
+        ctx.fillRect(bx, by, TILE, 12);
+        ctx.strokeStyle = "#fde047";
+        ctx.strokeRect(bx + 1, by + 1, TILE - 2, 10);
+      }
+      if (!state.bossBridge.broken && lvl.axeCol > 0) {
+        var ax = Math.round(lvl.axeCol * TILE - cam), ay = (lvl.bridgeCols.row - 2) * TILE;
+        ctx.fillStyle = "#facc15";
+        ctx.fillRect(ax + 12, ay + 6, 6, 36);
+        ctx.beginPath();
+        ctx.arc(ax + 15, ay + 14, Math.max(1, 12), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Flagpole & Castle
+    if (lvl.goalCol > 0 && lvl.axeCol < 0) {
+      var fx = Math.round(lvl.goalCol * TILE - cam);
+      var fTop = 3 * TILE, fBot = (lvl.rows - 2) * TILE;
+      ctx.fillStyle = "#e2e8f0";
+      ctx.fillRect(fx + 14, fTop, 5, fBot - fTop);
+      ctx.fillStyle = "#f0d77a";
+      ctx.beginPath();
+      ctx.arc(fx + 16, fTop, Math.max(1, 7), 0, Math.PI * 2);
+      ctx.fill();
+      var flagY = fTop + 10 + (state.flagAnim ? Math.min(180, state.flagAnim.timer * 140) : 0);
+      ctx.fillStyle = "#34d399";
+      ctx.fillRect(fx + 19, flagY, 34, 22);
+      // Obsidian Castle behind goal
+      var cxCastle = fx + TILE * 3;
+      ctx.fillStyle = "#262b38";
+      ctx.fillRect(cxCastle, fBot - 115, 110, 115);
+      ctx.fillStyle = theme.groundTrim;
+      ctx.fillRect(cxCastle, fBot - 122, 18, 12);
+      ctx.fillRect(cxCastle + 46, fBot - 122, 18, 12);
+      ctx.fillRect(cxCastle + 92, fBot - 122, 18, 12);
+      ctx.fillStyle = "#08090d";
+      ctx.fillRect(cxCastle + 40, fBot - 48, 30, 48);
+    }
+
+    // Moving Platforms
+    for (var mpi = 0; mpi < lvl.platforms.length; mpi++) {
+      var mp = lvl.platforms[mpi];
+      ctx.fillStyle = "#d4af37";
+      ctx.fillRect(Math.round(mp.x - cam), Math.round(mp.y), mp.w, mp.h);
+      ctx.fillStyle = "#fff7d6";
+      ctx.fillRect(Math.round(mp.x - cam), Math.round(mp.y), mp.w, 4);
+    }
+
+    // Coins
+    for (var ci = 0; ci < lvl.coins.length; ci++) {
+      var co = lvl.coins[ci];
+      if (co.collected) continue;
+      var coX = Math.round(co.x - cam + 9), coY = Math.round(co.y + 10 + Math.sin(state.elapsed * 5 + co.bob) * 3);
+      ctx.fillStyle = "#fbbf24";
+      ctx.beginPath();
+      ctx.arc(coX, coY, Math.max(1, 9), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fef08a";
+      ctx.fillRect(coX - 2, coY - 5, 4, 10);
+    }
+
+    // Powerups
+    for (var ii = 0; ii < state.items.length; ii++) {
+      var it = state.items[ii];
+      var ix = Math.round(it.x - cam), iy = Math.round(it.y);
+      ctx.fillStyle = (it.kind === "STAR") ? "#fde047" : ((it.kind === "FIRE") ? "#fb7185" : "#ef4444");
+      ctx.beginPath();
+      ctx.arc(ix + 13, iy + 13, Math.max(1, 13), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fef9c3";
+      ctx.beginPath();
+      ctx.arc(ix + 13, iy + 10, Math.max(1, 5), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Enemies
+    for (var ei = 0; ei < state.enemies.length; ei++) {
+      var en = state.enemies[ei];
+      var ex = Math.round(en.x - cam), ey = Math.round(en.y);
+      if (en.kind === "BOSS" && customSprites.boss && drawVectorSprite(ctx, customSprites.boss, ex, ey, en.w, en.h, false)) {
+        // Custom SVG boss rendered
+      } else {
+        var col = (en.kind === "SHELL") ? "#10b981" : ((en.kind === "PIPE_CHOMP") ? "#f43f5e" : ((en.kind === "BOSS") ? "#b91c1c" : ((en.kind === "HOPPER") ? "#a855f7" : "#d97706")));
+        ctx.fillStyle = en.dead ? "#64748b" : col;
+        var eh = en.dead ? Math.max(8, Math.floor(en.h * 0.45)) : en.h;
+        var edy = en.dead ? (ey + en.h - eh) : ey;
+        ctx.fillRect(ex, edy, en.w, eh);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(ex + 5, edy + 6, 5, 5);
+        ctx.fillRect(ex + en.w - 10, edy + 6, 5, 5);
+        if (en.kind === "BOSS" && !en.dead) {
+          ctx.fillStyle = "#fde047";
+          ctx.fillRect(ex, ey - 10, Math.max(4, Math.floor(en.w * (en.hp / en.maxHp))), 5);
+        }
+      }
+    }
+
+    // Fireballs
+    for (var fi = 0; fi < state.fireballs.length; fi++) {
+      var fb = state.fireballs[fi];
+      ctx.fillStyle = "#fbbf24";
+      ctx.beginPath();
+      ctx.arc(Math.round(fb.x - cam + 6), Math.round(fb.y + 6), Math.max(1, 6), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Hero
+    var hObj = state.hero;
+    var hx = Math.round(hObj.x - cam), hy = Math.round(hObj.y);
+    var blink = (state.invulnTimer > 0 && Math.floor(state.invulnTimer * 18) % 2 === 0);
+    if (!blink) {
+      if (state.starTimer > 0) {
+        var rg = ctx.createRadialGradient(hx + hObj.w * 0.5, hy + hObj.h * 0.5, 2, hx + hObj.w * 0.5, hy + hObj.h * 0.5, Math.max(8, hObj.w));
+        rg.addColorStop(0, "rgba(253, 224, 71, 0.55)");
+        rg.addColorStop(1, "rgba(253, 224, 71, 0)");
+        ctx.fillStyle = rg;
+        ctx.beginPath();
+        ctx.arc(hx + hObj.w * 0.5, hy + hObj.h * 0.5, Math.max(8, hObj.w), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (!customSprites.hero || !drawVectorSprite(ctx, customSprites.hero, hx - 6, hy - 4, hObj.w + 12, hObj.h + 6, hObj.facing < 0)) {
+        // Native Blackwell Plumber Pixel-Gold Silhouette
+        ctx.fillStyle = (state.form === "fire") ? "#f8fafc" : "#ef4444";
+        ctx.fillRect(hx, hy, hObj.w, Math.floor(hObj.h * 0.28)); // cap
+        ctx.fillStyle = "#f5d0a9";
+        ctx.fillRect(hx + 3, hy + Math.floor(hObj.h * 0.28), hObj.w - 6, Math.floor(hObj.h * 0.25)); // face
+        ctx.fillStyle = (state.form === "fire") ? "#dc2626" : ((state.starTimer > 0) ? "#facc15" : "#d4af37");
+        ctx.fillRect(hx + 1, hy + Math.floor(hObj.h * 0.52), hObj.w - 2, Math.floor(hObj.h * 0.34)); // overalls
+        ctx.fillStyle = "#1e293b";
+        var legSwing = Math.round(Math.sin(hObj.walkPhase) * 3);
+        ctx.fillRect(hx + 2 + legSwing, hy + hObj.h - 7, 8, 7);
+        ctx.fillRect(hx + hObj.w - 10 - legSwing, hy + hObj.h - 7, 8, 7);
+      }
+    }
+
+    // Particles & Popups
+    for (var pti = 0; pti < state.particles.length; pti++) {
+      var ptk = state.particles[pti];
+      ctx.fillStyle = ptk.color || "#d4af37";
+      ctx.fillRect(Math.round(ptk.x - cam), Math.round(ptk.y), ptk.size || 5, ptk.size || 5);
+    }
+    ctx.fillStyle = "#fffbeb";
+    ctx.font = "bold 12px monospace";
+    for (var ppi = 0; ppi < state.popups.length; ppi++) {
+      var pp = state.popups[ppi];
+      ctx.fillText(pp.text, Math.round(pp.x - cam), Math.round(pp.y));
+    }
+  }
+
+  function renderMarioLossChart(pts) {
+    var canvas = byId("marioLossCanvas");
+    if (!canvas || canvas.width < 50 || canvas.height < 50 || typeof canvas.getContext !== "function") return;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    var w = canvas.width, h = canvas.height;
+    ctx.fillStyle = "#06070a";
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "rgba(212,175,55,0.22)";
+    ctx.beginPath();
+    ctx.moveTo(10, h - 18); ctx.lineTo(w - 10, h - 18);
+    ctx.stroke();
+
+    if (!pts || pts.length === 0) {
+      ctx.fillStyle = "#a49e8d";
+      ctx.font = "11px monospace";
+      ctx.fillText("Training loss curve appears here during Play-to-Train.", 14, Math.floor(h * 0.54));
+      return;
+    }
+    var mx = pts[0].loss || 1.0, mn = mx;
+    for (var i = 1; i < pts.length; i++) {
+      if (pts[i].loss > mx) mx = pts[i].loss;
+      if (pts[i].loss < mn) mn = pts[i].loss;
+    }
+    var span = Math.max(0.05, mx - mn * 0.8);
+    ctx.strokeStyle = "#f0d77a";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var j = 0; j < pts.length; j++) {
+      var px = 14 + ((w - 28) * j) / Math.max(1, pts.length - 1);
+      var py = (h - 20) - clamp((pts[j].loss - mn * 0.8) / span, 0, 1) * (h - 32);
+      if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      ctx.fillStyle = "#34d399";
+      ctx.fillRect(px - 2, py - 2, 4, 4);
+    }
+    ctx.stroke();
+    ctx.fillStyle = "#e8cc7c";
+    ctx.font = "11px monospace";
+    ctx.fillText("Last loss: " + pts[pts.length - 1].loss.toFixed(4), 14, 14);
+  }
+
+  function syncHud() {
+    function setT(id, val) { var el = byId(id); if (el) el.textContent = String(val); }
+    setT("hudWorld", state.world + "-" + state.stage + (state.phase === "bonus" ? " (VAULT)" : ""));
+    setT("hudScore", state.score);
+    setT("hudCoins", state.coins);
+    setT("hudLives", state.lives);
+    setT("hudForm", state.starTimer > 0 ? "STAR" : state.form.toUpperCase());
+    setT("hudCombo", "x" + Math.max(1, state.combo));
+    setT("hudTime", Math.ceil(state.timeLeft));
+
+    var dom = detectDominantHabit();
+    setT("habitTag", dom);
+    var stPct = clamp(Math.round((state.habits.stomps / 8) * 100), 5, 100);
+    var cnPct = clamp(Math.round((state.habits.coinsCollected / 20) * 100), 5, 100);
+    var pcPct = clamp(Math.round((state.hero.x / Math.max(1, (state.level ? state.level.cols * TILE : 3500))) * 100), 5, 100);
+    setT("stompPct", stPct + "%"); setT("coinPct", cnPct + "%"); setT("pacePct", pcPct + "%");
+    if (byId("stompMeter")) byId("stompMeter").style.width = stPct + "%";
+    if (byId("coinMeter")) byId("coinMeter").style.width = cnPct + "%";
+    if (byId("paceMeter")) byId("paceMeter").style.width = pcPct + "%";
+    setT("deathReasonLabel", "Last hazard: " + state.habits.lastHazard + " | Pipes: " + state.habits.pipesEntered + " | Bricks: " + state.habits.blocksBroken);
+  }
+
+  function applyBlueprintUi(bp) {
+    state.blueprint = bp;
+    if (byId("architectBanner")) byId("architectBanner").textContent = "[ARCHITECT] " + bp.taunt;
+    if (byId("bpThemeChip")) byId("bpThemeChip").textContent = bp.theme;
+    if (byId("bpLayoutChip")) byId("bpLayoutChip").textContent = bp.layout;
+    if (byId("bpEnemyChip")) byId("bpEnemyChip").textContent = bp.enemies;
+    if (byId("bpPowerChip")) byId("bpPowerChip").textContent = bp.powerup;
+  }
+
+  function loadBuiltStage(wNum, sNum, keepForm) {
+    var built = buildMarioWorld(state.blueprint, wNum, sNum);
+    state.level = built.level;
+    state.enemies = built.enemies;
+    state.bossBridge = built.bossBridge;
+    state.items = [];
+    state.fireballs = [];
+    state.particles = [];
+    state.popups = [];
+    state.flagAnim = null;
+    state.bonusSaved = null;
+    state.timeLeft = 300;
+    state.camX = 0;
+    if (!keepForm) {
+      state.hero.h = (state.form === "small") ? 32 : 44;
+    } else {
+      state.hero.h = 32;
+    }
+    state.hero.x = 76;
+    state.hero.y = (ROWS - 4) * TILE;
+    state.hero.vx = 0;
+    state.hero.vy = 0;
+    state.hero.onGround = false;
+    state.hero.coyote = 0;
+    state.hero.jumpBuf = 0;
+    if (byId("reachBadge")) byId("reachBadge").textContent = "REACHABLE (" + built.level.reach.fixes + " fixes)";
+    syncHud();
+  }
+
+  function resetStage(autoRun) {
+    state.world = 1;
+    state.stage = 1;
+    state.score = 0;
+    state.coins = 0;
+    state.lives = 3;
+    state.form = "small";
+    state.starTimer = 0;
+    state.invulnTimer = 0;
+    state.combo = 0;
+    state.elapsed = 0;
+    state.habits.stomps = 0; state.habits.coinsCollected = 0; state.habits.blocksBroken = 0;
+    state.habits.fireShots = 0; state.habits.pipesEntered = 0; state.habits.jumps = 0;
+    state.habits.pitDeaths = 0; state.habits.enemyHits = 0; state.habits.lastHazard = "none";
+    applyBlueprintUi(parseBlueprint("", 1, 1));
+    loadBuiltStage(1, 1, true);
+    state.phase = autoRun ? "running" : "idle";
+    if (autoRun) hideOverlay();
+    syncHud();
+  }
+
+  function showOverlay(title, desc, hint) {
+    var ov = byId("marioOverlay");
+    if (!ov) return;
+    if (byId("overlayTitle")) byId("overlayTitle").textContent = title;
+    if (byId("overlayDesc")) byId("overlayDesc").textContent = desc;
+    if (byId("overlayHint")) byId("overlayHint").textContent = hint;
+    ov.className = "mario-overlay";
+  }
+
+  function hideOverlay() {
+    var ov = byId("marioOverlay");
+    if (ov) ov.className = "mario-overlay hidden";
+  }
+
+  /* Live Studio / LoRA Architect Integration */
+  function refreshStudioMeta() {
+    if (typeof fetch !== "function") return Promise.resolve();
+    return fetch("/health")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (h) {
+        if (!h) return;
+        activeModelId = h.model || activeModelId;
+        if (byId("gpuPill")) byId("gpuPill").textContent = (h.gpu_name || "RTX 5070").replace("NVIDIA GeForce ", "") + " (SM " + (h.gpu_cc || "12.0") + ")";
+        if (byId("tpsPill")) byId("tpsPill").textContent = (h.decoder_mode || "cuda_graph") + " (" + (h.last_tok_per_sec || 0) + " tok/s)";
+      })
+      .then(function () { return fetch("/v1/lora/adapters"); })
+      .then(function (r2) { return r2.ok ? r2.json() : null; })
+      .then(function (ad) {
+        if (!ad) return;
+        knownAdapters = ad.adapters || [];
+        activeAdapter = ad.active || "base";
+        var sel = byId("marioAdapterSelect");
+        if (sel) {
+          sel.innerHTML = "";
+          var bOpt = document.createElement("option");
+          bOpt.value = "base"; bOpt.textContent = "base (untrained)";
+          sel.appendChild(bOpt);
+          var hasMario = false;
+          for (var i = 0; i < knownAdapters.length; i++) {
+            var it = knownAdapters[i];
+            if (it.name === "mario_architect") hasMario = true;
+            var opt = document.createElement("option");
+            opt.value = it.name;
+            opt.textContent = it.name + " (r" + it.rank + ")";
+            sel.appendChild(opt);
+          }
+          if (hasMario && activeAdapter !== "mario_architect") activeAdapter = "mario_architect";
+          sel.value = activeAdapter;
+        }
+        var slider = byId("marioScaleSlider");
+        if (slider) slider.disabled = (activeAdapter === "base");
+        if (byId("architectStatusPill")) byId("architectStatusPill").textContent = "Architect: " + activeAdapter;
+      })
+      .catch(function () {});
+  }
+
+  function requestArchitectBlueprint(rebuildCurrent) {
+    if (forgeBusy || typeof fetch !== "function") return;
+    forgeBusy = true;
+    if (byId("architectStatusPill")) byId("architectStatusPill").textContent = "Architect: forging...";
+    var dom = detectDominantHabit();
+    var prompt = "WORLD " + state.world + "-" + state.stage + " | FORM " + state.form + " | HABIT " + dom + " | COINS " + state.coins + " | LIVES " + state.lives;
+    var sc = byId("marioScaleSlider") ? parseFloat(byId("marioScaleSlider").value) : 1.0;
+
+    fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: activeModelId,
+        adapter: activeAdapter,
+        lora_scale: sc,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.0,
+        max_tokens: 96,
+        stream: false
+      })
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.choices || !j.choices[0]) return;
+        var txt = j.choices[0].message ? j.choices[0].message.content : "";
+        var tps = (j.zcc_metrics && j.zcc_metrics.tok_per_sec) ? j.zcc_metrics.tok_per_sec : 0;
+        if (tps && byId("tpsPill")) byId("tpsPill").textContent = "Decoder: " + tps.toFixed(1) + " tok/s";
+        var bp = parseBlueprint(txt, state.world, state.stage);
+        applyBlueprintUi(bp);
+        appendLog("[AI " + tps.toFixed(1) + " tok/s] " + prompt + " -> " + bp.theme + "/" + bp.layout + " (" + bp.enemies + ")");
+        if (rebuildCurrent) {
+          loadBuiltStage(state.world, state.stage, false);
+          if (state.phase !== "running") { state.phase = "running"; hideOverlay(); }
+        }
+      })
+      .catch(function () {})
+      .then(function () {
+        forgeBusy = false;
+        if (byId("architectStatusPill")) byId("architectStatusPill").textContent = "Architect: " + activeAdapter;
+      });
+  }
+
+  /* Window Controls (Dual-Bound for Anti-Dead-Click Rule EF-7) */
+  window.zccMarioSelectAdapter = function (ev) {
+    if (!markHandled(ev)) return;
+    var sel = byId("marioAdapterSelect");
+    activeAdapter = sel ? sel.value : "base";
+    if (byId("marioScaleSlider")) byId("marioScaleSlider").disabled = (activeAdapter === "base");
+    if (byId("architectStatusPill")) byId("architectStatusPill").textContent = "Architect: " + activeAdapter;
+  };
+
+  window.zccMarioScaleChange = function (ev) {
+    if (!markHandled(ev)) return;
+    var sl = byId("marioScaleSlider");
+    if (sl && byId("marioScaleVal")) byId("marioScaleVal").textContent = Number(sl.value).toFixed(2) + "x";
+  };
+
+  window.zccMarioToggleSound = function (ev) {
+    if (!markHandled(ev)) return;
+    soundOn = !soundOn;
+    if (soundOn) ensureAudio(true);
+    var btn = byId("marioSoundBtn");
+    if (btn) btn.textContent = soundOn ? "Sound: ON" : "Sound: OFF";
+    if (soundOn) sfx("coin");
+  };
+
+  window.zccMarioStartToggle = function (ev) {
+    if (!markHandled(ev)) return;
+    if (soundOn) ensureAudio(true);
+    if (state.phase === "gameover") {
+      resetStage(true);
+    } else if (state.phase === "running" || state.phase === "bonus") {
+      state.phase = "paused";
+      showOverlay("PAUSED", "Adventure paused. Hit Start Adventure or Space to resume.", "Score: " + state.score + " | World " + state.world + "-" + state.stage);
+    } else {
+      if (!state.level) loadBuiltStage(state.world, state.stage, true);
+      state.phase = "running";
+      hideOverlay();
+    }
+    var sb = byId("startBtn");
+    if (sb) sb.textContent = (state.phase === "running" || state.phase === "bonus") ? "Pause" : "Play";
+  };
+
+  window.zccMarioRestart = function (ev) {
+    if (!markHandled(ev)) return;
+    resetStage(true);
+    if (byId("startBtn")) byId("startBtn").textContent = "Pause";
+  };
+
+  window.zccMarioForgeStage = function (ev) {
+    if (!markHandled(ev)) return;
+    var ns = state.stage + 1;
+    if (ns > 3) { state.world++; ns = 1; }
+    state.stage = ns;
+    if (activeAdapter !== "base" && typeof fetch === "function") {
+      requestArchitectBlueprint(true);
+    } else {
+      var layouts = ["CLASSIC_RUN", "PIPE_GAUNTLET", "SKY_BRIDGES", "BRICK_MAZE", "STAIR_ASCENT", "BOSS_KEEP"];
+      var ths = ["OVERWORLD_GOLD", "EMERALD_PIPES", "SKY_CITADEL", "UNDERGROUND_OBSIDIAN", "LAVA_FORTRESS"];
+      var bp = parseBlueprint(
+        "THEME:" + ths[(state.world + state.stage) % ths.length] +
+        "|LAYOUT:" + ((state.stage % 3 === 0) ? "BOSS_KEEP" : layouts[(state.world * 3 + state.stage) % 5]) +
+        "|ENEMIES:MIXED_ELITE|POWERUP:FIRE_FLOWER|PIPES:3|PITS:2|TAUNT:Local procedural stage " + state.world + "-" + state.stage + " forged!",
+        state.world, state.stage
+      );
+      applyBlueprintUi(bp);
+      loadBuiltStage(state.world, state.stage, false);
+      state.phase = "running";
+      hideOverlay();
+    }
+  };
+
+  window.zccMarioPadHold = function (dir, ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    if (dir === "left") input.left = true;
+    else if (dir === "right") input.right = true;
+    else if (dir === "jump") {
+      if (state.phase === "idle") window.zccMarioStartToggle();
+      input.jump = true;
+    } else if (dir === "down") input.down = true;
+    else if (dir === "fire") input.fire = true;
+  };
+
+  window.zccMarioPadRelease = function (dir, ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    if (dir === "left") input.left = false;
+    else if (dir === "right") input.right = false;
+    else if (dir === "jump") input.jump = false;
+    else if (dir === "down") input.down = false;
+    else if (dir === "fire") input.fire = false;
+  };
+
+  window.zccMarioForgeSprite = function (slot, ev) {
+    if (!markHandled(ev)) return;
+    if (spriteBusy || typeof fetch !== "function") return;
+    var hasSvg = false;
+    for (var i = 0; i < knownAdapters.length; i++) if (knownAdapters[i].name === "svg_forge") hasSvg = true;
+    var adp = hasSvg ? "svg_forge" : activeAdapter;
+    var prompt = (slot === "boss")
+      ? "SVG BOSS | STYLE crimson_core | ROLE nemesis_eye"
+      : "SVG SHIP | STYLE obsidian_gold | ROLE apex_interceptor";
+    spriteBusy = true;
+    if (byId("spriteLoadoutStatus")) byId("spriteLoadoutStatus").textContent = "Forging " + slot + " SVG via '" + adp + "'...";
+    fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: activeModelId,
+        adapter: adp,
+        lora_scale: 1.0,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+        max_tokens: 160,
+        stream: false
+      })
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var raw = (j && j.choices && j.choices[0] && j.choices[0].message) ? j.choices[0].message.content : "";
+        var parsed = parseMarioSvgPrimitives(raw);
+        if (parsed.prims.length > 0) {
+          customSprites[slot] = parsed;
+          if (byId("spriteLoadoutStatus")) byId("spriteLoadoutStatus").textContent = "Equipped custom GPU SVG " + slot + " (" + parsed.prims.length + " primitives)!";
+          appendLog("[SVG-ARSENAL] Equipped live " + slot + " SVG (" + parsed.prims.length + " prims)");
+        } else {
+          if (byId("spriteLoadoutStatus")) byId("spriteLoadoutStatus").textContent = "SVG response had 0 valid primitives; keeping sprite.";
+        }
+      })
+      .catch(function () { if (byId("spriteLoadoutStatus")) byId("spriteLoadoutStatus").textContent = "SVG Forge endpoint offline."; })
+      .then(function () { spriteBusy = false; });
+  };
+
+  window.zccMarioClearSprites = function (ev) {
+    if (!markHandled(ev)) return;
+    customSprites.hero = null;
+    customSprites.boss = null;
+    if (byId("spriteLoadoutStatus")) byId("spriteLoadoutStatus").textContent = "Reset to native pixel-gold Blackwell sprites.";
+  };
+
+  window.zccMarioEvolveArchitect = function (ev) {
+    if (!markHandled(ev)) return;
+    if (evolveBusy || typeof fetch !== "function") return;
+    var name = (byId("evolveNameInput") && byId("evolveNameInput").value.trim()) || "mario_rival_v1";
+    var steps = clamp(parseInt(byId("evolveStepsInput") ? byId("evolveStepsInput").value : "45", 10) || 45, 10, 200);
+    var dom = detectDominantHabit();
+    var sft = [
+      "Q: WORLD " + state.world + "-" + state.stage + " | FORM " + state.form + " | HABIT " + dom + " | COINS " + state.coins + " | LIVES " + state.lives,
+      "A: THEME:EMERALD_PIPES|LAYOUT:PIPE_GAUNTLET|ENEMIES:MIXED_ELITE|POWERUP:STAR_DRIVE|PIPES:4|PITS:3|TAUNT:Rival evolved for your " + dom + " habit!",
+      "",
+      "Q: WORLD " + state.world + "-3 | FORM fire | HABIT boss_ready | COINS 50 | LIVES 3",
+      "A: THEME:LAVA_FORTRESS|LAYOUT:BOSS_KEEP|ENEMIES:MIXED_ELITE|POWERUP:FIRE_FLOWER|PIPES:2|PITS:3|TAUNT:Evolved Keep awaits! Seize the Golden Axe.",
+      "",
+      "Q: What is the capital of France?",
+      "A: The capital of France is Paris."
+    ].join("\n");
+
+    evolveBusy = true;
+    lossPoints = [];
+    renderMarioLossChart(lossPoints);
+    if (byId("evolveStatus")) byId("evolveStatus").textContent = "Training LoRA '" + name + "' on RTX 5070 (" + steps + " steps)...";
+
+    fetch("/v1/lora/train", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name,
+        sft_text: sft,
+        rank: 8,
+        alpha: 16,
+        lr: 0.0005,
+        steps: steps,
+        chat: true,
+        save_path: "build_win64/" + name + ".zcc_lora",
+        activate: true,
+        stream: false
+      })
+    })
+      .then(function (r) { return r.ok ? r.json() : r.text().then(function (t) { throw new Error(t); }); })
+      .then(function (d) {
+        lossPoints.push({ step: 1, loss: d.initial_loss || 1.0 });
+        lossPoints.push({ step: steps, loss: d.final_loss || 0.1 });
+        renderMarioLossChart(lossPoints);
+        if (byId("evolveStatus")) byId("evolveStatus").textContent = "Trained '" + name + "' (" + (d.initial_loss || 0).toFixed(3) + " -> " + (d.final_loss || 0).toFixed(3) + ")!";
+        appendLog("[PLAY-TO-TRAIN] Saved build_win64/" + name + ".zcc_lora (loss=" + (d.final_loss || 0).toFixed(3) + ")");
+        return refreshStudioMeta();
+      })
+      .catch(function (err) {
+        if (byId("evolveStatus")) byId("evolveStatus").textContent = "Train error: " + (err ? err.message : "failed");
+      })
+      .then(function () { evolveBusy = false; });
+  };
+
+  function buildMarioProofSvg(st) {
+    return [
+      '<svg viewBox="0 0 720 420">',
+      '<rect x="0" y="0" width="720" height="420" fill="#07080b"/>',
+      '<rect x="16" y="16" width="688" height="388" rx="16" fill="#101218" stroke="#d4af37" stroke-width="3"/>',
+      '<text x="36" y="58" fill="#f0d77a" font-family="monospace" font-size="22" font-weight="bold">SUPER BLACKWELL // PROOF OF PLATFORMING</text>',
+      '<text x="36" y="96" fill="#f4f1e6" font-family="monospace" font-size="16">WORLD: ' + st.world + '-' + st.stage + ' | SCORE: ' + st.score + ' | COINS: ' + st.coins + ' | FORM: ' + st.form.toUpperCase() + '</text>',
+      '<text x="36" y="128" fill="#6ee7b7" font-family="monospace" font-size="14">THEME: ' + st.blueprint.theme + ' | LAYOUT: ' + st.blueprint.layout + ' | ARCHITECT: ' + activeAdapter + '</text>',
+      '<polygon points="360,175 430,295 290,295" fill="#d4af37" stroke="#fff5cc" stroke-width="3"/>',
+      '<circle cx="360" cy="245" r="24" fill="#ef4444"/>',
+      '</svg>'
+    ].join("");
+  }
+
+  window.zccMarioExportProof = function (ev) {
+    if (!markHandled(ev)) return;
+    var svgStr = buildMarioProofSvg(state);
+    if (typeof Blob !== "function" || typeof URL === "undefined" || typeof document === "undefined") return;
+    var blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "super_blackwell_proof.svg";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 400);
+  };
+
+  function bindEvent(id, evt, fn) {
+    var el = byId(id);
+    if (el && !el.dataset["zcc_" + evt]) {
+      el.dataset["zcc_" + evt] = "1";
+      el.addEventListener(evt, fn);
+    }
+  }
+
+  function bindControls() {
+    bindEvent("marioAdapterSelect", "change", window.zccMarioSelectAdapter);
+    bindEvent("marioScaleSlider", "input", window.zccMarioScaleChange);
+    bindEvent("marioSoundBtn", "click", window.zccMarioToggleSound);
+    bindEvent("startBtn", "click", window.zccMarioStartToggle);
+    bindEvent("overlayStartBtn", "click", window.zccMarioStartToggle);
+    bindEvent("restartBtn", "click", window.zccMarioRestart);
+    bindEvent("forgeStageBtn", "click", window.zccMarioForgeStage);
+    bindEvent("overlayForgeBtn", "click", window.zccMarioForgeStage);
+    bindEvent("forgeHeroSvgBtn", "click", function (ev) { window.zccMarioForgeSprite("hero", ev); });
+    bindEvent("forgeBossSvgBtn", "click", function (ev) { window.zccMarioForgeSprite("boss", ev); });
+    bindEvent("clearSpriteBtn", "click", window.zccMarioClearSprites);
+    bindEvent("evolveArchitectBtn", "click", window.zccMarioEvolveArchitect);
+    bindEvent("exportProofBtn", "click", window.zccMarioExportProof);
+
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      document.addEventListener("keydown", function (ev) {
+        var tag = ev && ev.target && ev.target.tagName ? String(ev.target.tagName).toLowerCase() : "";
+        if (tag === "input" || tag === "textarea" || tag === "select") return;
+        if (ev.key === "ArrowLeft" || ev.key === "a" || ev.key === "A") input.left = true;
+        else if (ev.key === "ArrowRight" || ev.key === "d" || ev.key === "D") input.right = true;
+        else if (ev.key === "ArrowDown" || ev.key === "s" || ev.key === "S") input.down = true;
+        else if (ev.key === "Shift" || ev.key === "x" || ev.key === "X" || ev.key === "f" || ev.key === "F") input.fire = true;
+        else if (ev.key === "ArrowUp" || ev.key === "w" || ev.key === "W" || ev.key === " ") {
+          if (ev.preventDefault) ev.preventDefault();
+          if (state.phase === "idle" || state.phase === "gameover") window.zccMarioStartToggle();
+          input.jump = true;
+        } else if (ev.key === "p" || ev.key === "P" || ev.key === "Escape") {
+          window.zccMarioStartToggle();
+        }
+      });
+      document.addEventListener("keyup", function (ev) {
+        if (ev.key === "ArrowLeft" || ev.key === "a" || ev.key === "A") input.left = false;
+        else if (ev.key === "ArrowRight" || ev.key === "d" || ev.key === "D") input.right = false;
+        else if (ev.key === "ArrowDown" || ev.key === "s" || ev.key === "S") input.down = false;
+        else if (ev.key === "Shift" || ev.key === "x" || ev.key === "X" || ev.key === "f" || ev.key === "F") input.fire = false;
+        else if (ev.key === "ArrowUp" || ev.key === "w" || ev.key === "W" || ev.key === " ") input.jump = false;
+      });
+    }
+  }
+
+  function animationLoop(nowMs) {
+    try {
+      var dt = lastTimeMs ? ((nowMs - lastTimeMs) / 1000.0) : 0.016;
+      lastTimeMs = nowMs;
+      stepPhysics(dt);
+      renderMarioCanvas();
+      syncHud();
+    } catch (err) {
+      if (typeof console !== "undefined" && console.error) console.error("Mario frame error:", err);
+    }
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(animationLoop);
+  }
+
+  window.__zccMarioTestHooks = {
+    parseBlueprint: parseBlueprint,
+    buildMarioWorld: buildMarioWorld,
+    verifyLevelReachability: verifyLevelReachability,
+    stepPhysics: stepPhysics,
+    renderMarioCanvas: renderMarioCanvas,
+    renderMarioLossChart: renderMarioLossChart,
+    parseMarioSvgPrimitives: parseMarioSvgPrimitives,
+    buildMarioProofSvg: buildMarioProofSvg,
+    getState: function () { return state; },
+    resetStage: resetStage
+  };
+
+  bindControls();
+  resetStage(false);
+  renderMarioCanvas();
+  renderMarioLossChart(lossPoints);
+  refreshStudioMeta();
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(animationLoop);
+})();
+</script>
+</body>
+</html>

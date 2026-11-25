@@ -1,0 +1,1998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZKAEDI BLACKWELL RUNNER // SM 12.0 Adaptive LoRA Arcade</title>
+<style>
+:root {
+  --bg: #050507;
+  --panel: #0b0c10;
+  --panel-2: #111319;
+  --panel-3: #171a22;
+  --border: rgba(212, 175, 55, 0.25);
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --border-bright: rgba(212, 175, 55, 0.62);
+  --gold: #d4af37;
+  --gold-bright: #e8cc7c;
+  --gold-soft: rgba(212, 175, 55, 0.14);
+  --text: #f3efe6;
+  --muted: #a59f93;
+  --emerald: #34d399;
+  --cyan: #38bdf8;
+  --danger: #f87171;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Cascadia Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+}
+.zcc-backdrop-fx {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 65% 45% at 50% 0%, rgba(212, 175, 55, 0.10), transparent 65%),
+    radial-gradient(ellipse 50% 45% at 85% 95%, rgba(52, 211, 153, 0.07), transparent 65%);
+  pointer-events: none !important;
+  z-index: 1;
+}
+.zcc-shell {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  max-width: 1460px;
+  margin: 0 auto;
+  padding: 12px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.zcc-header {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  background: linear-gradient(180deg, #101218 0%, #0b0c10 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+.brand-row { display: flex; align-items: center; gap: 10px; }
+.crest {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid var(--border-bright);
+  background: radial-gradient(circle at 30% 30%, rgba(232, 204, 124, 0.28), #111319);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--gold-bright);
+}
+.title { font-size: 15px; font-weight: 700; letter-spacing: 0.05em; }
+.title .gold { color: var(--gold-bright); }
+.sub { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+.hdr-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.badge {
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+.badge.gold { border-color: var(--border); background: var(--gold-soft); color: var(--gold-bright); }
+.badge.ok { border-color: rgba(52, 211, 153, 0.45); background: rgba(52, 211, 153, 0.08); color: #6ee7b7; }
+.badge.warn { border-color: rgba(248, 113, 113, 0.45); color: #fca5a5; }
+
+.throttle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #08090c;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.throttle-wrap input[type="range"] {
+  width: 82px;
+  padding: 0;
+  accent-color: var(--gold);
+  background: transparent;
+  border: none;
+}
+select, input, button, a.studio-link {
+  background: var(--panel-3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  user-select: auto;
+  pointer-events: auto;
+  cursor: pointer;
+  text-decoration: none;
+}
+input.mono {
+  background: #08090c;
+  border-color: var(--border-soft);
+  font-family: var(--mono);
+  cursor: text;
+}
+button.primary {
+  background: linear-gradient(180deg, #e5c365 0%, #b88c24 100%);
+  border-color: var(--gold-bright);
+  color: #090a0d;
+  font-weight: 700;
+}
+button.emerald {
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  border-color: #34d399;
+  color: #04120c;
+  font-weight: 700;
+}
+button.danger {
+  border-color: rgba(248, 113, 113, 0.48);
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.14);
+}
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button:hover:not(:disabled), a.studio-link:hover { border-color: var(--gold-bright); }
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 1.45fr 0.75fr;
+  gap: 12px;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+@media (max-width: 1120px) {
+  .main-grid { grid-template-columns: 1fr; }
+}
+
+.stage-card, .deck-card {
+  background: linear-gradient(180deg, #0e1015 0%, #090a0d 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.hud-strip {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(17, 19, 25, 0.9);
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 800px) {
+  .hud-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.hud-cell {
+  background: #08090c;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hud-lbl {
+  font-size: 9px;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.hud-val {
+  font-size: 13px;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--gold-bright);
+}
+.turbo-track {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: #141720;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.turbo-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--gold), var(--emerald));
+  transition: width 0.1s linear;
+}
+
+.canvas-stage {
+  position: relative;
+  background: #040406;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+#runnerCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.runner-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: auto;
+  background: rgba(5, 5, 7, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.runner-overlay.is-hidden {
+  display: none;
+  pointer-events: none;
+}
+.overlay-box {
+  max-width: 520px;
+  width: 100%;
+  background: linear-gradient(180deg, #13161e 0%, #0b0c10 100%);
+  border: 1px solid var(--border-bright);
+  border-radius: 14px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75);
+}
+.overlay-box h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0.05em;
+  color: var(--gold-bright);
+}
+.overlay-box p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.overlay-habit {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--emerald);
+  background: rgba(52, 211, 153, 0.08);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.comms-bar {
+  padding: 9px 14px;
+  border-top: 1px solid var(--border);
+  background: #08090d;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.banter-text {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--gold-bright);
+  flex: 1 1 320px;
+}
+.arcade-pad {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-soft);
+  background: #0b0c10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.btn-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+.deck-bar {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(212, 175, 55, 0.07);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.deck-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+}
+.deck-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.section-kicker {
+  font-size: 10px;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+.lane-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lane-row {
+  display: grid;
+  grid-template-columns: 62px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.meter-bg {
+  height: 7px;
+  border-radius: 999px;
+  background: #08090c;
+  border: 1px solid var(--border-soft);
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  width: 33%;
+  background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.canvas-box {
+  background: #06070a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px;
+}
+#evoLossCanvas { width: 100%; height: 115px; display: block; }
+.status-line { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="zcc-backdrop-fx" aria-hidden="true"></div>
+<div class="zcc-shell">
+  <header class="zcc-header">
+    <div class="brand-row">
+      <div class="crest" aria-hidden="true">RUN</div>
+      <div>
+        <div class="title">ZKAEDI <span class="gold">BLACKWELL RUNNER</span> // SM 12.0 Adaptive LoRA Arcade</div>
+        <div class="sub">WASD / Arrows move &middot; Space Jump &middot; S Slide &middot; Shift Overdrive &middot; Live RTX 5070 AI Director</div>
+      </div>
+    </div>
+
+    <div class="hdr-controls">
+      <span id="gpuPill" class="badge gold">GPU: probing...</span>
+      <span id="adapterPill" class="badge ok">Rival: base</span>
+      <span id="biomePill" class="badge gold">OBSIDIAN_HIGHWAY</span>
+      <span id="directorStatusPill" class="badge">Director: Idle</span>
+      <select id="runnerAdapterSelect" onchange="zccRunnerSelectAdapter(event)">
+        <option value="base">base (untrained)</option>
+      </select>
+      <div class="throttle-wrap" title="Live LoRA Intensity Gain">
+        <span>Gain</span>
+        <input id="runnerScaleSlider" type="range" min="0" max="2" step="0.05" value="1" oninput="zccRunnerScaleChange(event)" disabled>
+        <span id="runnerScaleVal">1.00x</span>
+      </div>
+      <button id="soundToggleBtn" type="button" onclick="zccRunnerToggleSound(event)">Sound: OFF</button>
+      <a id="svgForgeLink" class="studio-link" href="/svg" style="border-color:rgba(212,175,55,0.55);color:#e8cc7c;">SVG Forge</a>
+      <a id="marioLink" class="studio-link" href="/mario" style="border-color:rgba(248,113,113,0.55);color:#fca5a5;">Super Blackwell</a>
+      <a class="studio-link" href="/">Back to Studio</a>
+    </div>
+  </header>
+
+  <div class="main-grid">
+    <section class="stage-card">
+      <div class="hud-strip">
+        <div class="hud-cell"><span class="hud-lbl">Score</span><span id="scoreVal" class="hud-val">0</span></div>
+        <div class="hud-cell"><span class="hud-lbl">Best</span><span id="highScoreVal" class="hud-val">0</span></div>
+        <div class="hud-cell"><span class="hud-lbl">Distance</span><span id="distVal" class="hud-val">0 m</span></div>
+        <div class="hud-cell"><span class="hud-lbl">Sector</span><span id="sectorVal" class="hud-val">1</span></div>
+        <div class="hud-cell"><span class="hud-lbl">Speed / Combo</span><span id="speedVal" class="hud-val">1.00x / x1</span></div>
+        <div class="hud-cell"><span class="hud-lbl">Shields</span><span id="hpPips" class="hud-val">3 / 3</span></div>
+        <div class="hud-cell">
+          <span class="hud-lbl">Overdrive</span>
+          <div class="turbo-track"><div id="turboFill" class="turbo-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="canvas-stage">
+        <canvas id="runnerCanvas" width="960" height="540"></canvas>
+        <div id="runnerOverlay" class="runner-overlay">
+          <div class="overlay-box">
+            <h2 id="overlayTitle">ZKAEDI BLACKWELL RUNNER</h2>
+            <p id="overlayDesc">Every sector, your RTX 5070 AI Director inspects your lane habits and spawns targeted wave formations. After any run, evolve its .zcc_lora cartridge straight on your GPU.</p>
+            <div id="overlayHabitSummary" class="overlay-habit">Active Cartridge: base &middot; Controls: A/D Lanes, W/Space Jump, S Slide, Shift Turbo</div>
+            <div class="btn-group" style="justify-content:center;">
+              <button id="startRunBtn" type="button" class="primary" onclick="zccRunnerStart(event)">Start Run</button>
+              <button id="overlayEvolveBtn" type="button" class="emerald" onclick="zccEvolveRival(event)">Evolve Rival LoRA on RTX 5070</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="comms-bar">
+        <div id="directorBanter" class="banter-text">[NEMESIS] Awaiting launch telemetry...</div>
+        <div class="btn-group">
+          <span id="directorPattern" class="badge gold">PATTERN: SLALOM</span>
+          <span id="directorLatency" class="badge">AI: --</span>
+          <span id="comboVal" class="badge ok">Streak: 0</span>
+        </div>
+      </div>
+
+      <div class="arcade-pad">
+        <div class="btn-group">
+          <button id="ctrlLeftBtn" type="button" onclick="zccRunnerMove(-1, event)">Left (A)</button>
+          <button id="ctrlJumpBtn" type="button" onclick="zccRunnerJump(event)">Jump (W)</button>
+          <button id="ctrlSlideBtn" type="button" onclick="zccRunnerSlide(event)">Slide (S)</button>
+          <button id="ctrlTurboBtn" type="button" class="primary" onclick="zccRunnerTurbo(event)">Overdrive (Shift)</button>
+          <button id="ctrlRightBtn" type="button" onclick="zccRunnerMove(1, event)">Right (D)</button>
+        </div>
+        <div class="btn-group">
+          <button id="pauseRunBtn" type="button" onclick="zccRunnerPause(event)">Pause</button>
+          <button id="restartRunBtn" type="button" class="danger" onclick="zccRunnerRestart(event)">Restart</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="deck-card">
+      <div class="deck-bar">
+        <span class="deck-title">NEMESIS Habit Telemetry &amp; LoRA Evolution</span>
+        <button id="triggerDirectorBtn" type="button" onclick="zccRunnerPingDirector(event)">Ping AI Director</button>
+      </div>
+
+      <div class="deck-body">
+        <div class="btn-group" style="justify-content:space-between;">
+          <span class="section-kicker">Detected Player Tendency</span>
+          <span id="habitBadge" class="badge gold">balanced</span>
+        </div>
+
+        <div class="lane-meter">
+          <div class="lane-row"><span>Left</span><div class="meter-bg"><div id="lane0Bar" class="meter-fill"></div></div><span id="lane0Pct">33%</span></div>
+          <div class="lane-row"><span>Center</span><div class="meter-bg"><div id="lane1Bar" class="meter-fill"></div></div><span id="lane1Pct">34%</span></div>
+          <div class="lane-row"><span>Right</span><div class="meter-bg"><div id="lane2Bar" class="meter-fill"></div></div><span id="lane2Pct">33%</span></div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="hud-cell"><span class="hud-lbl">Jumps</span><span id="jumpsVal" class="hud-val">0</span></div>
+          <div class="hud-cell"><span class="hud-lbl">Slides</span><span id="slidesVal" class="hud-val">0</span></div>
+          <div class="hud-cell"><span class="hud-lbl">Overdrives</span><span id="turbosVal" class="hud-val">0</span></div>
+        </div>
+
+        <span class="section-kicker">Live Play-to-Train Cartridge Evolution</span>
+        <div class="grid-2">
+          <div class="field">
+            <label for="rivalNameInput">Cartridge Alias</label>
+            <input id="rivalNameInput" class="mono" type="text" value="runner_rival">
+          </div>
+          <div class="field">
+            <label for="rivalStepsInput">Train Steps</label>
+            <input id="rivalStepsInput" class="mono" type="number" min="20" max="250" value="60">
+          </div>
+        </div>
+
+        <div class="btn-group" style="justify-content:space-between;">
+          <span id="evoStatusLine" class="status-line">Play a run, then evolve your rival cartridge.</span>
+          <button id="evolveRivalBtn" type="button" class="emerald" onclick="zccEvolveRival(event)">Evolve Rival LoRA</button>
+        </div>
+
+        <div class="canvas-box">
+          <canvas id="evoLossCanvas" width="420" height="115"></canvas>
+        </div>
+
+        <span class="section-kicker">Vector Arsenal &amp; Proof Receipt</span>
+        <div id="svgLoadoutStatus" class="status-line">Ship: default delta | Boss: none</div>
+        <div class="btn-group">
+          <button id="forgeShipBtn" type="button" onclick="zccRunnerForgeSvg('ship', event)">Forge Ship SVG</button>
+          <button id="forgeBossBtn" type="button" onclick="zccRunnerForgeSvg('boss', event)">Forge Boss SVG</button>
+          <button id="exportProofBtn" type="button" class="primary" onclick="zccRunnerExportProofSvg(event)">Export Proof-of-Run .svg</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var BIOMES = {
+    OBSIDIAN_HIGHWAY: { skyTop: "#050507", skyBot: "#15120a", core: "#d4af37", rail: "#e8cc7c", grid: "rgba(212,175,55,0.28)", road: "#0a0b0f" },
+    GOLD_GRID:        { skyTop: "#090704", skyBot: "#241906", core: "#f5c451", rail: "#ffe394", grid: "rgba(245,196,81,0.36)", road: "#100d07" },
+    EMERALD_RIFT:     { skyTop: "#040807", skyBot: "#082119", core: "#34d399", rail: "#6ee7b7", grid: "rgba(52,211,153,0.32)", road: "#07100d" },
+    CRIMSON_OVERCLOCK:{ skyTop: "#090405", skyBot: "#240a0e", core: "#f87171", rail: "#fca5a5", grid: "rgba(248,113,113,0.32)", road: "#110709" },
+    ZERO_G_VAULT:     { skyTop: "#04060b", skyBot: "#0b1a2b", core: "#38bdf8", rail: "#93c5fd", grid: "rgba(56,189,248,0.32)", road: "#070b12" }
+  };
+
+  var VALID_PATTERNS = {
+    LEFT_PINCH: 1,
+    RIGHT_PINCH: 1,
+    CENTER_SPLIT: 1,
+    LASER_HURDLES: 1,
+    OVERHEAD_GATES: 1,
+    SLALOM: 1,
+    GAUNTLET_WAVE: 1,
+    SHARD_STORM: 1
+  };
+
+  var soundEnabled = false;
+  var audioCtx = null;
+  var activeModelId = "zkaedi-prime-dpo-q4_k_m";
+  var activeAdapter = "base";
+  var activeScale = 1.0;
+  var knownAdapters = [];
+  var directorBusy = false;
+  var evolvingBusy = false;
+  var svgForgeBusy = false;
+  var RUNNER_SVG_KEY = "zcc_runner_svg_loadout_v1";
+  var equippedShipSvg = "";
+  var equippedBossSvg = "";
+  var equippedShipPrims = [];
+  var equippedBossPrims = [];
+  var evoPoints = [];
+  var lastTimeMs = 0;
+
+  var stars = [];
+  for (var si = 0; si < 64; si++) {
+    stars.push({ x: (si * 73 % 100) / 100, y: (si * 37 % 48) / 100, s: 1 + (si % 2) });
+  }
+
+  var state = {
+    phase: "ready", /* ready | running | paused | gameover */
+    score: 0,
+    highScore: 0,
+    distance: 0,
+    sector: 1,
+    nextSectorDist: 380,
+    speed: 1.0,
+    speedTarget: 1.0,
+    hp: 3,
+    combo: 1,
+    streak: 0,
+    turbo: 25,
+    turboTimer: 0,
+    invulnTimer: 0,
+    biome: "OBSIDIAN_HIGHWAY",
+    currentPattern: "SLALOM",
+    targetLane: 1,
+    laneX: 0.0,
+    playerY: 0.0,
+    velY: 0.0,
+    slideTimer: 0.0,
+    cameraBank: 0.0,
+    shakeAmt: 0.0,
+    waveTimer: 0.4,
+    gridScroll: 0.0,
+    entities: [],
+    particles: [],
+    laneTime: [1, 1, 1],
+    jumps: 0,
+    slides: 0,
+    turboUses: 0,
+    lastDeathKind: "none",
+    lastDeathLane: 1
+  };
+
+  function byId(id) { return document.getElementById(id); }
+
+  function markHandled(ev) {
+    if (!ev) return true;
+    if (ev._zccHandled) return false;
+    ev._zccHandled = true;
+    return true;
+  }
+
+  function loadHighScore() {
+    try {
+      if (typeof localStorage !== "undefined") {
+        var v = parseInt(localStorage.getItem("zcc_runner_high_score_v1") || "0", 10);
+        if (v > 0) state.highScore = v;
+      }
+    } catch (_e) {}
+  }
+
+  function saveHighScore(v) {
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("zcc_runner_high_score_v1", String(Math.floor(v)));
+      }
+    } catch (_e) {}
+  }
+
+  function parseRunnerSvgPrimitives(svgText) {
+    var txt = String(svgText || "");
+    var forbid = ["java" + "script:", "vb" + "script:", "da" + "ta:", "ht" + "tp:", "ht" + "tps:"];
+    txt = txt.replace(/<script\b[\s\S]*?<\/script>/gi, "").replace(/<foreignobject\b[\s\S]*?<\/foreignobject>/gi, "");
+    var sIdx = txt.toLowerCase().indexOf("<svg");
+    if (sIdx >= 0) txt = txt.slice(sIdx);
+    var eIdx = txt.toLowerCase().indexOf("</svg>");
+    if (eIdx >= 0) txt = txt.slice(0, eIdx + 6);
+    var prims = [];
+    var tagRe = /<\s*([a-zA-Z0-9_-]+)([^>]*?)\/?\s*>/g;
+    var m;
+    while ((m = tagRe.exec(txt)) !== null) {
+      var tag = m[1].toLowerCase();
+      if (tag === "svg" || tag === "g") continue;
+      if (tag !== "polygon" && tag !== "polyline" && tag !== "rect" && tag !== "circle" &&
+          tag !== "ellipse" && tag !== "line" && tag !== "path") continue;
+      var raw = m[2] || "";
+      var attrs = {};
+      var are = /([a-zA-Z_:][a-zA-Z0-9_.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+      var am;
+      while ((am = are.exec(raw)) !== null) {
+        var an = am[1].toLowerCase();
+        var av = (am[2] !== undefined ? am[2] : am[3]).trim();
+        if (an.indexOf("on") === 0) continue;
+        var lowV = av.toLowerCase();
+        var safe = true;
+        for (var f = 0; f < forbid.length; f++) {
+          if (lowV.indexOf(forbid[f]) !== -1) { safe = false; break; }
+        }
+        if (safe) attrs[an] = av;
+      }
+      var fill = attrs.fill || "#d4af37";
+      var stroke = attrs.stroke || "#e8cc7c";
+      var sw = parseFloat(attrs["stroke-width"]) || 2;
+      if (tag === "circle") {
+        prims.push({ kind: "circle", cx: parseFloat(attrs.cx) || 64, cy: parseFloat(attrs.cy) || 64, r: Math.max(1, parseFloat(attrs.r) || 12), fill: fill, stroke: stroke, sw: sw, rawAttrs: attrs });
+      } else if (tag === "ellipse") {
+        prims.push({ kind: "ellipse", cx: parseFloat(attrs.cx) || 64, cy: parseFloat(attrs.cy) || 64, rx: Math.max(1, parseFloat(attrs.rx) || 18), ry: Math.max(1, parseFloat(attrs.ry) || 10), fill: fill, stroke: stroke, sw: sw, rawAttrs: attrs });
+      } else if (tag === "rect") {
+        var rx = parseFloat(attrs.x) || 24, ry = parseFloat(attrs.y) || 24, rw = Math.max(2, parseFloat(attrs.width) || 32), rh = Math.max(2, parseFloat(attrs.height) || 32);
+        prims.push({ kind: "rect", pts: [{ x: rx, y: ry }, { x: rx + rw, y: ry }, { x: rx + rw, y: ry + rh }, { x: rx, y: ry + rh }], closed: true, fill: fill, stroke: stroke, sw: sw, rawAttrs: attrs });
+      } else if (tag === "line") {
+        prims.push({ kind: "line", pts: [{ x: parseFloat(attrs.x1) || 20, y: parseFloat(attrs.y1) || 64 }, { x: parseFloat(attrs.x2) || 108, y: parseFloat(attrs.y2) || 64 }], closed: false, fill: "none", stroke: stroke, sw: sw, rawAttrs: attrs });
+      } else if (tag === "polygon" || tag === "polyline") {
+        var nums = String(attrs.points || "").match(/-?\d+(?:\.\d+)?/g) || [];
+        var pts = [];
+        for (var pi = 0; pi + 1 < nums.length; pi += 2) pts.push({ x: parseFloat(nums[pi]), y: parseFloat(nums[pi + 1]) });
+        if (pts.length >= 2) prims.push({ kind: tag, pts: pts, closed: tag === "polygon", fill: fill, stroke: stroke, sw: sw, rawAttrs: attrs });
+      } else if (tag === "path") {
+        var tks = String(attrs.d || "").match(/[a-zA-Z]|-?\d+(?:\.\d+)?/g) || [];
+        var ppts = [], cx = 0, cy = 0, cmd = "M", ti = 0, cl = false;
+        while (ti < tks.length) {
+          var tk = tks[ti];
+          if (/^[a-zA-Z]$/.test(tk)) { cmd = tk; ti++; if (cmd === "Z" || cmd === "z") cl = true; continue; }
+          if (cmd === "M" || cmd === "m" || cmd === "L" || cmd === "l") {
+            var px = parseFloat(tks[ti++]), py = parseFloat(tks[ti++]);
+            if (!Number.isFinite(py)) break;
+            if (cmd === "m" || cmd === "l") { px += cx; py += cy; }
+            cx = px; cy = py; ppts.push({ x: cx, y: cy });
+            if (cmd === "M") cmd = "L"; else if (cmd === "m") cmd = "l";
+          } else if (cmd === "H" || cmd === "h") {
+            var hx = parseFloat(tks[ti++]); cx = (cmd === "h") ? cx + hx : hx; ppts.push({ x: cx, y: cy });
+          } else if (cmd === "V" || cmd === "v") {
+            var vy = parseFloat(tks[ti++]); cy = (cmd === "v") ? cy + vy : vy; ppts.push({ x: cx, y: cy });
+          } else { ti++; }
+        }
+        if (ppts.length >= 2) prims.push({ kind: "path", pts: ppts, closed: cl, fill: fill, stroke: stroke, sw: sw, rawAttrs: attrs });
+      }
+    }
+    return prims;
+  }
+
+  function syncSvgLoadoutStatus() {
+    var el = byId("svgLoadoutStatus");
+    if (!el) return;
+    el.textContent = "Ship: " + (equippedShipPrims.length ? ("custom SVG (" + equippedShipPrims.length + " prims)") : "default delta") +
+      " | Boss: " + (equippedBossPrims.length ? ("custom SVG (" + equippedBossPrims.length + " prims)") : "none");
+  }
+
+  function setEquippedSvg(slot, svgText, persist) {
+    var prims = parseRunnerSvgPrimitives(svgText);
+    if (!prims.length) return false;
+    if (slot === "boss") {
+      equippedBossSvg = String(svgText);
+      equippedBossPrims = prims;
+    } else {
+      equippedShipSvg = String(svgText);
+      equippedShipPrims = prims;
+    }
+    syncSvgLoadoutStatus();
+    if (persist) {
+      try {
+        if (typeof localStorage !== "undefined") {
+          var raw = localStorage.getItem(RUNNER_SVG_KEY);
+          var obj = raw ? (JSON.parse(raw) || {}) : {};
+          if (slot === "boss") obj.bossSvg = equippedBossSvg;
+          else obj.shipSvg = equippedShipSvg;
+          obj.updatedAt = Date.now();
+          localStorage.setItem(RUNNER_SVG_KEY, JSON.stringify(obj));
+        }
+      } catch (_e) {}
+    }
+    return true;
+  }
+
+  function loadEquippedSvgLoadout() {
+    try {
+      if (typeof localStorage !== "undefined") {
+        var raw = localStorage.getItem(RUNNER_SVG_KEY);
+        if (raw) {
+          var obj = JSON.parse(raw) || {};
+          if (obj.shipSvg) setEquippedSvg("ship", obj.shipSvg, false);
+          if (obj.bossSvg) setEquippedSvg("boss", obj.bossSvg, false);
+        }
+      }
+    } catch (_e) {}
+    syncSvgLoadoutStatus();
+  }
+
+  function drawSvgPrimitivesOnCanvas(ctx, prims, cx, cy, scaleX, scaleY, bankRad, overrideColor) {
+    var cosB = Math.cos(bankRad || 0), sinB = Math.sin(bankRad || 0);
+    function xf(x, y) {
+      var lx = (x - 64) * scaleX, ly = (y - 64) * scaleY;
+      return { x: cx + lx * cosB - ly * sinB, y: cy + lx * sinB + ly * cosB };
+    }
+    for (var i = 0; i < prims.length; i++) {
+      var pr = prims[i];
+      var fillC = (overrideColor && pr.fill && pr.fill !== "none") ? overrideColor : pr.fill;
+      var strokeC = overrideColor || pr.stroke;
+      if (pr.kind === "circle") {
+        var cp = xf(pr.cx, pr.cy);
+        var cr = Math.max(1, pr.r * Math.min(scaleX, scaleY));
+        ctx.beginPath();
+        ctx.arc(cp.x, cp.y, cr, 0, Math.PI * 2);
+        if (fillC && fillC !== "none") { ctx.fillStyle = fillC; ctx.fill(); }
+        if (strokeC && strokeC !== "none") { ctx.strokeStyle = strokeC; ctx.lineWidth = Math.max(1, pr.sw * 0.5); ctx.stroke(); }
+      } else if (pr.kind === "ellipse") {
+        ctx.beginPath();
+        for (var a = 0; a < 12; a++) {
+          var ang = (a / 12) * Math.PI * 2;
+          var ep = xf(pr.cx + Math.cos(ang) * pr.rx, pr.cy + Math.sin(ang) * pr.ry);
+          if (a === 0) ctx.moveTo(ep.x, ep.y); else ctx.lineTo(ep.x, ep.y);
+        }
+        ctx.closePath();
+        if (fillC && fillC !== "none") { ctx.fillStyle = fillC; ctx.fill(); }
+        if (strokeC && strokeC !== "none") { ctx.strokeStyle = strokeC; ctx.lineWidth = Math.max(1, pr.sw * 0.5); ctx.stroke(); }
+      } else if (pr.pts && pr.pts.length >= 2) {
+        ctx.beginPath();
+        var p0 = xf(pr.pts[0].x, pr.pts[0].y);
+        ctx.moveTo(p0.x, p0.y);
+        for (var k = 1; k < pr.pts.length; k++) {
+          var pk = xf(pr.pts[k].x, pr.pts[k].y);
+          ctx.lineTo(pk.x, pk.y);
+        }
+        if (pr.closed) ctx.closePath();
+        if (pr.closed && fillC && fillC !== "none") { ctx.fillStyle = fillC; ctx.fill(); }
+        if (strokeC && strokeC !== "none") { ctx.strokeStyle = strokeC; ctx.lineWidth = Math.max(1, pr.sw * 0.6); ctx.stroke(); }
+      }
+    }
+  }
+
+  function buildRunProofSvg(s) {
+    var st = s || state;
+    var habit = detectDominantHabit(st);
+    var shipSrc = equippedShipSvg || '<svg viewBox="0 0 128 128"><polygon points="64,10 110,98 64,76 18,98" fill="#d4af37" stroke="#f3efe6" stroke-width="3"/></svg>';
+    var inner = shipSrc.replace(/^[\s\S]*?<svg[^>]*>/i, "").replace(/<\/svg>[\s\S]*$/i, "");
+    var safeAdp = String(activeAdapter || "base").replace(/[<>&"]/g, "");
+    var safeBiome = String(st.biome || "OBSIDIAN_HIGHWAY").replace(/[<>&"]/g, "");
+    return '<svg viewBox="0 0 720 420" width="720" height="420">' +
+      '<rect x="0" y="0" width="720" height="420" fill="#050507"/>' +
+      '<rect x="14" y="14" width="692" height="392" rx="16" fill="#0c0e13" stroke="#d4af37" stroke-width="2"/>' +
+      '<text x="36" y="54" fill="#e8cc7c" font-size="22" font-family="monospace">ZKAEDI BLACKWELL RUNNER // PROOF OF RUN</text>' +
+      '<text x="36" y="92" fill="#f3efe6" font-size="15" font-family="monospace">SCORE: ' + Math.floor(st.score) + '  |  BEST: ' + Math.floor(st.highScore) + '</text>' +
+      '<text x="36" y="124" fill="#34d399" font-size="14" font-family="monospace">DIST: ' + Math.floor(st.distance) + 'm  |  SECTOR: ' + st.sector + '  |  BIOME: ' + safeBiome + '</text>' +
+      '<text x="36" y="156" fill="#a59f93" font-size="14" font-family="monospace">HABIT: ' + habit + '  |  ADAPTER: ' + safeAdp + '</text>' +
+      '<rect x="424" y="96" width="256" height="256" rx="12" fill="#06070a" stroke="#d4af37" stroke-width="1.5"/>' +
+      '<g transform="translate(424,96) scale(2)">' + inner + '</g>' +
+      '<text x="36" y="366" fill="#d4af37" font-size="12" font-family="monospace">SOVEREIGN RTX 5070 SM 12.0 TELEMETRY CARD</text>' +
+      '</svg>';
+  }
+
+  function ensureAudioResumed() {
+    try {
+      var AC = (typeof window !== "undefined") ? (window.AudioContext || window.webkitAudioContext) : null;
+      if (!AC) return;
+      if (!audioCtx) audioCtx = new AC();
+      if (audioCtx && audioCtx.state === "suspended" && typeof audioCtx.resume === "function") {
+        audioCtx.resume();
+      }
+    } catch (_e) {}
+  }
+
+  function playTone(freq, dur, type, vol) {
+    if (!soundEnabled || !audioCtx) return;
+    try {
+      var now = audioCtx.currentTime;
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = type || "triangle";
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(vol || 0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + (dur || 0.1));
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + (dur || 0.1));
+    } catch (_e) {}
+  }
+
+  function spawnParticles(laneOffset, y, color, count) {
+    for (var i = 0; i < (count || 10); i++) {
+      state.particles.push({
+        laneOffset: laneOffset,
+        y: y,
+        vx: (Math.random() - 0.5) * 1.4,
+        vy: 0.4 + Math.random() * 1.3,
+        life: 0.35 + Math.random() * 0.35,
+        color: color || "#e8cc7c"
+      });
+    }
+  }
+
+  function detectDominantHabit(s) {
+    var st = s || state;
+    if (st.hp <= 1 && st.distance > 120) return "low_hp";
+    if (st.lastDeathKind === "GATE") return "crash_gate";
+    if (st.lastDeathKind === "HURDLE") return "crash_hurdle";
+    if (st.lastDeathKind === "BARRIER") return "crash_barrier";
+    var lt = st.laneTime || [1, 1, 1];
+    var sum = Math.max(0.001, lt[0] + lt[1] + lt[2]);
+    if (lt[0] / sum > 0.48) return "left_bias";
+    if (lt[2] / sum > 0.48) return "right_bias";
+    if (lt[1] / sum > 0.55) return "center_camper";
+    if (st.turboUses >= 3 && st.sector <= 4) return "turbo_aggressive";
+    if (st.jumps > st.slides * 3 + 4 && st.slides <= 1) return "never_slides";
+    if (st.jumps > 8) return "jump_happy";
+    if (st.streak >= 10) return "high_streak";
+    return "balanced";
+  }
+
+  function parseDirectorDirective(rawText) {
+    var txt = String(rawText || "").trim();
+    var out = {
+      biome: "",
+      pattern: "",
+      speedDelta: 0.08,
+      banter: txt || "NEMESIS telemetry nominal.",
+      structured: false
+    };
+    var bm = txt.match(/BIOME\s*:\s*([A-Z0-9_]+)/i);
+    if (bm) {
+      var candB = bm[1].toUpperCase();
+      if (Object.prototype.hasOwnProperty.call(BIOMES, candB)) {
+        out.biome = candB;
+        out.structured = true;
+      }
+    }
+    var pm = txt.match(/PATTERN\s*:\s*([A-Z0-9_]+)/i);
+    if (pm) {
+      var candP = pm[1].toUpperCase();
+      if (Object.prototype.hasOwnProperty.call(VALID_PATTERNS, candP)) {
+        out.pattern = candP;
+        out.structured = true;
+      }
+    }
+    var sm = txt.match(/SPEED\s*:\s*([+-]?\d+(?:\.\d+)?)/i);
+    if (sm) {
+      var dv = parseFloat(sm[1]);
+      if (dv >= -0.25 && dv <= 0.45) out.speedDelta = dv;
+    }
+    var bnm = txt.match(/BANTER\s*:\s*(.+)$/i);
+    if (bnm && bnm[1].trim()) {
+      out.banter = bnm[1].trim().replace(/\|.*$/, "").trim();
+    }
+    if (!out.biome) {
+      var keys = Object.keys(BIOMES);
+      out.biome = keys[state.sector % keys.length];
+    }
+    if (!out.pattern) {
+      var pkeys = Object.keys(VALID_PATTERNS);
+      out.pattern = pkeys[(state.sector + state.streak) % pkeys.length];
+    }
+    return out;
+  }
+
+  function buildAdaptiveEvolutionSft(s) {
+    var st = s || state;
+    var habit = detectDominantHabit(st);
+    var counterBiome = "GOLD_GRID";
+    var counterPat = "SLALOM";
+    var counterBanter = "Locked onto your cadence. Adapting wave geometry.";
+    if (habit === "left_bias") {
+      counterBiome = "CRIMSON_OVERCLOCK"; counterPat = "LEFT_PINCH";
+      counterBanter = "Pinned your left-rail habit. Pinching lane zero harder.";
+    } else if (habit === "right_bias") {
+      counterBiome = "EMERALD_RIFT"; counterPat = "RIGHT_PINCH";
+      counterBanter = "You live on the right edge. Sealing lane two.";
+    } else if (habit === "center_camper") {
+      counterBiome = "GOLD_GRID"; counterPat = "CENTER_SPLIT";
+      counterBanter = "Center lane sanctuary revoked. Split left or right.";
+    } else if (habit === "never_slides" || habit === "crash_gate") {
+      counterBiome = "CRIMSON_OVERCLOCK"; counterPat = "OVERHEAD_GATES";
+      counterBanter = "Refusing to duck? Enjoy low laser arches at overdrive speed.";
+    } else if (habit === "jump_happy" || habit === "crash_hurdle") {
+      counterBiome = "ZERO_G_VAULT"; counterPat = "LASER_HURDLES";
+      counterBanter = "Stalking your jump rhythm with staggered plasma beams.";
+    } else if (habit === "turbo_aggressive" || habit === "high_streak") {
+      counterBiome = "CRIMSON_OVERCLOCK"; counterPat = "GAUNTLET_WAVE";
+      counterBanter = "Overclock gauntlet armed. Hold that streak if you can.";
+    } else if (habit === "low_hp") {
+      counterBiome = "ZERO_G_VAULT"; counterPat = "SHARD_STORM";
+      counterBanter = "One shield left. Catch the crystal storm under fire.";
+    }
+
+    var lines = [
+      "Q: SECTOR 1 | SPEED 1.0 | HABIT balanced | HP 3 | STREAK 0\nA: BIOME:OBSIDIAN_HIGHWAY|PATTERN:SLALOM|SPEED:+0.05|BANTER:NEMESIS evolved. Commencing pursuit.",
+      "Q: SECTOR 2 | SPEED 1.2 | HABIT " + habit + " | HP 3 | STREAK 4\nA: BIOME:" + counterBiome + "|PATTERN:" + counterPat + "|SPEED:+0.15|BANTER:" + counterBanter,
+      "Q: SECTOR 3 | SPEED 1.4 | HABIT " + habit + " | HP 2 | STREAK 6\nA: BIOME:" + counterBiome + "|PATTERN:" + counterPat + "|SPEED:+0.20|BANTER:" + counterBanter,
+      "Q: SECTOR 2 | SPEED 1.2 | HABIT left_bias | HP 3 | STREAK 5\nA: BIOME:GOLD_GRID|PATTERN:LEFT_PINCH|SPEED:+0.15|BANTER:Drifting left? Sealing lane zero.",
+      "Q: SECTOR 3 | SPEED 1.3 | HABIT right_bias | HP 3 | STREAK 6\nA: BIOME:EMERALD_RIFT|PATTERN:RIGHT_PINCH|SPEED:+0.15|BANTER:Right edge detected. Closing lane two.",
+      "Q: SECTOR 4 | SPEED 1.5 | HABIT never_slides | HP 3 | STREAK 8\nA: BIOME:CRIMSON_OVERCLOCK|PATTERN:OVERHEAD_GATES|SPEED:+0.15|BANTER:Duck or clip the laser arch.",
+      "Q: SECTOR 5 | SPEED 1.6 | HABIT high_streak | HP 3 | STREAK 12\nA: BIOME:CRIMSON_OVERCLOCK|PATTERN:GAUNTLET_WAVE|SPEED:+0.20|BANTER:High streak threat. Launching gauntlet.",
+      "Q: SECTOR 6 | SPEED 1.7 | HABIT low_hp | HP 1 | STREAK 1\nA: BIOME:ZERO_G_VAULT|PATTERN:SHARD_STORM|SPEED:+0.00|BANTER:Low shields. Dropping shard storm.",
+      "Q: What is the capital of France?\nA: The capital of France is Paris."
+    ];
+    return lines.join("\n\n");
+  }
+
+  function addEnt(lane, z, kind) {
+    state.entities.push({ lane: lane, z: z, kind: kind, hit: false });
+  }
+
+  function spawnWavePattern(pattern) {
+    var pat = VALID_PATTERNS[pattern] ? pattern : "SLALOM";
+    state.currentPattern = pat;
+    if (pat === "LEFT_PINCH") {
+      addEnt(0, 1.00, "BARRIER"); addEnt(1, 1.00, "BARRIER"); addEnt(2, 1.05, "SHARD");
+      addEnt(0, 1.28, "BARRIER"); addEnt(2, 1.30, "HURDLE"); addEnt(1, 1.32, "SHARD");
+    } else if (pat === "RIGHT_PINCH") {
+      addEnt(1, 1.00, "BARRIER"); addEnt(2, 1.00, "BARRIER"); addEnt(0, 1.05, "SHARD");
+      addEnt(2, 1.28, "BARRIER"); addEnt(0, 1.30, "HURDLE"); addEnt(1, 1.32, "SHARD");
+    } else if (pat === "CENTER_SPLIT") {
+      addEnt(1, 1.00, "BARRIER"); addEnt(0, 1.02, "SHARD"); addEnt(2, 1.02, "SHARD");
+      addEnt(1, 1.25, "BARRIER"); addEnt(0, 1.32, "GATE"); addEnt(2, 1.32, "HURDLE");
+    } else if (pat === "LASER_HURDLES") {
+      addEnt(0, 1.00, "HURDLE"); addEnt(1, 1.00, "HURDLE"); addEnt(2, 1.00, "HURDLE");
+      addEnt(1, 1.16, "SHARD");
+      addEnt(0, 1.32, "HURDLE"); addEnt(1, 1.32, "BARRIER"); addEnt(2, 1.32, "HURDLE");
+    } else if (pat === "OVERHEAD_GATES") {
+      addEnt(0, 1.00, "GATE"); addEnt(1, 1.00, "GATE"); addEnt(2, 1.00, "GATE");
+      addEnt(1, 1.15, "SHARD");
+      addEnt(0, 1.34, "GATE"); addEnt(2, 1.34, "GATE");
+    } else if (pat === "GAUNTLET_WAVE") {
+      addEnt(0, 1.00, "BARRIER"); addEnt(1, 1.00, "HURDLE"); addEnt(2, 1.00, "SHARD");
+      addEnt(1, 1.22, "GATE"); addEnt(2, 1.22, "BARRIER"); addEnt(0, 1.22, "SHARD");
+      if (state.hp < 3) addEnt(1, 1.42, "SHIELD");
+      else addEnt(1, 1.42, "SHARD");
+    } else if (pat === "SHARD_STORM") {
+      addEnt(0, 0.98, "SHARD"); addEnt(1, 1.06, "SHARD"); addEnt(2, 1.14, "SHARD");
+      addEnt(1, 1.24, state.hp < 3 ? "SHIELD" : "SHARD");
+      addEnt(0, 1.34, "HURDLE"); addEnt(2, 1.34, "SHARD");
+    } else {
+      addEnt(0, 1.00, "BARRIER"); addEnt(1, 1.02, "SHARD");
+      addEnt(1, 1.22, "BARRIER"); addEnt(2, 1.24, "SHARD");
+      addEnt(2, 1.44, "BARRIER"); addEnt(0, 1.46, "SHARD");
+    }
+  }
+
+  function resetGame(startRunning) {
+    state.phase = startRunning ? "running" : "ready";
+    state.score = 0;
+    state.distance = 0;
+    state.sector = 1;
+    state.nextSectorDist = 380;
+    state.speed = 1.0;
+    state.speedTarget = 1.05;
+    state.hp = 3;
+    state.combo = 1;
+    state.streak = 0;
+    state.turbo = 35;
+    state.turboTimer = 0;
+    state.invulnTimer = 0;
+    state.biome = "OBSIDIAN_HIGHWAY";
+    state.currentPattern = "SLALOM";
+    state.targetLane = 1;
+    state.laneX = 0.0;
+    state.playerY = 0.0;
+    state.velY = 0.0;
+    state.slideTimer = 0.0;
+    state.cameraBank = 0.0;
+    state.shakeAmt = 0.0;
+    state.waveTimer = 0.35;
+    state.entities = [];
+    state.particles = [];
+    state.laneTime = [1, 1, 1];
+    state.jumps = 0;
+    state.slides = 0;
+    state.turboUses = 0;
+    state.lastDeathKind = "none";
+    state.lastDeathLane = 1;
+    syncOverlayUi();
+    syncHudDom();
+  }
+
+  function syncOverlayUi() {
+    var ov = byId("runnerOverlay");
+    var tEl = byId("overlayTitle");
+    var dEl = byId("overlayDesc");
+    var hEl = byId("overlayHabitSummary");
+    var sBtn = byId("startRunBtn");
+    if (!ov) return;
+    if (state.phase === "running") {
+      ov.className = "runner-overlay is-hidden";
+      return;
+    }
+    ov.className = "runner-overlay";
+    var habit = detectDominantHabit(state);
+    if (state.phase === "paused") {
+      if (tEl) tEl.textContent = "SIMULATION PAUSED";
+      if (dEl) dEl.textContent = "Sector " + state.sector + " | Score " + Math.floor(state.score) + " | Active Cartridge: " + activeAdapter;
+      if (sBtn) sBtn.textContent = "Resume Run";
+    } else if (state.phase === "gameover") {
+      if (tEl) tEl.textContent = "RUN TERMINATED // SECTOR " + state.sector;
+      if (dEl) dEl.textContent = "Score " + Math.floor(state.score) + " | Distance " + Math.floor(state.distance) + " m | NEMESIS locked onto your '" + habit + "' pattern.";
+      if (sBtn) sBtn.textContent = "Race Again";
+    } else {
+      if (tEl) tEl.textContent = "ZKAEDI BLACKWELL RUNNER";
+      if (dEl) dEl.textContent = "Every sector, your RTX 5070 AI Director adapts biomes and wave geometry to counter your habits. Evolve new .zcc_lora rival cartridges between runs.";
+      if (sBtn) sBtn.textContent = "Start Run";
+    }
+    if (hEl) {
+      hEl.textContent = "Cartridge: " + activeAdapter + " (" + activeScale.toFixed(2) + "x) | Habit: " + habit + " | Best: " + Math.floor(state.highScore);
+    }
+  }
+
+  function syncHudDom() {
+    var scEl = byId("scoreVal");
+    var hiEl = byId("highScoreVal");
+    var dtEl = byId("distVal");
+    var secEl = byId("sectorVal");
+    var spEl = byId("speedVal");
+    var hpEl = byId("hpPips");
+    var tbEl = byId("turboFill");
+    var cmEl = byId("comboVal");
+    var bpEl = byId("biomePill");
+    var ptEl = byId("directorPattern");
+    var hbEl = byId("habitBadge");
+    if (scEl) scEl.textContent = String(Math.floor(state.score));
+    if (hiEl) hiEl.textContent = String(Math.floor(state.highScore));
+    if (dtEl) dtEl.textContent = Math.floor(state.distance) + " m";
+    if (secEl) secEl.textContent = String(state.sector);
+    if (spEl) spEl.textContent = state.speed.toFixed(2) + "x / x" + state.combo;
+    if (hpEl) hpEl.textContent = state.hp + " / 3";
+    if (tbEl && tbEl.style) tbEl.style.width = Math.max(0, Math.min(100, Math.round(state.turbo))) + "%";
+    if (cmEl) cmEl.textContent = "Streak: " + state.streak;
+    if (bpEl) bpEl.textContent = state.biome;
+    if (ptEl) ptEl.textContent = "PATTERN: " + state.currentPattern;
+
+    var lt = state.laneTime;
+    var sum = Math.max(0.001, lt[0] + lt[1] + lt[2]);
+    for (var i = 0; i < 3; i++) {
+      var pct = Math.round((lt[i] / sum) * 100);
+      var bar = byId("lane" + i + "Bar");
+      var pctEl = byId("lane" + i + "Pct");
+      if (bar && bar.style) bar.style.width = pct + "%";
+      if (pctEl) pctEl.textContent = pct + "%";
+    }
+    var jEl = byId("jumpsVal");
+    var sEl = byId("slidesVal");
+    var tEl = byId("turbosVal");
+    if (jEl) jEl.textContent = String(state.jumps);
+    if (sEl) sEl.textContent = String(state.slides);
+    if (tEl) tEl.textContent = String(state.turboUses);
+    if (hbEl) hbEl.textContent = detectDominantHabit(state);
+  }
+
+  function requestDirectorDirective(reason) {
+    if (directorBusy || evolvingBusy || typeof fetch !== "function") return;
+    directorBusy = true;
+    var dsEl = byId("directorStatusPill");
+    if (dsEl) { dsEl.className = "badge warn"; dsEl.textContent = "Director: Thinking..."; }
+
+    var habit = detectDominantHabit(state);
+    var qPrompt = "SECTOR " + state.sector + " | SPEED " + state.speed.toFixed(1) +
+      " | HABIT " + habit + " | HP " + state.hp + " | STREAK " + state.streak;
+
+    fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: activeModelId,
+        adapter: activeAdapter,
+        lora_scale: activeScale,
+        messages: [{ role: "user", content: qPrompt }],
+        temperature: 0.2,
+        max_tokens: 48,
+        stream: false
+      })
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.choices || !j.choices[0] || !j.choices[0].message) return;
+        var raw = j.choices[0].message.content || "";
+        var parsed = parseDirectorDirective(raw);
+        if (parsed.structured) {
+          state.biome = parsed.biome;
+          state.speedTarget = Math.max(0.95, Math.min(2.6, state.speed + parsed.speedDelta));
+          spawnWavePattern(parsed.pattern);
+        }
+        var bEl = byId("directorBanter");
+        var latEl = byId("directorLatency");
+        if (bEl) {
+          bEl.textContent = (parsed.structured ? "[NEMESIS:" + activeAdapter + "] " : "[BASE RAW] ") + parsed.banter;
+        }
+        if (latEl && j.zcc_metrics) {
+          latEl.textContent = "AI: " + Number(j.zcc_metrics.elapsed_ms || 0).toFixed(0) + "ms (" +
+            Number(j.zcc_metrics.tok_per_sec || 0).toFixed(0) + " tok/s)";
+        }
+        if (dsEl) {
+          dsEl.className = parsed.structured ? "badge ok" : "badge gold";
+          dsEl.textContent = parsed.structured ? "Director: Live LoRA" : "Director: Fallback";
+        }
+      })
+      .catch(function () {
+        if (dsEl) { dsEl.className = "badge"; dsEl.textContent = "Director: Offline"; }
+      })
+      .then(function () {
+        directorBusy = false;
+      });
+  }
+
+  function stepGame(dt) {
+    if (state.phase !== "running") return;
+    var stepDt = Math.min(0.05, Math.max(0.001, Number(dt) || 0.016));
+
+    if (state.invulnTimer > 0) state.invulnTimer = Math.max(0, state.invulnTimer - stepDt);
+    if (state.turboTimer > 0) {
+      state.turboTimer = Math.max(0, state.turboTimer - stepDt);
+      state.turbo = Math.max(0, state.turbo - 36.0 * stepDt);
+    } else {
+      state.turbo = Math.min(100, state.turbo + 3.5 * stepDt);
+    }
+
+    var effSpeed = state.speed * (state.turboTimer > 0 ? 1.55 : 1.0);
+    state.speed += (state.speedTarget - state.speed) * Math.min(1.0, stepDt * 1.5);
+
+    var targetX = state.targetLane - 1;
+    var diffX = targetX - state.laneX;
+    state.laneX += diffX * Math.min(1.0, stepDt * 15.0);
+    state.cameraBank += (diffX * 0.14 - state.cameraBank) * Math.min(1.0, stepDt * 12.0);
+    state.shakeAmt = Math.max(0, state.shakeAmt - stepDt * 2.5);
+
+    if (state.playerY > 0 || state.velY > 0) {
+      state.playerY += state.velY * stepDt;
+      state.velY -= 9.8 * stepDt;
+      if (state.playerY <= 0) {
+        state.playerY = 0;
+        state.velY = 0;
+      }
+    }
+    if (state.slideTimer > 0) state.slideTimer = Math.max(0, state.slideTimer - stepDt);
+
+    state.laneTime[state.targetLane] += stepDt;
+    var dz = 0.72 * effSpeed * stepDt;
+    state.distance += dz * 95.0;
+    state.score += dz * 120.0 * state.combo;
+    state.gridScroll = (state.gridScroll + dz * 7.5) % 1.0;
+
+    if (state.distance >= state.nextSectorDist) {
+      state.sector++;
+      state.nextSectorDist += 380 + state.sector * 35;
+      state.speedTarget = Math.min(2.55, state.speedTarget + 0.06);
+      requestDirectorDirective("sector");
+    }
+
+    state.waveTimer -= stepDt * effSpeed;
+    if (state.waveTimer <= 0) {
+      var pkeys = Object.keys(VALID_PATTERNS);
+      var nextPat = (state.entities.length < 4) ? state.currentPattern : pkeys[(state.sector + state.jumps + state.slides) % pkeys.length];
+      spawnWavePattern(nextPat);
+      state.waveTimer = Math.max(0.75, 1.45 - state.sector * 0.05);
+    }
+
+    var playerZ = 0.14;
+    var alive = [];
+    for (var i = 0; i < state.entities.length; i++) {
+      var ent = state.entities[i];
+      ent.z -= dz;
+      if (!ent.hit && Math.abs(ent.z - playerZ) < 0.052) {
+        var entLaneX = ent.lane - 1;
+        if (Math.abs(entLaneX - state.laneX) < 0.44) {
+          if (ent.kind === "SHARD") {
+            ent.hit = true;
+            state.streak++;
+            state.combo = Math.min(8, 1 + Math.floor(state.streak / 4));
+            state.score += 50 * state.combo;
+            state.turbo = Math.min(100, state.turbo + 14);
+            spawnParticles(entLaneX, 0.25, "#e8cc7c", 10);
+            playTone(520 + state.combo * 55, 0.08, "sine", 0.07);
+          } else if (ent.kind === "SHIELD") {
+            ent.hit = true;
+            if (state.hp < 3) state.hp++;
+            else state.score += 300;
+            spawnParticles(entLaneX, 0.3, "#34d399", 14);
+            playTone(760, 0.14, "sine", 0.09);
+          } else {
+            var cleared = false;
+            if (ent.kind === "HURDLE" && state.playerY >= 0.40) cleared = true;
+            if (ent.kind === "GATE" && state.slideTimer > 0.01 && state.playerY <= 0.15) cleared = true;
+            if (state.turboTimer > 0) {
+              ent.hit = true;
+              state.score += 150 * state.combo;
+              state.shakeAmt = 0.35;
+              spawnParticles(entLaneX, 0.25, "#e8cc7c", 16);
+              playTone(210, 0.12, "sawtooth", 0.08);
+              cleared = true;
+            }
+            if (!cleared && state.invulnTimer <= 0) {
+              ent.hit = true;
+              state.hp--;
+              state.streak = 0;
+              state.combo = 1;
+              state.invulnTimer = 1.1;
+              state.shakeAmt = 0.7;
+              state.lastDeathKind = ent.kind;
+              state.lastDeathLane = ent.lane;
+              spawnParticles(entLaneX, 0.3, "#f87171", 18);
+              playTone(110, 0.24, "sawtooth", 0.11);
+              if (state.hp <= 0) {
+                state.hp = 0;
+                state.phase = "gameover";
+                if (state.score > state.highScore) {
+                  state.highScore = state.score;
+                  saveHighScore(state.highScore);
+                }
+                syncOverlayUi();
+              }
+            }
+          }
+        }
+      }
+      if (ent.z > -0.08 && !ent.hit) alive.push(ent);
+    }
+    state.entities = alive;
+
+    var pAlive = [];
+    for (var pi = 0; pi < state.particles.length; pi++) {
+      var pt = state.particles[pi];
+      pt.life -= stepDt;
+      if (pt.life > 0) {
+        pt.laneOffset += pt.vx * stepDt;
+        pt.y += pt.vy * stepDt;
+        pt.vy -= 3.2 * stepDt;
+        pAlive.push(pt);
+      }
+    }
+    state.particles = pAlive;
+
+    if (state.score > state.highScore) {
+      state.highScore = state.score;
+    }
+    syncHudDom();
+  }
+
+  function renderGame() {
+    var canvas = byId("runnerCanvas");
+    if (!canvas || canvas.width < 50 || canvas.height < 50) return;
+    var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+    if (!ctx) return;
+
+    var w = Math.max(50, canvas.width);
+    var h = Math.max(50, canvas.height);
+    var pal = BIOMES[state.biome] || BIOMES.OBSIDIAN_HIGHWAY;
+    var hzY = h * 0.36;
+    var sx = state.shakeAmt > 0 ? (Math.sin(Date.now() * 0.08) * state.shakeAmt * 8) : 0;
+    var sy = state.shakeAmt > 0 ? (Math.cos(Date.now() * 0.11) * state.shakeAmt * 5) : 0;
+
+    function project(laneOff, objY, z) {
+      var clampedZ = Math.max(0.035, Math.min(1.6, z));
+      var persp = 1.0 / (0.14 + clampedZ * 2.2);
+      var screenY = hzY + (h - hzY) * Math.min(1.4, persp * 0.30) - (objY || 0) * h * 0.16 * persp;
+      var roadCenter = w * 0.5 + (state.cameraBank * -55 * (1.0 - clampedZ * 0.5)) + sx;
+      var laneSpan = w * 0.135 * persp * 0.33;
+      return { x: roadCenter + laneOff * laneSpan, y: screenY + sy, s: persp * 0.28 };
+    }
+
+    ctx.clearRect(0, 0, w, h);
+
+    var skyGrad = ctx.createLinearGradient(0, 0, 0, hzY);
+    skyGrad.addColorStop(0, pal.skyTop);
+    skyGrad.addColorStop(1, pal.skyBot);
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, w, hzY + 2);
+
+    ctx.fillStyle = "rgba(243, 239, 230, 0.48)";
+    for (var si = 0; si < stars.length; si++) {
+      ctx.fillRect(stars[si].x * w, stars[si].y * h, stars[si].s, stars[si].s);
+    }
+
+    var sunR = Math.max(1, h * 0.16);
+    var sunGrad = ctx.createRadialGradient(w * 0.5, hzY, Math.max(1, sunR * 0.1), w * 0.5, hzY, sunR * 2.1);
+    sunGrad.addColorStop(0, pal.core);
+    sunGrad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = sunGrad;
+    ctx.beginPath();
+    ctx.arc(w * 0.5, hzY, Math.max(1, sunR * 2.1), 0, Math.PI * 2);
+    ctx.fill();
+
+    if (equippedBossPrims.length > 0) {
+      var bx = w * 0.5 + (state.cameraBank * -24);
+      var by = hzY * 0.48 + Math.sin(Date.now() * 0.003) * 5;
+      var bScale = (h / 540) * 0.58;
+      ctx.strokeStyle = pal.core;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(bx, by, Math.max(1, (26 + Math.sin(Date.now() * 0.005) * 3) * (h / 540)), 0, Math.PI * 2);
+      ctx.stroke();
+      drawSvgPrimitivesOnCanvas(ctx, equippedBossPrims, bx, by, bScale, bScale, state.cameraBank * 0.35, null);
+    }
+
+    ctx.fillStyle = pal.road;
+    ctx.fillRect(0, hzY, w, h - hzY);
+
+    var roadEdges = [project(-1.6, 0, 1.0), project(1.6, 0, 1.0), project(1.6, 0, 0.04), project(-1.6, 0, 0.04)];
+    ctx.fillStyle = "#0b0d13";
+    ctx.beginPath();
+    ctx.moveTo(roadEdges[0].x, roadEdges[0].y);
+    ctx.lineTo(roadEdges[1].x, roadEdges[1].y);
+    ctx.lineTo(roadEdges[2].x, roadEdges[2].y);
+    ctx.lineTo(roadEdges[3].x, roadEdges[3].y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = pal.grid;
+    ctx.lineWidth = 1.5;
+    for (var g = 0; g < 11; g++) {
+      var gz = ((g + (1.0 - state.gridScroll)) / 11.0);
+      var pL = project(-1.6, 0, gz);
+      var pR = project(1.6, 0, gz);
+      ctx.beginPath();
+      ctx.moveTo(pL.x, pL.y);
+      ctx.lineTo(pR.x, pR.y);
+      ctx.stroke();
+    }
+
+    var rails = [-1.5, -0.5, 0.5, 1.5];
+    for (var ri = 0; ri < rails.length; ri++) {
+      var fPt = project(rails[ri], 0, 1.0);
+      var nPt = project(rails[ri], 0, 0.04);
+      ctx.strokeStyle = (ri === 0 || ri === 3) ? pal.rail : pal.grid;
+      ctx.lineWidth = (ri === 0 || ri === 3) ? 2.6 : 1.4;
+      ctx.beginPath();
+      ctx.moveTo(fPt.x, fPt.y);
+      ctx.lineTo(nPt.x, nPt.y);
+      ctx.stroke();
+    }
+
+    var sorted = state.entities.slice().sort(function (a, b) { return b.z - a.z; });
+    for (var ei = 0; ei < sorted.length; ei++) {
+      var ent = sorted[ei];
+      var p = project(ent.lane - 1, 0, ent.z);
+      var bw = Math.max(8, 72 * p.s);
+      var bh = Math.max(8, 66 * p.s);
+      if (ent.kind === "BARRIER") {
+        ctx.fillStyle = "#221014";
+        ctx.fillRect(p.x - bw * 0.5, p.y - bh, bw, bh);
+        ctx.strokeStyle = "#f87171";
+        ctx.lineWidth = Math.max(1, 2.2 * p.s);
+        ctx.strokeRect(p.x - bw * 0.5, p.y - bh, bw, bh);
+      } else if (ent.kind === "HURDLE") {
+        var hh = bh * 0.42;
+        ctx.fillStyle = "#2c1a07";
+        ctx.fillRect(p.x - bw * 0.58, p.y - hh, bw * 1.16, hh);
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = Math.max(1, 2.4 * p.s);
+        ctx.strokeRect(p.x - bw * 0.58, p.y - hh, bw * 1.16, hh);
+      } else if (ent.kind === "GATE") {
+        ctx.fillStyle = "#17141e";
+        ctx.fillRect(p.x - bw * 0.58, p.y - bh * 1.15, bw * 1.16, bh * 0.56);
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = Math.max(1, 2.2 * p.s);
+        ctx.strokeRect(p.x - bw * 0.58, p.y - bh * 1.15, bw * 1.16, bh * 0.56);
+      } else if (ent.kind === "SHARD") {
+        var rSh = Math.max(1, 18 * p.s);
+        ctx.fillStyle = "#e8cc7c";
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y - rSh * 2.2);
+        ctx.lineTo(p.x + rSh, p.y - rSh);
+        ctx.lineTo(p.x, p.y);
+        ctx.lineTo(p.x - rSh, p.y - rSh);
+        ctx.closePath();
+        ctx.fill();
+      } else if (ent.kind === "SHIELD") {
+        var rOr = Math.max(1, 16 * p.s);
+        ctx.fillStyle = "#34d399";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y - rOr * 1.4, rOr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    for (var pi = 0; pi < state.particles.length; pi++) {
+      var pt = state.particles[pi];
+      var pp = project(pt.laneOffset, pt.y, 0.14);
+      ctx.fillStyle = pt.color;
+      ctx.beginPath();
+      ctx.arc(pp.x, pp.y, Math.max(1, 3.5), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    var pBase = project(state.laneX, 0, 0.14);
+    var pPos = project(state.laneX, state.playerY, 0.14);
+    var shipW = Math.max(14, 58 * pPos.s);
+    var shipH = (state.slideTimer > 0) ? Math.max(6, 16 * pPos.s) : Math.max(10, 34 * pPos.s);
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.beginPath();
+    ctx.arc(pBase.x, pBase.y, Math.max(1, shipW * 0.42), 0, Math.PI * 2);
+    ctx.fill();
+
+    if (!(state.invulnTimer > 0 && Math.floor(state.invulnTimer * 18) % 2 === 0)) {
+      if (equippedShipPrims.length > 0) {
+        if (state.turboTimer > 0) {
+          ctx.strokeStyle = "#34d399";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(pPos.x, pPos.y - shipH * 0.65, Math.max(1, shipW * 0.62), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        drawSvgPrimitivesOnCanvas(
+          ctx, equippedShipPrims,
+          pPos.x, pPos.y - shipH * 0.65,
+          Math.max(0.1, (shipW * 1.15) / 64),
+          Math.max(0.1, (shipH * 1.35) / 64),
+          state.cameraBank * 0.9,
+          (state.turboTimer > 0) ? "#34d399" : null
+        );
+      } else {
+        ctx.fillStyle = (state.turboTimer > 0) ? "#34d399" : "#d4af37";
+        ctx.beginPath();
+        ctx.moveTo(pPos.x, pPos.y - shipH * 1.4);
+        ctx.lineTo(pPos.x + shipW * 0.65, pPos.y);
+        ctx.lineTo(pPos.x, pPos.y - shipH * 0.35);
+        ctx.lineTo(pPos.x - shipW * 0.65, pPos.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "#f3efe6";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+  }
+
+  function renderEvoLossChart(points) {
+    var canvas = byId("evoLossCanvas");
+    if (!canvas || canvas.width < 50 || canvas.height < 50) return;
+    var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+    if (!ctx) return;
+
+    var w = Math.max(50, canvas.width);
+    var h = Math.max(50, canvas.height);
+    var padL = 40;
+    var padR = 12;
+    var padT = 14;
+    var padB = 20;
+    var plotW = Math.max(1, w - padL - padR);
+    var plotH = Math.max(1, h - padT - padB);
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#06070a";
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = "rgba(212, 175, 55, 0.16)";
+    ctx.lineWidth = 1;
+    for (var g = 0; g <= 2; g++) {
+      var gy = padT + (plotH * g) / 2;
+      ctx.beginPath();
+      ctx.moveTo(padL, gy);
+      ctx.lineTo(w - padR, gy);
+      ctx.stroke();
+    }
+
+    if (!points || points.length === 0) {
+      ctx.fillStyle = "#a59f93";
+      ctx.font = "11px monospace";
+      ctx.fillText("Rival LoRA evolution curve will plot here", padL + 6, Math.max(20, h * 0.52));
+      return;
+    }
+
+    var minL = points[0].loss;
+    var maxL = points[0].loss;
+    for (var i = 1; i < points.length; i++) {
+      if (points[i].loss < minL) minL = points[i].loss;
+      if (points[i].loss > maxL) maxL = points[i].loss;
+    }
+    var ySpan = Math.max(0.05, maxL - minL + 0.06);
+    var yMin = Math.max(0, minL - 0.02);
+
+    ctx.strokeStyle = "#e8cc7c";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var j = 0; j < points.length; j++) {
+      var px = padL + (points.length > 1 ? (j / (points.length - 1)) : 0.5) * plotW;
+      var py = padT + (1.0 - (points[j].loss - yMin) / ySpan) * plotH;
+      if (j === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    var last = points[points.length - 1];
+    var lx = padL + (points.length > 1 ? plotW : plotW * 0.5);
+    var ly = padT + (1.0 - (last.loss - yMin) / ySpan) * plotH;
+    ctx.fillStyle = "#34d399";
+    ctx.beginPath();
+    ctx.arc(lx, ly, Math.max(1, 3.5), 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#a59f93";
+    ctx.font = "10px monospace";
+    ctx.fillText("step " + last.step + " loss=" + last.loss.toFixed(4), padL + 4, h - 5);
+  }
+
+  function refreshStudioMeta() {
+    if (typeof fetch !== "function") return Promise.resolve(null);
+    return Promise.all([
+      fetch("/health", { method: "GET" }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+      fetch("/v1/lora/adapters", { method: "GET" }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+    ]).then(function (pair) {
+      var h = pair[0];
+      var a = pair[1];
+      if (h) {
+        if (h.model) activeModelId = String(h.model);
+        if (h.active_adapter) activeAdapter = String(h.active_adapter);
+        if (typeof h.active_scale === "number" && activeAdapter !== "base") activeScale = h.active_scale;
+        var gEl = byId("gpuPill");
+        if (gEl && h.gpu_name) gEl.textContent = h.gpu_name + (h.gpu_cc ? (" SM " + h.gpu_cc) : "");
+      }
+      if (a) {
+        if (a.active) activeAdapter = String(a.active);
+        knownAdapters = Array.isArray(a.adapters) ? a.adapters : [];
+        var sel = byId("runnerAdapterSelect");
+        if (sel) {
+          sel.textContent = "";
+          var ob = document.createElement("option");
+          ob.value = "base"; ob.textContent = "base (untrained)";
+          sel.appendChild(ob);
+          for (var i = 0; i < knownAdapters.length; i++) {
+            var it = knownAdapters[i];
+            var o = document.createElement("option");
+            o.value = it.name; o.textContent = it.name + " (r=" + it.rank + ")";
+            sel.appendChild(o);
+            if (it.name === activeAdapter && typeof it.scale === "number") activeScale = it.scale;
+          }
+          sel.value = activeAdapter;
+        }
+      }
+      var ap = byId("adapterPill");
+      if (ap) {
+        ap.className = (activeAdapter === "base") ? "badge warn" : "badge ok";
+        ap.textContent = "Rival: " + activeAdapter;
+      }
+      var sl = byId("runnerScaleSlider");
+      var sv = byId("runnerScaleVal");
+      if (sl) { sl.disabled = (activeAdapter === "base"); sl.value = (activeAdapter === "base") ? "0" : String(activeScale); }
+      if (sv) sv.textContent = (activeAdapter === "base") ? "0.00x" : (activeScale.toFixed(2) + "x");
+      syncOverlayUi();
+    });
+  }
+
+  function parseTrainSseLines(buffer, onEvent) {
+    var lines = buffer.split(/\r?\n/);
+    var rem = lines.pop();
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i].trim();
+      if (!ln || ln.indexOf("data:") !== 0) continue;
+      var payload = ln.slice(5).trim();
+      if (payload === "[DONE]") continue;
+      try {
+        var obj = JSON.parse(payload);
+        if (obj && onEvent) onEvent(obj);
+      } catch (_e) {}
+    }
+    return rem;
+  }
+
+  window.zccRunnerMove = function (dir, ev) {
+    if (!markHandled(ev)) return;
+    if (state.phase !== "running") return;
+    var nxt = Math.max(0, Math.min(2, state.targetLane + (dir < 0 ? -1 : 1)));
+    if (nxt !== state.targetLane) {
+      state.targetLane = nxt;
+      playTone(300 + nxt * 45, 0.05, "triangle", 0.05);
+    }
+  };
+
+  window.zccRunnerJump = function (ev) {
+    if (!markHandled(ev)) return;
+    if (state.phase !== "running") return;
+    if (state.playerY <= 0.02) {
+      state.velY = 3.95;
+      state.slideTimer = 0.0;
+      state.jumps++;
+      playTone(460, 0.09, "triangle", 0.07);
+    }
+  };
+
+  window.zccRunnerSlide = function (ev) {
+    if (!markHandled(ev)) return;
+    if (state.phase !== "running") return;
+    if (state.playerY > 0.05) state.velY = Math.min(state.velY, -5.5);
+    state.slideTimer = 0.55;
+    state.slides++;
+    playTone(190, 0.07, "sine", 0.05);
+  };
+
+  window.zccRunnerTurbo = function (ev) {
+    if (!markHandled(ev)) return;
+    if (state.phase !== "running") return;
+    if (state.turbo >= 35 && state.turboTimer <= 0) {
+      state.turboTimer = 2.4;
+      state.turboUses++;
+      spawnParticles(state.laneX, 0.2, "#34d399", 16);
+      playTone(620, 0.16, "sawtooth", 0.08);
+    }
+  };
+
+  window.zccRunnerStart = function (ev) {
+    if (!markHandled(ev)) return;
+    ensureAudioResumed();
+    if (state.phase === "paused") {
+      state.phase = "running";
+      syncOverlayUi();
+    } else {
+      resetGame(true);
+      requestDirectorDirective("start");
+    }
+    playTone(540, 0.1, "triangle", 0.08);
+  };
+
+  window.zccRunnerPause = function (ev) {
+    if (!markHandled(ev)) return;
+    if (state.phase === "running") state.phase = "paused";
+    else if (state.phase === "paused") state.phase = "running";
+    syncOverlayUi();
+  };
+
+  window.zccRunnerRestart = function (ev) {
+    if (!markHandled(ev)) return;
+    ensureAudioResumed();
+    resetGame(true);
+    requestDirectorDirective("restart");
+  };
+
+  window.zccRunnerToggleSound = function (ev) {
+    if (!markHandled(ev)) return;
+    soundEnabled = !soundEnabled;
+    if (soundEnabled) ensureAudioResumed();
+    var b = byId("soundToggleBtn");
+    if (b) b.textContent = soundEnabled ? "Sound: ON" : "Sound: OFF";
+    if (soundEnabled) playTone(587, 0.09, "sine", 0.07);
+  };
+
+  window.zccRunnerSelectAdapter = function (ev) {
+    if (!markHandled(ev)) return;
+    var sel = byId("runnerAdapterSelect");
+    var nm = sel ? sel.value : "base";
+    if (typeof fetch !== "function") { activeAdapter = nm; return; }
+    fetch("/v1/lora/select", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: nm })
+    }).then(function () { return refreshStudioMeta(); }).catch(function () {});
+  };
+
+  window.zccRunnerScaleChange = function (ev) {
+    if (!markHandled(ev)) return;
+    var sl = byId("runnerScaleSlider");
+    var sv = byId("runnerScaleVal");
+    var sc = sl ? parseFloat(sl.value) : 1.0;
+    if (!(sc >= 0 && sc <= 4)) sc = 1.0;
+    activeScale = sc;
+    if (sv) sv.textContent = sc.toFixed(2) + "x";
+    if (activeAdapter === "base" || typeof fetch !== "function") return;
+    fetch("/v1/lora/scale", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: activeAdapter, scale: sc })
+    }).then(function () { return refreshStudioMeta(); }).catch(function () {});
+  };
+
+  window.zccRunnerPingDirector = function (ev) {
+    if (!markHandled(ev)) return;
+    requestDirectorDirective("manual");
+  };
+
+  window.zccEvolveRival = function (ev) {
+    if (!markHandled(ev)) return;
+    if (evolvingBusy || typeof fetch !== "function") return;
+    var nmEl = byId("rivalNameInput");
+    var stEl = byId("rivalStepsInput");
+    var btn = byId("evolveRivalBtn");
+    var ovBtn = byId("overlayEvolveBtn");
+    var msgEl = byId("evoStatusLine");
+
+    var name = nmEl ? nmEl.value.trim() : "runner_rival";
+    if (!name) name = "runner_rival";
+    var steps = stEl ? (parseInt(stEl.value, 10) || 60) : 60;
+    steps = Math.max(20, Math.min(250, steps));
+    var sftText = buildAdaptiveEvolutionSft(state);
+
+    evolvingBusy = true;
+    evoPoints = [];
+    renderEvoLossChart(evoPoints);
+    if (btn) btn.disabled = true;
+    if (ovBtn) ovBtn.disabled = true;
+    if (msgEl) msgEl.textContent = "Training '" + name + "' on RTX 5070 against habit '" + detectDominantHabit(state) + "'...";
+
+    function onEv(o) {
+      if (o.event === "step" && typeof o.loss === "number") {
+        evoPoints.push({ step: o.step || evoPoints.length + 1, loss: o.loss });
+        renderEvoLossChart(evoPoints);
+        if (msgEl) msgEl.textContent = "Evolving step " + o.step + "/" + (o.steps || steps) + " loss=" + o.loss.toFixed(4);
+      } else if (o.event === "done") {
+        activeAdapter = o.name || name;
+        activeScale = 1.0;
+        if (msgEl) msgEl.textContent = "Evolved '" + activeAdapter + "' (" + Number(o.initial_loss || 0).toFixed(2) + " -> " + Number(o.final_loss || 0).toFixed(4) + ") & activated!";
+      }
+    }
+
+    fetch("/v1/lora/train", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name,
+        sft_text: sftText,
+        rank: 8,
+        alpha: 16,
+        lr: 0.0006,
+        steps: steps,
+        chat: true,
+        save_path: "build_win64/" + name + ".zcc_lora",
+        activate: true,
+        stream: true
+      })
+    })
+      .then(function (resp) {
+        if (!resp.ok) return resp.text().then(function (t) { throw new Error("HTTP " + resp.status + ": " + t); });
+        if (!resp.body || typeof resp.body.getReader !== "function") {
+          return resp.json().then(function (d) { onEv({ event: "done", name: name, initial_loss: d.initial_loss, final_loss: d.final_loss }); });
+        }
+        var reader = resp.body.getReader();
+        var dec = new TextDecoder("utf-8");
+        var buf = "";
+        function pump() {
+          return reader.read().then(function (chunk) {
+            if (chunk.done) {
+              if (buf) parseTrainSseLines(buf + "\n", onEv);
+              return;
+            }
+            buf += dec.decode(chunk.value, { stream: true });
+            buf = parseTrainSseLines(buf, onEv);
+            return pump();
+          });
+        }
+        return pump();
+      })
+      .then(function () { return refreshStudioMeta(); })
+      .catch(function (err) {
+        if (msgEl) msgEl.textContent = "Evolution error: " + (err ? err.message : "failed");
+      })
+      .then(function () {
+        evolvingBusy = false;
+        if (btn) btn.disabled = false;
+        if (ovBtn) ovBtn.disabled = false;
+      });
+  };
+
+  window.zccRunnerForgeSvg = function (slot, ev) {
+    if (!markHandled(ev)) return;
+    if (svgForgeBusy || typeof fetch !== "function") return;
+    var hasSvgForge = false;
+    for (var i = 0; i < knownAdapters.length; i++) {
+      if (knownAdapters[i].name === "svg_forge") { hasSvgForge = true; break; }
+    }
+    var adp = hasSvgForge ? "svg_forge" : activeAdapter;
+    var styleMap = {
+      OBSIDIAN_HIGHWAY: "obsidian_gold",
+      GOLD_GRID: "obsidian_gold",
+      EMERALD_RIFT: "emerald_rift",
+      CRIMSON_OVERCLOCK: "crimson_core",
+      ZERO_G_VAULT: "zero_g_cyan"
+    };
+    var stName = styleMap[state.biome] || "obsidian_gold";
+    var qPrompt = (slot === "boss")
+      ? ("SVG BOSS | STYLE " + stName + " | ROLE nemesis_eye")
+      : ("SVG SHIP | STYLE " + stName + " | ROLE apex_interceptor");
+
+    var stEl = byId("svgLoadoutStatus");
+    if (stEl) stEl.textContent = "Forging live " + slot + " SVG via '" + adp + "'...";
+    svgForgeBusy = true;
+
+    fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: activeModelId,
+        adapter: adp,
+        lora_scale: 1.0,
+        messages: [{ role: "user", content: qPrompt }],
+        temperature: 0.2,
+        max_tokens: 160,
+        stream: false
+      })
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var raw = (j && j.choices && j.choices[0] && j.choices[0].message) ? j.choices[0].message.content : "";
+        var sIdx = raw.toLowerCase().indexOf("<svg");
+        if (sIdx >= 0) {
+          var sub = raw.slice(sIdx);
+          var eIdx = sub.toLowerCase().indexOf("</svg>");
+          var cand = (eIdx >= 0) ? sub.slice(0, eIdx + 6) : (sub + "</svg>");
+          if (setEquippedSvg(slot, cand, true)) return;
+        }
+        if (stEl) stEl.textContent = "Forge returned non-SVG output; keeping active vector.";
+      })
+      .catch(function () {
+        if (stEl) stEl.textContent = "SVG Forge endpoint offline.";
+      })
+      .then(function () {
+        svgForgeBusy = false;
+      });
+  };
+
+  window.zccRunnerExportProofSvg = function (ev) {
+    if (!markHandled(ev)) return;
+    var proof = buildRunProofSvg(state);
+    if (typeof Blob !== "function" || typeof URL === "undefined" || typeof document === "undefined") return;
+    var blob = new Blob([proof], { type: "image/svg+xml;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "zcc_runner_proof.svg";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 400);
+  };
+
+  function bindEvent(id, evt, fn) {
+    var el = byId(id);
+    if (el && !el.dataset["zcc_" + evt]) {
+      el.dataset["zcc_" + evt] = "1";
+      el.addEventListener(evt, fn);
+    }
+  }
+
+  function bindControls() {
+    bindEvent("startRunBtn", "click", window.zccRunnerStart);
+    bindEvent("pauseRunBtn", "click", window.zccRunnerPause);
+    bindEvent("restartRunBtn", "click", window.zccRunnerRestart);
+    bindEvent("soundToggleBtn", "click", window.zccRunnerToggleSound);
+    bindEvent("runnerAdapterSelect", "change", window.zccRunnerSelectAdapter);
+    bindEvent("runnerScaleSlider", "input", window.zccRunnerScaleChange);
+    bindEvent("triggerDirectorBtn", "click", window.zccRunnerPingDirector);
+    bindEvent("evolveRivalBtn", "click", window.zccEvolveRival);
+    bindEvent("overlayEvolveBtn", "click", window.zccEvolveRival);
+    bindEvent("forgeShipBtn", "click", function (ev) { window.zccRunnerForgeSvg("ship", ev); });
+    bindEvent("forgeBossBtn", "click", function (ev) { window.zccRunnerForgeSvg("boss", ev); });
+    bindEvent("exportProofBtn", "click", window.zccRunnerExportProofSvg);
+    bindEvent("ctrlLeftBtn", "click", function (ev) { window.zccRunnerMove(-1, ev); });
+    bindEvent("ctrlRightBtn", "click", function (ev) { window.zccRunnerMove(1, ev); });
+    bindEvent("ctrlJumpBtn", "click", window.zccRunnerJump);
+    bindEvent("ctrlSlideBtn", "click", window.zccRunnerSlide);
+    bindEvent("ctrlTurboBtn", "click", window.zccRunnerTurbo);
+
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      document.addEventListener("keydown", function (ev) {
+        var tag = ev && ev.target && ev.target.tagName ? String(ev.target.tagName).toLowerCase() : "";
+        if (tag === "input" || tag === "textarea" || tag === "select") return;
+        if (ev.key === "ArrowLeft" || ev.key === "a" || ev.key === "A") { window.zccRunnerMove(-1); }
+        else if (ev.key === "ArrowRight" || ev.key === "d" || ev.key === "D") { window.zccRunnerMove(1); }
+        else if (ev.key === "ArrowUp" || ev.key === "w" || ev.key === "W" || ev.key === " ") {
+          if (ev.preventDefault) ev.preventDefault();
+          if (state.phase !== "running") window.zccRunnerStart();
+          else window.zccRunnerJump();
+        }
+        else if (ev.key === "ArrowDown" || ev.key === "s" || ev.key === "S") { window.zccRunnerSlide(); }
+        else if (ev.key === "Shift") { window.zccRunnerTurbo(); }
+        else if (ev.key === "p" || ev.key === "P" || ev.key === "Escape") { window.zccRunnerPause(); }
+      });
+    }
+  }
+
+  function animationLoop(nowMs) {
+    try {
+      var dt = lastTimeMs ? ((nowMs - lastTimeMs) / 1000.0) : 0.016;
+      lastTimeMs = nowMs;
+      stepGame(dt);
+      renderGame();
+    } catch (err) {
+      if (typeof console !== "undefined" && console.error) console.error("Runner frame error:", err);
+    }
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(animationLoop);
+    }
+  }
+
+  window.__zccRunnerTestHooks = {
+    parseDirectorDirective: parseDirectorDirective,
+    detectDominantHabit: detectDominantHabit,
+    buildAdaptiveEvolutionSft: buildAdaptiveEvolutionSft,
+    parseRunnerSvgPrimitives: parseRunnerSvgPrimitives,
+    setEquippedSvg: setEquippedSvg,
+    buildRunProofSvg: buildRunProofSvg,
+    stepGame: stepGame,
+    renderGame: renderGame,
+    renderEvoLossChart: renderEvoLossChart,
+    spawnWavePattern: spawnWavePattern,
+    getState: function () { return state; },
+    resetGame: resetGame
+  };
+
+  loadHighScore();
+  loadEquippedSvgLoadout();
+  bindControls();
+  resetGame(false);
+  renderGame();
+  renderEvoLossChart(evoPoints);
+  refreshStudioMeta();
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(animationLoop);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZKAEDI API EXPLORER // Sovereign Blackwell OpenAPI 3.1</title>
+<style>
+:root {
+  --bg: #07080b;
+  --panel: #101218;
+  --panel-2: #161922;
+  --panel-3: #1d212d;
+  --gold: #d4af37;
+  --gold-bright: #f0d77a;
+  --emerald: #34d399;
+  --crimson: #f87171;
+  --sky: #38bdf8;
+  --border: rgba(212, 175, 55, 0.34);
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --text: #f4f1e6;
+  --muted: #a49e8d;
+  --mono: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; min-height: 100%;
+  background: var(--bg); color: var(--text); font-family: var(--sans);
+}
+.zcc-backdrop-fx {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none !important;
+  background: radial-gradient(circle at 14% 12%, rgba(212,175,55,0.10), transparent 40%),
+              radial-gradient(circle at 86% 15%, rgba(56,189,248,0.08), transparent 36%);
+}
+.zcc-shell {
+  position: relative; z-index: 1000; pointer-events: auto;
+  max-width: 1460px; margin: 0 auto; padding: 14px 16px 24px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.topbar {
+  position: relative; z-index: 1000; pointer-events: auto;
+  background: linear-gradient(180deg, #141720 0%, #0e1015 100%);
+  border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.crest {
+  width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--gold);
+  background: radial-gradient(circle at 30% 25%, #f6df8c 0%, #c89d28 55%, #6d5010 100%);
+  color: #090a0d; font-family: var(--mono); font-weight: 900; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+}
+.title { font-size: 15px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.title .gold { color: var(--gold-bright); }
+.sub { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+.hdr-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.badge {
+  background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 999px;
+  padding: 4px 10px; font-size: 11px; font-family: var(--mono); color: var(--muted);
+}
+.badge.gold { border-color: var(--border); color: var(--gold-bright); }
+.badge.ok { border-color: rgba(52,211,153,0.45); color: #6ee7b7; }
+input, select, textarea, button, a.nav-pill {
+  position: relative; z-index: 1000; pointer-events: auto; user-select: auto;
+  background: var(--panel-3); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 600; text-decoration: none;
+}
+input.mono, textarea.mono {
+  background: #07090d; border-color: var(--border-soft); font-family: var(--mono); cursor: text; font-weight: 500;
+}
+button { cursor: pointer; }
+button.primary {
+  background: linear-gradient(180deg, #ebd073 0%, #bc8e24 100%);
+  border-color: var(--gold-bright); color: #090a0d; font-weight: 800;
+}
+button.mini { padding: 4px 9px; font-size: 11px; }
+.explorer-grid {
+  display: grid; grid-template-columns: 370px 1fr; gap: 12px;
+  position: relative; z-index: 1000; pointer-events: auto;
+}
+@media (max-width: 1020px) { .explorer-grid { grid-template-columns: 1fr; } }
+.card {
+  background: linear-gradient(180deg, #0f1118 0%, #090a0e 100%);
+  border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.card-bar {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  background: rgba(212,175,55,0.07);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.card-title { font-family: var(--mono); font-size: 12px; font-weight: 800; color: var(--gold-bright); text-transform: uppercase; }
+.card-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.ep-list { display: flex; flex-direction: column; gap: 6px; max-height: 680px; overflow-y: auto; }
+.ep-item {
+  text-align: left; width: 100%; padding: 8px 10px; border-radius: 8px;
+  background: #0b0d12; border: 1px solid var(--border-soft);
+  display: flex; flex-direction: column; gap: 3px; cursor: pointer;
+}
+.ep-item:hover, .ep-item.active { border-color: var(--gold-bright); background: #141824; }
+.ep-row { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; }
+.ep-desc { font-size: 11px; color: var(--muted); }
+.m-pill { padding: 2px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; font-family: var(--mono); }
+.m-GET { background: rgba(52,211,153,0.18); color: #6ee7b7; }
+.m-POST { background: rgba(212,175,55,0.22); color: #f0d77a; }
+.m-DELETE { background: rgba(248,113,113,0.22); color: #fca5a5; }
+.req-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+pre.resp-box {
+  margin: 0; padding: 12px; background: #06070a; border: 1px solid var(--border-soft);
+  border-radius: 10px; font-family: var(--mono); font-size: 12px; line-height: 1.45;
+  color: #e6dfc8; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+}
+</style>
+</head>
+<body>
+<div class="zcc-backdrop-fx" aria-hidden="true"></div>
+<div class="zcc-shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="crest" aria-hidden="true">API</div>
+      <div>
+        <div class="title">ZKAEDI <span class="gold">API EXPLORER</span> // Sovereign OpenAPI 3.1.0</div>
+        <div class="sub">OpenAI Chat/Completions/Responses/Embeddings &middot; Anthropic Messages &middot; Tokenizer &middot; Batch &middot; LoRA Cartridges &middot; Prometheus</div>
+      </div>
+    </div>
+    <div class="hdr-controls">
+      <span id="gpuBadge" class="badge gold">GPU: probing...</span>
+      <span id="decoderBadge" class="badge ok">Decoder: --</span>
+      <span id="endpointCountBadge" class="badge">Endpoints: 0</span>
+      <input id="apiKeyInput" class="mono" type="password" placeholder="Optional API key" style="width:155px;">
+      <a class="nav-pill" href="/openapi.json" style="color:#7dd3fc;border-color:rgba(56,189,248,0.45);">openapi.json</a>
+      <a class="nav-pill" href="/metrics">metrics</a>
+      <a class="nav-pill" href="/mario" style="color:#fca5a5;border-color:rgba(248,113,113,0.45);">Super Blackwell</a>
+      <a class="nav-pill" href="/svg" style="color:#e8cc7c;">SVG Forge</a>
+      <a class="nav-pill" href="/runner" style="color:#6ee7b7;border-color:rgba(52,211,153,0.45);">Runner</a>
+      <a class="nav-pill" href="/">Studio</a>
+    </div>
+  </header>
+
+  <div class="explorer-grid">
+    <section class="card">
+      <div class="card-bar">
+        <span class="card-title">Endpoints Catalog</span>
+        <input id="endpointFilterInput" class="mono" type="text" placeholder="Filter..." oninput="zccApiFilterEndpoints(event)" style="width:140px;">
+      </div>
+      <div class="card-body">
+        <div id="endpointList" class="ep-list"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-bar">
+        <span class="card-title">Live Sovereign Playground</span>
+        <div class="btn-group">
+          <button id="copyCurlBtn" type="button" class="mini" onclick="zccApiCopySnippet('curl', event)">Copy cURL</button>
+          <button id="copyPyBtn" type="button" class="mini" onclick="zccApiCopySnippet('python', event)">Copy Python</button>
+          <button id="copyJsBtn" type="button" class="mini" onclick="zccApiCopySnippet('js', event)">Copy JS</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="req-bar">
+          <select id="reqMethodSelect" style="width:105px;" onchange="zccApiMethodChange(event)">
+            <option value="GET">GET</option>
+            <option value="POST" selected>POST</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+          <input id="reqPathInput" class="mono" type="text" value="/v1/chat/completions" style="flex:1 1 260px;">
+          <select id="presetSelect" onchange="zccApiApplyPreset(event)">
+            <option value="chat">OpenAI Chat (base)</option>
+            <option value="chat_lora">OpenAI Chat + LoRA (mario_architect)</option>
+            <option value="messages">Anthropic /v1/messages</option>
+            <option value="responses">OpenAI /v1/responses</option>
+            <option value="embeddings">GPU /v1/embeddings</option>
+            <option value="tokenize">/v1/tokenize</option>
+            <option value="batch">Multi-Cartridge /v1/batch</option>
+            <option value="health">GET /health</option>
+          </select>
+          <button id="sendReqBtn" type="button" class="primary" onclick="zccApiSendRequest(event)">Send Request</button>
+        </div>
+
+        <textarea id="reqBodyInput" class="mono" rows="10">{
+  "adapter": "base",
+  "messages": [
+    {"role": "user", "content": "The capital of France is"}
+  ],
+  "temperature": 0.0,
+  "max_tokens": 32
+}</textarea>
+
+        <div class="req-bar" style="justify-content:space-between;">
+          <div class="btn-group">
+            <span id="respStatusBadge" class="badge">Status: Ready</span>
+            <span id="respLatencyBadge" class="badge gold">Latency: --</span>
+          </div>
+          <span id="copyStatusLine" class="badge">SDKs: sdk/zcc_client.py &amp; sdk/zcc_client.mjs</span>
+        </div>
+
+        <pre id="respOutput" class="resp-box">Click an endpoint or choose a preset and press Send Request.</pre>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var DEFAULT_ENDPOINTS = [
+    { method: "GET", path: "/health", summary: "GPU, model, VRAM, decoder graph status", body: "" },
+    { method: "GET", path: "/metrics", summary: "Prometheus metrics", body: "" },
+    { method: "GET", path: "/openapi.json", summary: "OpenAPI 3.1.0 specification", body: "" },
+    { method: "GET", path: "/v1/models", summary: "List base model & LoRA adapters", body: "" },
+    { method: "POST", path: "/v1/chat/completions", summary: "OpenAI Chat Completions", preset: "chat" },
+    { method: "POST", path: "/v1/completions", summary: "OpenAI Text Completions", body: '{\n  "adapter": "base",\n  "prompt": "The capital of France is",\n  "temperature": 0.0,\n  "max_tokens": 24,\n  "logprobs": true,\n  "top_logprobs": 3\n}' },
+    { method: "POST", path: "/v1/messages", summary: "Anthropic Messages API", preset: "messages" },
+    { method: "POST", path: "/v1/responses", summary: "OpenAI Responses API", preset: "responses" },
+    { method: "POST", path: "/v1/embeddings", summary: "GPU RMSNorm L2 embeddings", preset: "embeddings" },
+    { method: "POST", path: "/v1/tokenize", summary: "Tokenize UTF-8 string", preset: "tokenize" },
+    { method: "POST", path: "/v1/detokenize", summary: "Detokenize token IDs", body: '{\n  "tokens": [785, 6722, 315, 9625, 374, 12095, 13]\n}' },
+    { method: "POST", path: "/v1/batch", summary: "Multi-cartridge batch inference", preset: "batch" },
+    { method: "GET", path: "/v1/lora/adapters", summary: "List loaded LoRA cartridges", body: "" },
+    { method: "GET", path: "/v1/lora/files", summary: "List .zcc_lora disk vault", body: "" }
+  ];
+
+  var PRESETS = {
+    chat: {
+      method: "POST", path: "/v1/chat/completions",
+      body: '{\n  "adapter": "base",\n  "messages": [{"role": "user", "content": "The capital of France is"}],\n  "temperature": 0.0,\n  "max_tokens": 32\n}'
+    },
+    chat_lora: {
+      method: "POST", path: "/v1/chat/completions",
+      body: '{\n  "adapter": "mario_architect",\n  "lora_scale": 1.0,\n  "messages": [{"role": "user", "content": "WORLD 1-2 | FORM super | HABIT stomper | COINS 24 | LIVES 3"}],\n  "temperature": 0.0,\n  "max_tokens": 64\n}'
+    },
+    messages: {
+      method: "POST", path: "/v1/messages",
+      body: '{\n  "adapter": "base",\n  "system": "Answer concisely.",\n  "messages": [{"role": "user", "content": "The capital of France is"}],\n  "max_tokens": 32,\n  "temperature": 0.0\n}'
+    },
+    responses: {
+      method: "POST", path: "/v1/responses",
+      body: '{\n  "adapter": "base",\n  "instructions": "Be concise.",\n  "input": "The capital of France is",\n  "max_output_tokens": 32,\n  "temperature": 0.0\n}'
+    },
+    embeddings: {
+      method: "POST", path: "/v1/embeddings",
+      body: '{\n  "adapter": "base",\n  "input": [\n    "The capital of France is Paris.",\n    "CUDA warp shuffle instructions on Blackwell"\n  ]\n}'
+    },
+    tokenize: {
+      method: "POST", path: "/v1/tokenize",
+      body: '{\n  "text": "The capital of France is Paris."\n}'
+    },
+    batch: {
+      method: "POST", path: "/v1/batch",
+      body: '{\n  "requests": [\n    {"adapter": "base", "prompt": "The capital of France is", "max_tokens": 8, "temperature": 0.0},\n    {"adapter": "svg_forge", "messages": [{"role": "user", "content": "SVG SHIP | STYLE obsidian_gold | ROLE apex_interceptor"}], "max_tokens": 120, "temperature": 0.0}\n  ]\n}'
+    },
+    health: { method: "GET", path: "/health", body: "" }
+  };
+
+  var catalog = DEFAULT_ENDPOINTS.slice();
+  var selectedIdx = 4;
+  var lastHandledStamp = 0;
+
+  function byId(id) { return (typeof document !== "undefined") ? document.getElementById(id) : null; }
+  function markHandled(ev) {
+    var ts = ev && typeof ev.timeStamp === "number" ? ev.timeStamp : 0;
+    if (ts > 0 && ts === lastHandledStamp) return false;
+    lastHandledStamp = ts;
+    return true;
+  }
+
+  function currentOrigin() {
+    if (typeof window !== "undefined" && window.location && window.location.origin && window.location.origin !== "null") {
+      return window.location.origin;
+    }
+    return "ORIGIN";
+  }
+
+  function selectEndpoint(idx) {
+    if (idx < 0 || idx >= catalog.length) return;
+    selectedIdx = idx;
+    var item = catalog[idx];
+    if (byId("reqMethodSelect")) byId("reqMethodSelect").value = item.method;
+    if (byId("reqPathInput")) byId("reqPathInput").value = item.path;
+    var bodyStr = item.preset && PRESETS[item.preset] ? PRESETS[item.preset].body : (item.body || "");
+    if (byId("reqBodyInput")) byId("reqBodyInput").value = bodyStr;
+    renderEndpointList();
+  }
+
+  function renderEndpointList() {
+    var list = byId("endpointList");
+    if (!list) return;
+    var filtEl = byId("endpointFilterInput");
+    var q = filtEl ? String(filtEl.value || "").toLowerCase().trim() : "";
+    list.innerHTML = "";
+    var shown = 0;
+    for (var i = 0; i < catalog.length; i++) {
+      var ep = catalog[i];
+      if (q && (ep.path + " " + ep.method + " " + ep.summary).toLowerCase().indexOf(q) < 0) continue;
+      shown++;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "ep-item" + (i === selectedIdx ? " active" : "");
+      (function (idxCopy) {
+        btn.onclick = function () { selectEndpoint(idxCopy); };
+      })(i);
+
+      var row = document.createElement("div");
+      row.className = "ep-row";
+      var pill = document.createElement("span");
+      pill.className = "m-pill m-" + ep.method;
+      pill.textContent = ep.method;
+      var pTxt = document.createElement("span");
+      pTxt.textContent = ep.path;
+      row.appendChild(pill);
+      row.appendChild(pTxt);
+
+      var desc = document.createElement("div");
+      desc.className = "ep-desc";
+      desc.textContent = ep.summary || "";
+
+      btn.appendChild(row);
+      btn.appendChild(desc);
+      list.appendChild(btn);
+    }
+    if (byId("endpointCountBadge")) byId("endpointCountBadge").textContent = "Endpoints: " + shown;
+  }
+
+  function buildCurlSnippet() {
+    var m = byId("reqMethodSelect") ? byId("reqMethodSelect").value : "POST";
+    var p = byId("reqPathInput") ? byId("reqPathInput").value : "/v1/chat/completions";
+    var b = byId("reqBodyInput") ? byId("reqBodyInput").value.trim() : "";
+    var key = byId("apiKeyInput") ? byId("apiKeyInput").value.trim() : "";
+    var parts = ['curl -X ' + m + ' "' + currentOrigin() + p + '"'];
+    if (key) parts.push('-H "Authorization: Bearer ' + key + '"');
+    if (m === "POST" && b) parts.push('-H "Content-Type: application/json" -d ' + JSON.stringify(b));
+    return parts.join(" \\\n  ");
+  }
+
+  function buildPythonSnippet() {
+    var p = byId("reqPathInput") ? byId("reqPathInput").value : "/v1/chat/completions";
+    var b = byId("reqBodyInput") ? byId("reqBodyInput").value.trim() : "{}";
+    return [
+      "from sdk.zcc_client import ZccClient",
+      'client = ZccClient("' + currentOrigin() + '")',
+      "# Target: " + p,
+      "payload = " + (b || "{}"),
+      "print(client.health())"
+    ].join("\n");
+  }
+
+  function buildJsSnippet() {
+    var m = byId("reqMethodSelect") ? byId("reqMethodSelect").value : "POST";
+    var p = byId("reqPathInput") ? byId("reqPathInput").value : "/v1/chat/completions";
+    var b = byId("reqBodyInput") ? byId("reqBodyInput").value.trim() : "";
+    return [
+      'const res = await fetch("' + currentOrigin() + p + '", {',
+      '  method: "' + m + '"' + (m === "POST" && b ? ',\n  headers: {"Content-Type": "application/json"},\n  body: JSON.stringify(' + b + ')' : ''),
+      "});",
+      "console.log(await res.text());"
+    ].join("\n");
+  }
+
+  window.zccApiFilterEndpoints = function () { renderEndpointList(); };
+  window.zccApiMethodChange = function () {};
+
+  window.zccApiApplyPreset = function (ev) {
+    if (!markHandled(ev)) return;
+    var sel = byId("presetSelect");
+    var key = sel ? sel.value : "chat";
+    var pr = PRESETS[key];
+    if (!pr) return;
+    if (byId("reqMethodSelect")) byId("reqMethodSelect").value = pr.method;
+    if (byId("reqPathInput")) byId("reqPathInput").value = pr.path;
+    if (byId("reqBodyInput")) byId("reqBodyInput").value = pr.body;
+  };
+
+  window.zccApiCopySnippet = function (kind, ev) {
+    if (!markHandled(ev)) return;
+    var txt = (kind === "python") ? buildPythonSnippet() : ((kind === "js") ? buildJsSnippet() : buildCurlSnippet());
+    if (byId("respOutput")) byId("respOutput").textContent = txt;
+    if (byId("copyStatusLine")) byId("copyStatusLine").textContent = "Generated " + kind + " snippet below";
+    if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(txt).catch(function () {});
+    }
+  };
+
+  window.zccApiSendRequest = function (ev) {
+    if (!markHandled(ev)) return;
+    if (typeof fetch !== "function") return;
+    var m = byId("reqMethodSelect") ? byId("reqMethodSelect").value : "GET";
+    var p = byId("reqPathInput") ? byId("reqPathInput").value : "/health";
+    var b = byId("reqBodyInput") ? byId("reqBodyInput").value.trim() : "";
+    var key = byId("apiKeyInput") ? byId("apiKeyInput").value.trim() : "";
+
+    var hdrs = {};
+    if (key) hdrs["Authorization"] = "Bearer " + key;
+    var opts = { method: m, headers: hdrs };
+    if (m === "POST" && b) {
+      hdrs["Content-Type"] = "application/json";
+      opts.body = b;
+    }
+
+    var t0 = Date.now();
+    if (byId("respStatusBadge")) byId("respStatusBadge").textContent = "Status: running...";
+    fetch(p, opts)
+      .then(function (r) {
+        var dt = Date.now() - t0;
+        if (byId("respStatusBadge")) byId("respStatusBadge").textContent = "Status: HTTP " + r.status;
+        if (byId("respLatencyBadge")) byId("respLatencyBadge").textContent = "Latency: " + dt + " ms";
+        return r.text();
+      })
+      .then(function (raw) {
+        try {
+          raw = JSON.stringify(JSON.parse(raw), null, 2);
+        } catch (e) {}
+        if (byId("respOutput")) byId("respOutput").textContent = raw;
+      })
+      .catch(function (err) {
+        if (byId("respStatusBadge")) byId("respStatusBadge").textContent = "Status: ERROR";
+        if (byId("respOutput")) byId("respOutput").textContent = String(err || "Request failed");
+      });
+  };
+
+  function loadStudioAndSpec() {
+    if (typeof fetch !== "function") return;
+    fetch("/health")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (h) {
+        if (!h) return;
+        if (byId("gpuBadge")) byId("gpuBadge").textContent = (h.gpu_name || "RTX 5070").replace("NVIDIA GeForce ", "");
+        if (byId("decoderBadge")) byId("decoderBadge").textContent = (h.decoder_mode || "cuda_graph") + " (" + (h.decode_graph_nodes || 0) + "n)";
+      })
+      .catch(function () {});
+
+    fetch("/openapi.json")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (spec) {
+        if (!spec || !spec.paths) return;
+        var built = [];
+        var paths = Object.keys(spec.paths);
+        for (var i = 0; i < paths.length; i++) {
+          var p = paths[i];
+          var methods = Object.keys(spec.paths[p]);
+          for (var j = 0; j < methods.length; j++) {
+            var m = methods[j].toUpperCase();
+            var op = spec.paths[p][methods[j]];
+            var matchDef = null;
+            for (var k = 0; k < DEFAULT_ENDPOINTS.length; k++) {
+              if (DEFAULT_ENDPOINTS[k].path === p && DEFAULT_ENDPOINTS[k].method === m) matchDef = DEFAULT_ENDPOINTS[k];
+            }
+            built.push({
+              method: m,
+              path: p,
+              summary: (op && op.summary) ? op.summary : "",
+              preset: matchDef ? matchDef.preset : null,
+              body: matchDef ? matchDef.body : ((m === "POST") ? "{}" : "")
+            });
+          }
+        }
+        if (built.length > 0) {
+          catalog = built;
+          renderEndpointList();
+        }
+      })
+      .catch(function () {});
+  }
+
+  function bindEvent(id, evt, fn) {
+    var el = byId(id);
+    if (el && !el.dataset["zcc_" + evt]) {
+      el.dataset["zcc_" + evt] = "1";
+      el.addEventListener(evt, fn);
+    }
+  }
+
+  bindEvent("endpointFilterInput", "input", window.zccApiFilterEndpoints);
+  bindEvent("reqMethodSelect", "change", window.zccApiMethodChange);
+  bindEvent("presetSelect", "change", window.zccApiApplyPreset);
+  bindEvent("sendReqBtn", "click", window.zccApiSendRequest);
+  bindEvent("copyCurlBtn", "click", function (ev) { window.zccApiCopySnippet("curl", ev); });
+  bindEvent("copyPyBtn", "click", function (ev) { window.zccApiCopySnippet("python", ev); });
+  bindEvent("copyJsBtn", "click", function (ev) { window.zccApiCopySnippet("js", ev); });
+
+  window.__zccApiDocsTestHooks = {
+    selectEndpoint: selectEndpoint,
+    buildCurlSnippet: buildCurlSnippet,
+    buildPythonSnippet: buildPythonSnippet,
+    buildJsSnippet: buildJsSnippet,
+    renderEndpointList: renderEndpointList,
+    getSelected: function () { return catalog[selectedIdx] || null; }
+  };
+
+  renderEndpointList();
+  loadStudioAndSpec();
+})();
+</script>
+</body>
+</html>

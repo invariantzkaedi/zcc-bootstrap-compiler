@@ -1,0 +1,210 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ZKAEDI ZCC Sovereign Blackwell AI API",
+    "version": "2.5.0",
+    "description": "Zero-PyTorch, zero-CUDA-SDK Blackwell sm_120 OpenAI + Anthropic + Responses + Embeddings + Batch + LoRA Cartridge API compiled natively by ZCC."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Local Sovereign GPU Studio Origin"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key"
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "GPU, model, VRAM, decoder graph, and telemetry status",
+        "responses": { "200": { "description": "Healthy Studio telemetry" } }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus text format metrics (0.0.4)",
+        "responses": { "200": { "description": "Prometheus metrics stream" } }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "summary": "OpenAPI 3.1.0 specification document",
+        "responses": { "200": { "description": "OpenAPI JSON schema" } }
+      }
+    },
+    "/docs": {
+      "get": {
+        "summary": "Interactive ZKAEDI API Explorer workbench",
+        "responses": { "200": { "description": "HTML explorer" } }
+      }
+    },
+    "/shutdown": {
+      "post": {
+        "summary": "Gracefully shut down server (when --allow-shutdown is enabled)",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Shutting down" } }
+      }
+    },
+    "/": {
+      "get": { "summary": "Sovereign LoRA Studio web UI", "responses": { "200": { "description": "HTML" } } }
+    },
+    "/runner": {
+      "get": { "summary": "Blackwell Runner AI Director game UI", "responses": { "200": { "description": "HTML" } } }
+    },
+    "/svg": {
+      "get": { "summary": "ZKAEDI SVG Forge triple-plane UI", "responses": { "200": { "description": "HTML" } } }
+    },
+    "/mario": {
+      "get": { "summary": "Super Blackwell 2D Mario platformer UI", "responses": { "200": { "description": "HTML" } } }
+    },
+    "/v1/models": {
+      "get": {
+        "summary": "List loaded base model and hot-swappable LoRA cartridges",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Model list" } }
+      }
+    },
+    "/v1/models/{model_id}": {
+      "get": {
+        "summary": "Inspect a specific model or <model_id>:<adapter> variant",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Model metadata" }, "404": { "description": "Model not found" } }
+      }
+    },
+    "/v1/chat/completions": {
+      "post": {
+        "summary": "OpenAI-compatible Chat Completions (SSE, logprobs, stop sequences, penalties, LoRA routing)",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Chat completion or SSE chunks" } }
+      }
+    },
+    "/v1/completions": {
+      "post": {
+        "summary": "OpenAI-compatible Text Completions (SSE, logprobs, stop sequences, penalties, LoRA routing)",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Text completion or SSE chunks" } }
+      }
+    },
+    "/v1/responses": {
+      "post": {
+        "summary": "OpenAI Responses API (/v1/responses)",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Structured response object or SSE events" } }
+      }
+    },
+    "/v1/messages": {
+      "post": {
+        "summary": "Anthropic Messages API (/v1/messages) with system prompt, stop_sequences & SSE streaming",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Anthropic message JSON or SSE events" } }
+      }
+    },
+    "/v1/embeddings": {
+      "post": {
+        "summary": "GPU hidden-state RMSNorm mean-pooled L2-normalized embeddings",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Embedding vectors" } }
+      }
+    },
+    "/v1/tokenize": {
+      "post": {
+        "summary": "Encode UTF-8 text into model token IDs and decoded pieces",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Token ID array" } }
+      }
+    },
+    "/v1/detokenize": {
+      "post": {
+        "summary": "Decode model token IDs back to UTF-8 text",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Decoded text" } }
+      }
+    },
+    "/v1/batch": {
+      "post": {
+        "summary": "Sequential multi-cartridge inference batch execution",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Batch completion array" } }
+      }
+    },
+    "/v1/lora/adapters": {
+      "get": {
+        "summary": "List loaded LoRA cartridges in VRAM",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Adapter registry" } }
+      }
+    },
+    "/v1/lora/adapters/{name}": {
+      "get": {
+        "summary": "Inspect a single loaded LoRA cartridge by name",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Adapter info" }, "404": { "description": "Not found" } }
+      },
+      "delete": {
+        "summary": "Unload a LoRA cartridge by name and invalidate CUDA Graph",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Unloaded" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/v1/lora/files": {
+      "get": {
+        "summary": "Inspect .zcc_lora cartridges on disk in --lora-dir",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Disk cartridge list" } }
+      }
+    },
+    "/v1/lora/select": {
+      "post": {
+        "summary": "Switch default active LoRA cartridge",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Selected" } }
+      }
+    },
+    "/v1/lora/scale": {
+      "post": {
+        "summary": "Set dynamic scaling multiplier (0.0..4.0) via device step_args",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Scaled" } }
+      }
+    },
+    "/v1/lora/load": {
+      "post": {
+        "summary": "Load verified .zcc_lora file from disk into VRAM",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Loaded" } }
+      }
+    },
+    "/v1/lora/save": {
+      "post": {
+        "summary": "Save in-VRAM LoRA cartridge to disk as .zcc_lora",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Saved" } }
+      }
+    },
+    "/v1/lora/unload": {
+      "post": {
+        "summary": "Unload a LoRA cartridge by name via POST",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Unloaded" } }
+      }
+    },
+    "/v1/lora/train": {
+      "post": {
+        "summary": "Run real GPU LoRA AdamW fine-tuning over Q:/A: SFT pairs",
+        "security": [{ "bearerAuth": [] }, { "apiKeyAuth": [] }],
+        "responses": { "200": { "description": "Training loss stream or summary" } }
+      }
+    }
+  }
+}

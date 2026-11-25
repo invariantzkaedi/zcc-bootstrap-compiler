@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZKAEDI ZCC // Sovereign OpenAI GPU Server</title>
+<style>
+:root {
+  --bg: #070b10;
+  --panel: #0d141d;
+  --panel-2: #121c29;
+  --border: #1e2d40;
+  --text: #e6eef8;
+  --muted: #8ea3bd;
+  --accent: #38bdf8;
+  --accent-2: #10b981;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+}
+.zcc-backdrop-fx {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 10%, rgba(56, 189, 248, 0.08), transparent 42%),
+    radial-gradient(circle at 88% 85%, rgba(16, 185, 129, 0.07), transparent 45%);
+  pointer-events: none !important;
+  z-index: 1;
+}
+.zcc-shell {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  max-width: 1120px;
+  margin: 0 auto;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+}
+.zcc-header {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.zcc-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.zcc-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.zcc-sub {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+.zcc-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.badge {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text);
+}
+.badge.ok { border-color: rgba(16, 185, 129, 0.45); color: #6ee7b7; }
+.badge.accent { border-color: rgba(56, 189, 248, 0.45); color: #7dd3fc; }
+.badge.warn { border-color: rgba(245, 158, 11, 0.45); color: #fcd34d; }
+.zcc-main {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 290px;
+  gap: 12px;
+}
+@media (max-width: 860px) {
+  .zcc-main { grid-template-columns: 1fr; }
+}
+.chat-pane {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.transcript {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.msg {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  max-width: 92%;
+}
+.msg.user {
+  align-self: flex-end;
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.08);
+}
+.msg.assistant {
+  align-self: flex-start;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.msg.system-note {
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+  background: transparent;
+  border-style: dashed;
+}
+.msg-role {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 4px;
+  font-family: var(--mono);
+}
+.msg-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  font-size: 14px;
+}
+.composer {
+  border-top: 1px solid var(--border);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+textarea, input {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: var(--sans);
+  font-size: 14px;
+  user-select: auto;
+  pointer-events: auto;
+}
+textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 54px;
+}
+.composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.btn-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+button {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  user-select: auto;
+  pointer-events: auto;
+}
+button.primary {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+button.danger {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.sidebar {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.field label {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  user-select: auto;
+}
+.status-line {
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+.endpoint-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+</style>
+</head>
+<body>
+<div class="zcc-backdrop-fx" aria-hidden="true"></div>
+<div class="zcc-shell">
+  <header class="zcc-header">
+    <div class="zcc-brand">
+      <div class="zcc-title">ZKAEDI ZCC // Sovereign OpenAI GPU Server</div>
+      <div class="zcc-sub">Zero Python &middot; Zero MSVC &middot; Zero CUDA SDK &middot; Winsock2 + nvcuda.dll ONLY</div>
+    </div>
+    <div class="zcc-badges">
+      <span id="modelBadge" class="badge accent">model: loading...</span>
+      <span id="archBadge" class="badge">arch: --</span>
+      <span id="kvBadge" class="badge">kv: --</span>
+      <span id="sealBadge" class="badge">seal: checking</span>
+      <span id="tpsBadge" class="badge ok">tok/s: --</span>
+    </div>
+  </header>
+
+  <main class="zcc-main">
+    <section class="chat-pane">
+      <div id="chatTranscript" class="transcript" aria-live="polite">
+        <div class="msg system-note">
+          <div class="msg-body">Connected to sovereign native PE32+ HTTP/SSE server. Enter a prompt or point any OpenAI SDK at /v1/chat/completions.</div>
+        </div>
+      </div>
+      <div class="composer">
+        <textarea id="promptInput" rows="2" placeholder="Ask ZKAEDI ZCC LLM anything... (Enter to send, Shift+Enter for newline)"></textarea>
+        <div class="composer-actions">
+          <span id="statusLine" class="status-line">Ready</span>
+          <div class="btn-group">
+            <button id="clearBtn" type="button" onclick="zccClearChat(event)">Clear Chat</button>
+            <button id="stopBtn" type="button" class="danger" onclick="zccStopStream(event)" disabled>Stop</button>
+            <button id="sendBtn" type="button" class="primary" onclick="zccSendMessage(event)">Send</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="field">
+        <label for="systemPrompt">System Prompt</label>
+        <textarea id="systemPrompt" rows="3" placeholder="Optional system instructions..."></textarea>
+      </div>
+      <div class="field">
+        <label for="tempInput">Temperature (0.0 = greedy)</label>
+        <input id="tempInput" type="number" step="0.05" min="0" max="2" value="0.7">
+      </div>
+      <div class="field">
+        <label for="maxTokensInput">Max Tokens</label>
+        <input id="maxTokensInput" type="number" step="16" min="1" max="2048" value="128">
+      </div>
+      <label class="check-row" for="streamCheck">
+        <input id="streamCheck" type="checkbox" checked>
+        <span>Stream SSE tokens live</span>
+      </label>
+      <div class="endpoint-box">
+        <div>GET  /health</div>
+        <div>GET  /v1/models</div>
+        <div>POST /v1/chat/completions</div>
+        <div>POST /v1/completions</div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var chatHistory = [];
+  var activeAbort = null;
+  var activeModelId = "zkaedi-zcc-llm";
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function appendMessage(role, content, cssClass) {
+    var box = byId("chatTranscript");
+    var card = document.createElement("div");
+    card.className = "msg " + (cssClass || role);
+    var hdr = document.createElement("div");
+    hdr.className = "msg-role";
+    hdr.textContent = role;
+    var body = document.createElement("div");
+    body.className = "msg-body";
+    body.textContent = content || "";
+    card.appendChild(hdr);
+    card.appendChild(body);
+    box.appendChild(card);
+    box.scrollTop = box.scrollHeight;
+    return body;
+  }
+
+  function setBusy(isBusy, label) {
+    var sendBtn = byId("sendBtn");
+    var stopBtn = byId("stopBtn");
+    var statusEl = byId("statusLine");
+    if (sendBtn) sendBtn.disabled = isBusy;
+    if (stopBtn) stopBtn.disabled = !isBusy;
+    if (statusEl && label) statusEl.textContent = label;
+  }
+
+  function applyHealthPayload(data) {
+    if (!data || typeof data !== "object") return;
+    if (data.model) activeModelId = String(data.model);
+    var mb = byId("modelBadge");
+    var ab = byId("archBadge");
+    var kb = byId("kvBadge");
+    var sb = byId("sealBadge");
+    var tb = byId("tpsBadge");
+    if (mb) mb.textContent = "model: " + activeModelId;
+    if (ab) ab.textContent = "arch: " + (data.arch || "--") + " L" + (data.n_layers || 0) + " aot=" + (data.aot_tier || 0);
+    if (kb) kb.textContent = "kv: " + (data.kv_type || "--") + " ctx=" + (data.eff_max_seq || 0);
+    if (sb) {
+      if (data.seal_verified) {
+        sb.className = "badge ok";
+        sb.textContent = "seal: SHA-256 verified";
+      } else {
+        sb.className = "badge warn";
+        sb.textContent = "seal: external file";
+      }
+    }
+    if (tb && typeof data.last_tok_per_sec === "number" && data.last_tok_per_sec > 0) {
+      tb.textContent = "tok/s: " + data.last_tok_per_sec.toFixed(1);
+    }
+  }
+
+  function refreshHealth() {
+    if (typeof fetch !== "function") return Promise.resolve(null);
+    return fetch("/health", { method: "GET" })
+      .then(function (resp) {
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        return resp.json();
+      })
+      .then(function (data) {
+        applyHealthPayload(data);
+        return data;
+      })
+      .catch(function () { return null; });
+  }
+
+  function parseSseLines(buffer, onDelta, onDone) {
+    var lines = buffer.split(/\r?\n/);
+    var remainder = lines.pop();
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line || line.indexOf("data:") !== 0) continue;
+      var payload = line.slice(5).trim();
+      if (payload === "[DONE]") {
+        if (onDone) onDone();
+        continue;
+      }
+      try {
+        var obj = JSON.parse(payload);
+        if (obj && obj.choices && obj.choices.length > 0) {
+          var ch = obj.choices[0];
+          var deltaText = (ch.delta && typeof ch.delta.content === "string")
+            ? ch.delta.content
+            : (typeof ch.text === "string" ? ch.text : "");
+          if (deltaText && onDelta) onDelta(deltaText);
+        }
+      } catch (_err) {
+        /* ignore malformed non-JSON comment/keepalive chunk */
+      }
+    }
+    return remainder;
+  }
+
+  function markHandled(ev) {
+    if (!ev) return true;
+    if (ev._zccHandled) return false;
+    ev._zccHandled = true;
+    return true;
+  }
+
+  window.zccStopStream = function (ev) {
+    if (!markHandled(ev)) return;
+    if (activeAbort) {
+      activeAbort.abort();
+      activeAbort = null;
+    }
+    setBusy(false, "Stopped");
+  };
+
+  window.zccClearChat = function (ev) {
+    if (!markHandled(ev)) return;
+    if (activeAbort) {
+      activeAbort.abort();
+      activeAbort = null;
+    }
+    chatHistory = [];
+    var box = byId("chatTranscript");
+    if (box) {
+      box.textContent = "";
+      appendMessage("system", "Transcript cleared.", "system-note");
+    }
+    setBusy(false, "Ready");
+  };
+
+  window.zccSendMessage = function (ev) {
+    if (!markHandled(ev)) return;
+    if (activeAbort) return;
+
+    var promptEl = byId("promptInput");
+    var sysEl = byId("systemPrompt");
+    var tempEl = byId("tempInput");
+    var maxEl = byId("maxTokensInput");
+    var streamEl = byId("streamCheck");
+
+    var promptText = promptEl ? promptEl.value.trim() : "";
+    if (!promptText) return;
+
+    var sysText = sysEl ? sysEl.value.trim() : "";
+    var tempVal = tempEl ? parseFloat(tempEl.value) : 0.7;
+    if (!(tempVal >= 0 && tempVal <= 2)) tempVal = 0.7;
+    var maxToks = maxEl ? parseInt(maxEl.value, 10) : 128;
+    if (!(maxToks >= 1 && maxToks <= 2048)) maxToks = 128;
+    var wantStream = streamEl ? !!streamEl.checked : true;
+
+    if (promptEl) promptEl.value = "";
+    appendMessage("user", promptText, "user");
+    chatHistory.push({ role: "user", content: promptText });
+
+    var reqMessages = [];
+    if (sysText) reqMessages.push({ role: "system", content: sysText });
+    for (var i = 0; i < chatHistory.length; i++) reqMessages.push(chatHistory[i]);
+
+    var assistantBody = appendMessage("assistant", "", "assistant");
+    var accText = "";
+    var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    activeAbort = ctrl;
+    setBusy(true, wantStream ? "Streaming SSE..." : "Generating...");
+
+    var bodyJson = JSON.stringify({
+      model: activeModelId,
+      messages: reqMessages,
+      temperature: tempVal,
+      max_tokens: maxToks,
+      stream: wantStream
+    });
+
+    fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: bodyJson,
+      signal: ctrl ? ctrl.signal : undefined
+    })
+      .then(function (resp) {
+        if (!resp.ok) {
+          return resp.text().then(function (errTxt) {
+            throw new Error("HTTP " + resp.status + ": " + errTxt);
+          });
+        }
+        if (!wantStream || !resp.body || typeof resp.body.getReader !== "function") {
+          return resp.json().then(function (json) {
+            var content = (json.choices && json.choices[0] && json.choices[0].message)
+              ? json.choices[0].message.content
+              : "";
+            accText = content || "";
+            assistantBody.textContent = accText;
+          });
+        }
+        var reader = resp.body.getReader();
+        var decoder = new TextDecoder("utf-8");
+        var sseBuf = "";
+        function pump() {
+          return reader.read().then(function (chunk) {
+            if (chunk.done) {
+              if (sseBuf) parseSseLines(sseBuf + "\n", function (d) {
+                accText += d;
+                assistantBody.textContent = accText;
+              });
+              return;
+            }
+            sseBuf += decoder.decode(chunk.value, { stream: true });
+            sseBuf = parseSseLines(sseBuf, function (d) {
+              accText += d;
+              assistantBody.textContent = accText;
+            });
+            return pump();
+          });
+        }
+        return pump();
+      })
+      .then(function () {
+        chatHistory.push({ role: "assistant", content: accText });
+        setBusy(false, "Ready");
+        return refreshHealth();
+      })
+      .catch(function (err) {
+        if (err && err.name === "AbortError") {
+          assistantBody.textContent = accText + " [aborted]";
+          setBusy(false, "Aborted");
+        } else {
+          assistantBody.textContent = "[Error: " + (err ? err.message : "request failed") + "]";
+          setBusy(false, "Error");
+        }
+      })
+      .then(function () {
+        if (activeAbort === ctrl) activeAbort = null;
+      });
+  };
+
+  function bindControls() {
+    var sendBtn = byId("sendBtn");
+    var stopBtn = byId("stopBtn");
+    var clearBtn = byId("clearBtn");
+    var promptEl = byId("promptInput");
+    if (sendBtn && !sendBtn.dataset.zccBound) {
+      sendBtn.dataset.zccBound = "1";
+      sendBtn.addEventListener("click", window.zccSendMessage);
+    }
+    if (stopBtn && !stopBtn.dataset.zccBound) {
+      stopBtn.dataset.zccBound = "1";
+      stopBtn.addEventListener("click", window.zccStopStream);
+    }
+    if (clearBtn && !clearBtn.dataset.zccBound) {
+      clearBtn.dataset.zccBound = "1";
+      clearBtn.addEventListener("click", window.zccClearChat);
+    }
+    if (promptEl && !promptEl.dataset.zccBound) {
+      promptEl.dataset.zccBound = "1";
+      promptEl.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" && !ev.shiftKey) {
+          ev.preventDefault();
+          window.zccSendMessage(ev);
+        }
+      });
+    }
+  }
+
+  window.__zccTestHooks = {
+    parseSseLines: parseSseLines,
+    applyHealthPayload: applyHealthPayload,
+    bindControls: bindControls
+  };
+
+  bindControls();
+  refreshHealth();
+})();
+</script>
+</body>
+</html>

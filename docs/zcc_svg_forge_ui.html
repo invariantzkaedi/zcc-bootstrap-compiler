@@ -1,0 +1,1711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZKAEDI SVG FORGE // SM 12.0 Live Vector &amp; SDF Engine</title>
+<style>
+:root {
+  --bg: #050507;
+  --panel: #0c0e13;
+  --panel-2: #12151d;
+  --border: rgba(212, 175, 55, 0.28);
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --gold: #d4af37;
+  --gold-bright: #e8cc7c;
+  --emerald: #34d399;
+  --crimson: #f87171;
+  --cyan: #38bdf8;
+  --text: #f3efe6;
+  --muted: #a59f93;
+  --mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+}
+.zcc-backdrop-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none !important;
+  background:
+    radial-gradient(circle at 18% 15%, rgba(212, 175, 55, 0.08), transparent 46%),
+    radial-gradient(circle at 82% 85%, rgba(52, 211, 153, 0.06), transparent 45%);
+}
+.zcc-shell {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  max-width: 1580px;
+  margin: 0 auto;
+  padding: 12px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.zcc-header {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  background: linear-gradient(135deg, #0d0f15 0%, #15120b 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.brand-row { display: flex; align-items: center; gap: 10px; }
+.crest {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #e8cc7c, #9b771a);
+  color: #090a0d;
+  font-weight: 800;
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+.title { font-size: 16px; font-weight: 700; letter-spacing: 0.03em; }
+.title .gold { color: var(--gold-bright); }
+.sub { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.hdr-controls {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.badge {
+  font-size: 11px;
+  font-family: var(--mono);
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.badge.gold { border-color: var(--border); color: var(--gold-bright); }
+.badge.ok { border-color: rgba(52, 211, 153, 0.45); color: var(--emerald); }
+.badge.warn { border-color: rgba(248, 113, 113, 0.45); color: var(--crimson); }
+.throttle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+.nav-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--gold-bright);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: auto;
+}
+.nav-pill:hover { border-color: var(--gold); background: rgba(212, 175, 55, 0.12); }
+.nav-pill.emerald { border-color: rgba(52, 211, 153, 0.45); color: var(--emerald); }
+.forge-grid {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: 330px minmax(420px, 1fr) 360px;
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 1260px) {
+  .forge-grid { grid-template-columns: 1fr; }
+}
+.card {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.card-bar {
+  padding: 9px 12px;
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.08), transparent);
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.card-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gold-bright);
+}
+.card-body {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kicker {
+  font-size: 10px;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--muted);
+  text-transform: uppercase;
+}
+input, select, textarea {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  user-select: auto;
+  width: 100%;
+  background: #08090d;
+  color: var(--text);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: var(--sans);
+}
+.mono { font-family: var(--mono); }
+textarea { resize: vertical; line-height: 1.35; }
+button {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  user-select: auto;
+  cursor: pointer;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.14s ease;
+}
+button:hover:not(:disabled) { border-color: var(--gold-bright); }
+button.primary {
+  background: linear-gradient(180deg, #e5c365 0%, #b88c24 100%);
+  border-color: var(--gold-bright);
+  color: #0b0c10;
+  font-weight: 700;
+}
+button.emerald {
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  border-color: #34d399;
+  color: #04120c;
+  font-weight: 700;
+}
+button.mini { padding: 5px 8px; font-size: 11px; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.chip-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.planes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 980px) {
+  .planes-grid { grid-template-columns: 1fr; }
+}
+.plane-box {
+  background: #06070a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.plane-hdr {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--gold-bright);
+  text-transform: uppercase;
+}
+#svgLiveStage {
+  width: 100%;
+  max-width: 260px;
+  height: 260px;
+  background: radial-gradient(circle at 50% 50%, #12151e 0%, #050507 100%);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  display: block;
+}
+#sdfCanvas, #extrude3dCanvas {
+  width: 100%;
+  height: 260px;
+  background: #050608;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  display: block;
+}
+#extrude3dCanvas { cursor: grab; }
+#forgeLossCanvas {
+  width: 100%;
+  height: 115px;
+  background: #06070a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: block;
+}
+.status-line { font-family: var(--mono); font-size: 11px; color: var(--muted); word-break: break-word; }
+.compare-box {
+  background: #06070a;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: pre-wrap;
+  max-height: 130px;
+  overflow-y: auto;
+}
+</style>
+</head>
+<body>
+<div class="zcc-backdrop-fx" aria-hidden="true"></div>
+<div class="zcc-shell">
+  <header class="zcc-header">
+    <div class="brand-row">
+      <div class="crest" aria-hidden="true">SVG</div>
+      <div>
+        <div class="title">ZKAEDI <span class="gold">SVG FORGE</span> // SM 12.0 Live Vector &amp; SDF Engine</div>
+        <div class="sub">Zero-Asset Symbolic Graphics &middot; 2D Signed Distance Fields &middot; 60 FPS 3D Extrusion &middot; XSS-Sanitized DOM</div>
+      </div>
+    </div>
+
+    <div class="hdr-controls">
+      <span id="gpuPill" class="badge gold">GPU: probing...</span>
+      <span id="adapterPill" class="badge ok">Cartridge: base</span>
+      <span id="forgeStatusPill" class="badge">Forge: Ready</span>
+      <span id="forgeMetricsPill" class="badge">AI: --</span>
+      <select id="forgeAdapterSelect" style="width:auto;" onchange="zccSvgSelectAdapter(event)">
+        <option value="base">base (untrained)</option>
+      </select>
+      <div class="throttle-wrap" title="Live LoRA Strength">
+        <span>Gain</span>
+        <input id="forgeScaleSlider" type="range" min="0" max="2" step="0.05" value="1" oninput="zccSvgScaleChange(event)" style="width:74px;" disabled>
+        <span id="forgeScaleVal">1.00x</span>
+      </div>
+      <a class="nav-pill" href="/">Studio</a>
+      <a class="nav-pill emerald" href="/runner">Blackwell Runner</a>
+      <a class="nav-pill" href="/mario" style="border-color:rgba(248,113,113,0.55);color:#fca5a5;">Super Blackwell</a>
+    </div>
+  </header>
+
+  <div class="forge-grid">
+    <section class="card">
+      <div class="card-bar">
+        <span class="card-title">RTX 5070 Vector Synthesizer</span>
+        <button id="forgeCompareBtn" type="button" class="mini" onclick="zccSvgForgeCompareBase(event)">Compare vs Base</button>
+      </div>
+      <div class="card-body">
+        <div class="grid-2">
+          <div class="field">
+            <label for="forgeCatSelect">Category</label>
+            <select id="forgeCatSelect">
+              <option value="SHIP">SHIP</option>
+              <option value="BOSS">BOSS</option>
+              <option value="EMBLEM">EMBLEM</option>
+              <option value="PORTAL">PORTAL</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="forgeStyleSelect">Design Style</label>
+            <select id="forgeStyleSelect">
+              <option value="obsidian_gold">obsidian_gold</option>
+              <option value="emerald_rift">emerald_rift</option>
+              <option value="crimson_core">crimson_core</option>
+              <option value="zero_g_cyan">zero_g_cyan</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="field" style="grid-column: span 2;">
+            <label for="forgeRoleInput">Asset Role</label>
+            <input id="forgeRoleInput" class="mono" type="text" value="apex_interceptor">
+          </div>
+          <div class="field">
+            <label for="forgeTempInput">Temp</label>
+            <input id="forgeTempInput" class="mono" type="number" min="0" max="1.5" step="0.05" value="0.0">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="forgeMaxTokInput">Max Tokens</label>
+            <input id="forgeMaxTokInput" class="mono" type="number" min="64" max="240" step="8" value="160">
+          </div>
+          <div class="field" style="justify-content:flex-end;">
+            <button id="forgeGenBtn" type="button" class="primary" onclick="zccSvgForgeGenerate(event)">Synthesize SVG on RTX 5070</button>
+          </div>
+        </div>
+
+        <span class="kicker">Quick Blueprint Presets</span>
+        <div class="chip-grid">
+          <button id="presetApexBtn" type="button" class="mini" onclick="zccSvgLoadPreset('SHIP','obsidian_gold','apex_interceptor',event)">Apex Ship</button>
+          <button id="presetNemesisBtn" type="button" class="mini" onclick="zccSvgLoadPreset('BOSS','crimson_core','nemesis_eye',event)">Nemesis Eye</button>
+          <button id="presetCrestBtn" type="button" class="mini" onclick="zccSvgLoadPreset('EMBLEM','obsidian_gold','zcc_sovereign_crest',event)">ZCC Crest</button>
+          <button id="presetDieBtn" type="button" class="mini" onclick="zccSvgLoadPreset('EMBLEM','emerald_rift','blackwell_die',event)">Blackwell Die</button>
+          <button id="presetQpuBtn" type="button" class="mini" onclick="zccSvgLoadPreset('EMBLEM','zero_g_cyan','quantum_qpu',event)">Quantum QPU</button>
+          <button id="presetRiftBtn" type="button" class="mini" onclick="zccSvgLoadPreset('PORTAL','obsidian_gold','rift_arch',event)">Rift Arch</button>
+        </div>
+
+        <span class="kicker">Genetic Mutator &amp; Supercharger</span>
+        <div class="chip-grid">
+          <button id="mutateBtn" type="button" class="mini" onclick="zccSvgMutate(event)">Mutate Geometry</button>
+          <button id="symmetrizeBtn" type="button" class="mini" onclick="zccSvgSymmetrize(event)">Enforce Symmetry</button>
+          <button id="paletteBtn" type="button" class="mini" onclick="zccSvgCyclePalette(event)">Cycle Palette</button>
+          <button id="fxToggleBtn" type="button" class="mini" onclick="zccSvgToggleFx(event)">FX Glow: ON</button>
+        </div>
+
+        <span class="kicker">LoRA vs Base Comparison</span>
+        <div id="compareBox" class="compare-box">Click "Compare vs Base" to compare the active .zcc_lora vector blueprint against base Qwen2.5 weights.</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-bar">
+        <span class="card-title">Triple-Plane Visual IR Viewport (Vector + 2D SDF + 3D Extrusion)</span>
+        <span id="astStatsLine" class="status-line">prims=0 | verts=0 | CLEAN</span>
+      </div>
+      <div class="card-body">
+        <div class="planes-grid">
+          <div class="plane-box">
+            <div class="plane-hdr"><span>1. Live SVG Stage</span><span id="stageModeBadge">FX+AST</span></div>
+            <svg id="svgLiveStage" viewBox="0 0 128 128" width="280" height="280"></svg>
+          </div>
+          <div class="plane-box">
+            <div class="plane-hdr"><span>2. 2D SDF Contour</span><span id="sdfReadout">min=0.0</span></div>
+            <canvas id="sdfCanvas" width="320" height="260"></canvas>
+          </div>
+          <div class="plane-box">
+            <div class="plane-hdr">
+              <span>3. 3D Extrude</span>
+              <input id="extrudeDepthSlider" type="range" min="4" max="36" step="2" value="18" oninput="zccSvgDepthChange(event)" style="width:76px;padding:0;">
+            </div>
+            <canvas id="extrude3dCanvas" width="320" height="260"></canvas>
+          </div>
+        </div>
+
+        <div class="btn-row" style="justify-content:space-between;">
+          <div class="btn-row">
+            <button id="equipShipBtn" type="button" class="emerald" onclick="zccSvgEquipToRunner('ship', event)">Equip as Runner Ship</button>
+            <button id="equipBossBtn" type="button" class="primary" onclick="zccSvgEquipToRunner('boss', event)">Equip as Runner Boss</button>
+          </div>
+          <div class="btn-row">
+            <button id="exportRawBtn" type="button" class="mini" onclick="zccSvgDownload('raw', event)">Export .svg</button>
+            <button id="exportProofBtn" type="button" class="mini" onclick="zccSvgDownload('proof', event)">Export Proof Card</button>
+          </div>
+        </div>
+        <div id="equipStatusLine" class="status-line">Runner bridge idle. Equip any ship or boss crest straight into /runner.</div>
+
+        <div class="field">
+          <div class="btn-row" style="justify-content:space-between;">
+            <label for="svgSourceInput">Sanitized SVG Vector IR Source</label>
+            <button id="applySourceBtn" type="button" class="mini" onclick="zccSvgApplySource(event)">Parse &amp; Render SVG</button>
+          </div>
+          <textarea id="svgSourceInput" class="mono" rows="5"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <aside class="card">
+      <div class="card-bar">
+        <span class="card-title">Live Vector Style LoRA Trainer (RTX 5070)</span>
+        <button id="loadStarterCorpusBtn" type="button" class="mini" onclick="zccSvgLoadStarterCorpus(event)">Load Starter SVG Corpus</button>
+      </div>
+      <div class="card-body">
+        <div class="grid-2">
+          <div class="field">
+            <label for="forgeAliasInput">Cartridge Alias</label>
+            <input id="forgeAliasInput" class="mono" type="text" value="svg_style_custom">
+          </div>
+          <div class="field">
+            <label for="forgeStepsInput">Train Steps</label>
+            <input id="forgeStepsInput" class="mono" type="number" min="20" max="200" value="70">
+          </div>
+        </div>
+
+        <div class="btn-row" style="justify-content:space-between;">
+          <button id="pinSvgBtn" type="button" class="mini" onclick="zccSvgPinToCorpus(event)">+ Pin Current SVG to Q/A</button>
+          <button id="trainStyleBtn" type="button" class="emerald" onclick="zccSvgTrainStyleCartridge(event)">Train Cartridge on RTX 5070</button>
+        </div>
+
+        <div class="field">
+          <label for="forgeSftInput">SFT Q/A Vector Corpus (&lt;= 256 tok/ex)</label>
+          <textarea id="forgeSftInput" class="mono" rows="10"></textarea>
+        </div>
+
+        <div id="forgeTrainStatus" class="status-line">Ready to pin current SVGs or train a custom design cartridge.</div>
+        <canvas id="forgeLossCanvas" width="420" height="115"></canvas>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  function byId(id) { return (typeof document !== "undefined") ? document.getElementById(id) : null; }
+
+  var DEFAULT_BLUEPRINT = '<svg viewBox="0 0 128 128"><polygon points="64,10 110,98 64,76 18,98" fill="#181510" stroke="#e8cc7c" stroke-width="3"/><polygon points="64,28 84,78 64,66 44,78" fill="#d4af37"/><circle cx="64" cy="52" r="7" fill="#f3efe6"/></svg>';
+
+  var PALETTES = [
+    { name: "obsidian_gold", fill: "#181510", accent: "#d4af37", stroke: "#e8cc7c", core: "#f3efe6" },
+    { name: "emerald_rift",  fill: "#0b1e17", accent: "#10b981", stroke: "#34d399", core: "#d1fae5" },
+    { name: "crimson_core",  fill: "#220c10", accent: "#ef4444", stroke: "#f87171", core: "#fca5a5" },
+    { name: "zero_g_cyan",   fill: "#091826", accent: "#0284c7", stroke: "#38bdf8", core: "#e0f2fe" }
+  ];
+
+  var PRESET_SVGS = {
+    "SHIP|obsidian_gold|apex_interceptor": DEFAULT_BLUEPRINT,
+    "BOSS|crimson_core|nemesis_eye": '<svg viewBox="0 0 128 128"><polygon points="64,12 114,42 114,86 64,116 14,86 14,42" fill="#1a090c" stroke="#f87171" stroke-width="4"/><circle cx="64" cy="64" r="28" fill="#7f1d1d" stroke="#fca5a5" stroke-width="3"/><circle cx="64" cy="64" r="11" fill="#ef4444"/></svg>',
+    "EMBLEM|obsidian_gold|zcc_sovereign_crest": '<svg viewBox="0 0 128 128"><polygon points="64,10 110,30 100,86 64,118 28,86 18,30" fill="#14120c" stroke="#e8cc7c" stroke-width="4"/><path d="M40,42 L88,42 L40,86 L88,86" fill="none" stroke="#d4af37" stroke-width="6"/><circle cx="64" cy="64" r="8" fill="#f3efe6"/></svg>',
+    "EMBLEM|emerald_rift|blackwell_die": '<svg viewBox="0 0 128 128"><rect x="22" y="22" width="84" height="84" rx="10" fill="#071712" stroke="#34d399" stroke-width="3"/><rect x="42" y="42" width="44" height="44" fill="#065f46" stroke="#6ee7b7" stroke-width="2"/><circle cx="64" cy="64" r="11" fill="#34d399"/></svg>',
+    "EMBLEM|zero_g_cyan|quantum_qpu": '<svg viewBox="0 0 128 128"><circle cx="64" cy="64" r="44" fill="#07131f" stroke="#38bdf8" stroke-width="3"/><polygon points="64,20 102,86 26,86" fill="none" stroke="#93c5fd" stroke-width="3"/><polygon points="64,108 102,42 26,42" fill="none" stroke="#38bdf8" stroke-width="2"/></svg>',
+    "PORTAL|obsidian_gold|rift_arch": '<svg viewBox="0 0 128 128"><path d="M26,112 L26,54 L64,16 L102,54 L102,112 Z" fill="#12100b" stroke="#e8cc7c" stroke-width="4"/><path d="M44,112 L44,60 L64,38 L84,60 L84,112 Z" fill="#33260b" stroke="#d4af37" stroke-width="2"/><circle cx="64" cy="76" r="10" fill="#f3efe6"/></svg>'
+  };
+
+  var ALLOWED_TAGS = {
+    svg: 1, g: 1, path: 1, polygon: 1, polyline: 1, rect: 1, circle: 1, ellipse: 1, line: 1
+  };
+  var DANGEROUS_CONTAINERS = { script: 1, foreignobject: 1, iframe: 1, style: 1, object: 1, embed: 1 };
+  var ALLOWED_ATTRS = {
+    viewBox: 1, d: 1, points: 1, x: 1, y: 1, x1: 1, y1: 1, x2: 1, y2: 1,
+    cx: 1, cy: 1, r: 1, rx: 1, ry: 1, width: 1, height: 1,
+    fill: 1, stroke: 1, "stroke-width": 1, "stroke-linecap": 1, "stroke-linejoin": 1,
+    "stroke-dasharray": 1, opacity: 1, "fill-opacity": 1, "stroke-opacity": 1, transform: 1
+  };
+  var ATTR_CANON = { viewbox: "viewBox" };
+
+  var FORBID_SCHEMES = ["java" + "script:", "vb" + "script:", "da" + "ta:", "ht" + "tp:", "ht" + "tps:"];
+
+  var RUNNER_STORAGE_KEY = "zcc_runner_svg_loadout_v1";
+
+  var state = {
+    currentSvgText: DEFAULT_BLUEPRINT,
+    parsedModel: null,
+    primitives: [],
+    strippedCount: 0,
+    fxEnabled: true,
+    paletteIdx: 0,
+    extrudeDepth: 18,
+    yaw: 0.45,
+    pitch: 0.34,
+    dragging: false,
+    dragX: 0,
+    dragY: 0,
+    activeModelId: "zkaedi-prime-dpo-q4_k_m",
+    activeAdapter: "base",
+    activeScale: 1.0,
+    knownAdapters: [],
+    forgeBusy: false,
+    trainBusy: false,
+    lossPoints: [],
+    handledSeq: 0
+  };
+
+  function markHandled(ev) {
+    if (!ev) return true;
+    if (ev.__zccHandled) return false;
+    ev.__zccHandled = true;
+    return true;
+  }
+
+  function fnv1a32(str) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return ("00000000" + h.toString(16)).slice(-8);
+  }
+
+  function isAttrValueSafe(val) {
+    var low = String(val || "").toLowerCase();
+    for (var i = 0; i < FORBID_SCHEMES.length; i++) {
+      if (low.indexOf(FORBID_SCHEMES[i]) !== -1) return false;
+    }
+    if (low.indexOf("expression(") !== -1 || low.indexOf("url(") !== -1) return false;
+    return true;
+  }
+
+  function parseAttrs(rawAttrText) {
+    var out = {};
+    var stripped = 0;
+    var re = /([a-zA-Z_:][a-zA-Z0-9_.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+    var m;
+    while ((m = re.exec(rawAttrText)) !== null) {
+      var rawName = m[1];
+      var lowName = rawName.toLowerCase();
+      var canonName = ATTR_CANON[lowName] || (ALLOWED_ATTRS[rawName] ? rawName : lowName);
+      var val = (m[2] !== undefined ? m[2] : m[3]);
+      if (lowName === "xmlns" || lowName.indexOf("xmlns:") === 0) continue;
+      if (lowName.indexOf("on") === 0 || !ALLOWED_ATTRS[canonName] || !isAttrValueSafe(val)) {
+        stripped++;
+        continue;
+      }
+      out[canonName] = val.trim();
+    }
+    return { attrs: out, stripped: stripped };
+  }
+
+  function parseSafeSvgModel(rawText) {
+    var txt = String(rawText || "");
+    var strippedCount = 0;
+    txt = txt.replace(/<script\b[\s\S]*?<\/script>/gi, function () { strippedCount++; return ""; });
+    txt = txt.replace(/<foreignobject\b[\s\S]*?<\/foreignobject>/gi, function () { strippedCount++; return ""; });
+    txt = txt.replace(/<style\b[\s\S]*?<\/style>/gi, function () { strippedCount++; return ""; });
+    txt = txt.replace(/<iframe\b[\s\S]*?<\/iframe>/gi, function () { strippedCount++; return ""; });
+
+    var startIdx = txt.toLowerCase().indexOf("<svg");
+    if (startIdx >= 0) txt = txt.slice(startIdx);
+    var endIdx = txt.toLowerCase().indexOf("</svg>");
+    if (endIdx >= 0) txt = txt.slice(0, endIdx + 6);
+
+    var tagRe = /<\s*(\/?)\s*([a-zA-Z0-9_-]+)([^>]*?)(\/?)\s*>/g;
+    var viewBox = "0 0 128 128";
+    var nodes = [];
+    var skipDepth = 0;
+    var m;
+    while ((m = tagRe.exec(txt)) !== null) {
+      var isClose = m[1] === "/";
+      var tag = m[2].toLowerCase();
+      var rawAttrs = m[3] || "";
+      var selfClose = m[4] === "/";
+
+      if (DANGEROUS_CONTAINERS[tag]) {
+        strippedCount++;
+        if (!isClose && !selfClose) skipDepth++;
+        else if (isClose && skipDepth > 0) skipDepth--;
+        continue;
+      }
+      if (skipDepth > 0) continue;
+
+      if (!ALLOWED_TAGS[tag]) {
+        strippedCount++;
+        continue;
+      }
+      if (isClose) continue;
+
+      var parsedAttrs = parseAttrs(rawAttrs);
+      strippedCount += parsedAttrs.stripped;
+
+      if (tag === "svg") {
+        if (parsedAttrs.attrs.viewBox) viewBox = parsedAttrs.attrs.viewBox;
+        continue;
+      }
+      if (tag === "g") continue;
+      nodes.push({ tag: tag, attrs: parsedAttrs.attrs });
+    }
+    return { viewBox: viewBox, nodes: nodes, strippedCount: strippedCount };
+  }
+
+  function sanitizeSvgToString(model, withXmlnsNs) {
+    var m = (typeof model === "string") ? parseSafeSvgModel(model) : (model || { viewBox: "0 0 128 128", nodes: [] });
+    var nsPart = withXmlnsNs ? (' xmlns="' + withXmlnsNs + '"') : "";
+    var out = '<svg' + nsPart + ' viewBox="' + m.viewBox + '">';
+    for (var i = 0; i < m.nodes.length; i++) {
+      var nd = m.nodes[i];
+      out += "<" + nd.tag;
+      var keys = Object.keys(nd.attrs);
+      for (var k = 0; k < keys.length; k++) {
+        var av = String(nd.attrs[keys[k]]).replace(/"/g, "");
+        out += " " + keys[k] + '="' + av + '"';
+      }
+      out += "/>";
+    }
+    out += "</svg>";
+    return out;
+  }
+
+  function num(v, dflt) {
+    var n = parseFloat(v);
+    return Number.isFinite(n) ? n : (dflt || 0);
+  }
+
+  function parsePointsList(ptsStr) {
+    var nums = String(ptsStr || "").match(/-?\d+(?:\.\d+)?/g) || [];
+    var pts = [];
+    for (var i = 0; i + 1 < nums.length; i += 2) {
+      pts.push({ x: parseFloat(nums[i]), y: parseFloat(nums[i + 1]) });
+    }
+    return pts;
+  }
+
+  function parsePathSimple(dStr) {
+    var tokens = String(dStr || "").match(/[a-zA-Z]|-?\d+(?:\.\d+)?/g) || [];
+    var subpaths = [];
+    var curPts = [];
+    var cx = 0, cy = 0, idx = 0, cmd = "M";
+    function flushSub(closed) {
+      if (curPts.length >= 2) subpaths.push({ pts: curPts, closed: !!closed });
+      curPts = [];
+    }
+    while (idx < tokens.length) {
+      var tk = tokens[idx];
+      if (/^[a-zA-Z]$/.test(tk)) {
+        cmd = tk;
+        idx++;
+        if (cmd === "Z" || cmd === "z") {
+          flushSub(true);
+          continue;
+        }
+        continue;
+      }
+      if (cmd === "M" || cmd === "m" || cmd === "L" || cmd === "l" || cmd === "T" || cmd === "t") {
+        var nx = parseFloat(tokens[idx++]);
+        var ny = parseFloat(tokens[idx++]);
+        if (!Number.isFinite(nx) || !Number.isFinite(ny)) break;
+        if (cmd === "m" || cmd === "l" || cmd === "t") { nx += cx; ny += cy; }
+        if (cmd === "M" || cmd === "m") { flushSub(false); cmd = (cmd === "m") ? "l" : "L"; }
+        cx = nx; cy = ny;
+        curPts.push({ x: cx, y: cy });
+      } else if (cmd === "H" || cmd === "h") {
+        var hx = parseFloat(tokens[idx++]);
+        cx = (cmd === "h") ? cx + hx : hx;
+        curPts.push({ x: cx, y: cy });
+      } else if (cmd === "V" || cmd === "v") {
+        var vy = parseFloat(tokens[idx++]);
+        cy = (cmd === "v") ? cy + vy : vy;
+        curPts.push({ x: cx, y: cy });
+      } else if (cmd === "C" || cmd === "c") {
+        var c1x = parseFloat(tokens[idx++]), c1y = parseFloat(tokens[idx++]);
+        var c2x = parseFloat(tokens[idx++]), c2y = parseFloat(tokens[idx++]);
+        var ex = parseFloat(tokens[idx++]), ey = parseFloat(tokens[idx++]);
+        if (!Number.isFinite(ey)) break;
+        if (cmd === "c") {
+          c1x += cx; c1y += cy; c2x += cx; c2y += cy; ex += cx; ey += cy;
+        }
+        for (var st = 1; st <= 4; st++) {
+          var t = st / 4, mt = 1 - t;
+          var px = mt * mt * mt * cx + 3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + t * t * t * ex;
+          var py = mt * mt * mt * cy + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + t * t * t * ey;
+          curPts.push({ x: px, y: py });
+        }
+        cx = ex; cy = ey;
+      } else if (cmd === "Q" || cmd === "q") {
+        var qx = parseFloat(tokens[idx++]), qy = parseFloat(tokens[idx++]);
+        var qex = parseFloat(tokens[idx++]), qey = parseFloat(tokens[idx++]);
+        if (!Number.isFinite(qey)) break;
+        if (cmd === "q") { qx += cx; qy += cy; qex += cx; qey += cy; }
+        for (var qt = 1; qt <= 3; qt++) {
+          var u = qt / 3, mu = 1 - u;
+          curPts.push({
+            x: mu * mu * cx + 2 * mu * u * qx + u * u * qex,
+            y: mu * mu * cy + 2 * mu * u * qy + u * u * qey
+          });
+        }
+        cx = qex; cy = qey;
+      } else {
+        idx++;
+      }
+    }
+    flushSub(false);
+    return subpaths;
+  }
+
+  function extractPrimitives(model) {
+    var prims = [];
+    if (!model || !model.nodes) return prims;
+    for (var i = 0; i < model.nodes.length; i++) {
+      var nd = model.nodes[i];
+      var a = nd.attrs || {};
+      var fill = a.fill || "#d4af37";
+      var stroke = a.stroke || "#e8cc7c";
+      var sw = num(a["stroke-width"], 2);
+      if (nd.tag === "circle") {
+        prims.push({ kind: "circle", cx: num(a.cx, 64), cy: num(a.cy, 64), r: Math.max(1, num(a.r, 16)), fill: fill, stroke: stroke, sw: sw });
+      } else if (nd.tag === "ellipse") {
+        prims.push({ kind: "ellipse", cx: num(a.cx, 64), cy: num(a.cy, 64), rx: Math.max(1, num(a.rx, 24)), ry: Math.max(1, num(a.ry, 12)), fill: fill, stroke: stroke, sw: sw });
+      } else if (nd.tag === "rect") {
+        var rx = num(a.x, 24), ry = num(a.y, 24), rw = Math.max(2, num(a.width, 40)), rh = Math.max(2, num(a.height, 40));
+        prims.push({
+          kind: "rect", x: rx, y: ry, w: rw, h: rh, fill: fill, stroke: stroke, sw: sw,
+          pts: [{ x: rx, y: ry }, { x: rx + rw, y: ry }, { x: rx + rw, y: ry + rh }, { x: rx, y: ry + rh }],
+          closed: true
+        });
+      } else if (nd.tag === "polygon" || nd.tag === "polyline") {
+        var pts = parsePointsList(a.points);
+        if (pts.length >= 2) {
+          prims.push({ kind: nd.tag, pts: pts, closed: nd.tag === "polygon", fill: fill, stroke: stroke, sw: sw });
+        }
+      } else if (nd.tag === "line") {
+        prims.push({
+          kind: "line", x1: num(a.x1, 20), y1: num(a.y1, 64), x2: num(a.x2, 108), y2: num(a.y2, 64),
+          pts: [{ x: num(a.x1, 20), y: num(a.y1, 64) }, { x: num(a.x2, 108), y: num(a.y2, 64) }],
+          closed: false, fill: "none", stroke: stroke, sw: sw
+        });
+      } else if (nd.tag === "path") {
+        var subs = parsePathSimple(a.d);
+        for (var s = 0; s < subs.length; s++) {
+          prims.push({ kind: "path", pts: subs[s].pts, closed: subs[s].closed, fill: fill, stroke: stroke, sw: sw });
+        }
+      }
+    }
+    return prims;
+  }
+
+  function distToSegment(px, py, ax, ay, bx, by) {
+    var vx = bx - ax, vy = by - ay;
+    var wx = px - ax, wy = py - ay;
+    var len2 = vx * vx + vy * vy;
+    var t = len2 > 1e-6 ? Math.max(0, Math.min(1, (wx * vx + wy * vy) / len2)) : 0;
+    var dx = px - (ax + t * vx), dy = py - (ay + t * vy);
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function sdPolygon(px, py, pts, closed) {
+    if (!pts || pts.length < 2) return 128.0;
+    var minD = 1e9;
+    var inside = false;
+    var n = pts.length;
+    for (var i = 0, j = n - 1; i < n; j = i++) {
+      var xi = pts[i].x, yi = pts[i].y;
+      var xj = pts[j].x, yj = pts[j].y;
+      if (closed || i > 0) {
+        var ed = distToSegment(px, py, xj, yj, xi, yi);
+        if (ed < minD) minD = ed;
+      }
+      if (closed) {
+        var inter = ((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / ((yj - yi) || 1e-9) + xi);
+        if (inter) inside = !inside;
+      }
+    }
+    return (closed && inside) ? -minD : minD;
+  }
+
+  function sdBox(px, py, x, y, w, h) {
+    var cx = x + w * 0.5, cy = y + h * 0.5;
+    var dx = Math.abs(px - cx) - w * 0.5;
+    var dy = Math.abs(py - cy) - h * 0.5;
+    var outD = Math.sqrt(Math.max(dx, 0) * Math.max(dx, 0) + Math.max(dy, 0) * Math.max(dy, 0));
+    var inD = Math.min(Math.max(dx, dy), 0);
+    return outD + inD;
+  }
+
+  function evalSdfAt(px, py, prims) {
+    var arr = prims || state.primitives;
+    if (!arr || arr.length === 0) return 64.0;
+    var best = 1e9;
+    for (var i = 0; i < arr.length; i++) {
+      var pr = arr[i];
+      var d = 1e9;
+      if (pr.kind === "circle") {
+        d = Math.sqrt((px - pr.cx) * (px - pr.cx) + (py - pr.cy) * (py - pr.cy)) - pr.r;
+      } else if (pr.kind === "ellipse") {
+        var ex = (px - pr.cx) / Math.max(1, pr.rx);
+        var ey = (py - pr.cy) / Math.max(1, pr.ry);
+        d = (Math.sqrt(ex * ex + ey * ey) - 1.0) * Math.min(pr.rx, pr.ry);
+      } else if (pr.kind === "rect") {
+        d = sdBox(px, py, pr.x, pr.y, pr.w, pr.h);
+      } else if (pr.kind === "line") {
+        d = distToSegment(px, py, pr.x1, pr.y1, pr.x2, pr.y2) - 1.5;
+      } else if (pr.pts && pr.pts.length >= 2) {
+        d = sdPolygon(px, py, pr.pts, pr.closed);
+        if (!pr.closed) d -= 1.5;
+      }
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  function renderSvgStageDom() {
+    var stage = byId("svgLiveStage");
+    if (!stage || typeof document === "undefined") return;
+    var ns = stage.namespaceURI || null;
+    while (stage.firstChild) stage.removeChild(stage.firstChild);
+    function mk(tag) {
+      return (ns && typeof document.createElementNS === "function")
+        ? document.createElementNS(ns, tag)
+        : document.createElement(tag);
+    }
+
+    if (state.fxEnabled) {
+      var defs = mk("defs");
+      var flt = mk("filter");
+      flt.setAttribute("id", "zccGlow");
+      flt.setAttribute("x", "-30%");
+      flt.setAttribute("y", "-30%");
+      flt.setAttribute("width", "160%");
+      flt.setAttribute("height", "160%");
+      var blur = mk("feDropShadow");
+      blur.setAttribute("dx", "0");
+      blur.setAttribute("dy", "0");
+      blur.setAttribute("stdDeviation", "2.4");
+      blur.setAttribute("flood-color", "#e8cc7c");
+      blur.setAttribute("flood-opacity", "0.75");
+      flt.appendChild(blur);
+      defs.appendChild(flt);
+      stage.appendChild(defs);
+
+      for (var g = 16; g < 128; g += 16) {
+        var hl = mk("line");
+        hl.setAttribute("x1", "0"); hl.setAttribute("y1", String(g));
+        hl.setAttribute("x2", "128"); hl.setAttribute("y2", String(g));
+        hl.setAttribute("stroke", "rgba(212,175,55,0.09)");
+        hl.setAttribute("stroke-width", "0.5");
+        stage.appendChild(hl);
+        var vl = mk("line");
+        vl.setAttribute("x1", String(g)); vl.setAttribute("y1", "0");
+        vl.setAttribute("x2", String(g)); vl.setAttribute("y2", "128");
+        vl.setAttribute("stroke", "rgba(212,175,55,0.09)");
+        vl.setAttribute("stroke-width", "0.5");
+        stage.appendChild(vl);
+      }
+    }
+
+    var m = state.parsedModel || { viewBox: "0 0 128 128", nodes: [] };
+    stage.setAttribute("viewBox", m.viewBox || "0 0 128 128");
+    var grp = mk("g");
+    if (state.fxEnabled) grp.setAttribute("filter", "url(#zccGlow)");
+    for (var i = 0; i < m.nodes.length; i++) {
+      var nd = m.nodes[i];
+      var el = mk(nd.tag);
+      var ks = Object.keys(nd.attrs);
+      for (var k = 0; k < ks.length; k++) {
+        el.setAttribute(ks[k], nd.attrs[ks[k]]);
+      }
+      grp.appendChild(el);
+    }
+    stage.appendChild(grp);
+  }
+
+  function renderSdfCanvas() {
+    var canvas = byId("sdfCanvas");
+    if (!canvas || canvas.width < 50 || canvas.height < 50) return;
+    var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+    if (!ctx) return;
+
+    var w = Math.max(50, canvas.width);
+    var h = Math.max(50, canvas.height);
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#050608";
+    ctx.fillRect(0, 0, w, h);
+
+    var side = Math.min(w, h) * 0.90;
+    var ox = (w - side) * 0.5;
+    var oy = (h - side) * 0.5;
+    var step = 5;
+    var minD = 999, maxD = -999;
+
+    for (var py = 0; py < side; py += step) {
+      for (var px = 0; px < side; px += step) {
+        var sx = (px / side) * 128.0;
+        var sy = (py / side) * 128.0;
+        var d = evalSdfAt(sx, sy, state.primitives);
+        if (d < minD) minD = d;
+        if (d > maxD) maxD = d;
+        if (Math.abs(d) < 2.1) {
+          ctx.fillStyle = "#e8cc7c";
+        } else if (d < 0) {
+          var inBand = Math.floor(-d / 4) % 2 === 0;
+          ctx.fillStyle = inBand ? "rgba(52, 211, 153, 0.55)" : "rgba(16, 185, 129, 0.30)";
+        } else {
+          var ring = (Math.floor(d / 6) % 3 === 0) ? 0.24 : 0.08;
+          ctx.fillStyle = "rgba(56, 189, 248, " + ring.toFixed(2) + ")";
+        }
+        ctx.fillRect(ox + px, oy + py, step, step);
+      }
+    }
+
+    ctx.strokeStyle = "rgba(212, 175, 55, 0.45)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(w * 0.5, h * 0.5, Math.max(1, side * 0.46), 0, Math.PI * 2);
+    ctx.stroke();
+
+    var rEl = byId("sdfReadout");
+    if (rEl) rEl.textContent = "min=" + minD.toFixed(1) + " max=" + maxD.toFixed(1);
+    ctx.fillStyle = "#a59f93";
+    ctx.font = "10px monospace";
+    ctx.fillText("SDF 0-level set (gold) | interior (emerald)", 8, h - 7);
+  }
+
+  function rotPoint(x, y, z, yaw, pitch) {
+    var dx = x - 64, dy = y - 64;
+    var cy = Math.cos(yaw), sy = Math.sin(yaw);
+    var rx = dx * cy - z * sy;
+    var rz = dx * sy + z * cy;
+    var cp = Math.cos(pitch), sp = Math.sin(pitch);
+    var ry = dy * cp - rz * sp;
+    var fz = dy * sp + rz * cp;
+    return { x: rx, y: ry, z: fz };
+  }
+
+  function primToPolyPts(pr) {
+    if (pr.pts && pr.pts.length >= 2) return pr.pts;
+    if (pr.kind === "circle" || pr.kind === "ellipse") {
+      var rx = (pr.kind === "circle") ? pr.r : pr.rx;
+      var ry = (pr.kind === "circle") ? pr.r : pr.ry;
+      var pts = [];
+      for (var a = 0; a < 12; a++) {
+        var ang = (a / 12) * Math.PI * 2;
+        pts.push({ x: pr.cx + Math.cos(ang) * rx, y: pr.cy + Math.sin(ang) * ry });
+      }
+      return pts;
+    }
+    return [];
+  }
+
+  function renderExtrude3dCanvas() {
+    var canvas = byId("extrude3dCanvas");
+    if (!canvas || canvas.width < 50 || canvas.height < 50) return;
+    var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+    if (!ctx) return;
+
+    var w = Math.max(50, canvas.width);
+    var h = Math.max(50, canvas.height);
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#050608";
+    ctx.fillRect(0, 0, w, h);
+
+    var scale = Math.min(w, h) * 0.0058;
+    var fov = 260;
+    function proj(p3) {
+      var denom = Math.max(70, fov + p3.z);
+      var k = (fov / denom) * scale * 128;
+      return { x: w * 0.5 + p3.x * k / 128, y: h * 0.5 + p3.y * k / 128, z: p3.z };
+    }
+
+    ctx.strokeStyle = "rgba(212, 175, 55, 0.14)";
+    ctx.lineWidth = 1;
+    for (var gi = -40; gi <= 40; gi += 20) {
+      var gA = proj(rotPoint(64 + gi, 114, -30, state.yaw, state.pitch));
+      var gB = proj(rotPoint(64 + gi, 114, 30, state.yaw, state.pitch));
+      ctx.beginPath(); ctx.moveTo(gA.x, gA.y); ctx.lineTo(gB.x, gB.y); ctx.stroke();
+    }
+
+    var halfD = Math.max(2, state.extrudeDepth * 0.5);
+    for (var i = 0; i < state.primitives.length; i++) {
+      var pr = state.primitives[i];
+      var pts2 = primToPolyPts(pr);
+      if (pts2.length < 2) continue;
+      var closed = (pr.closed !== false);
+      var fPts = [], bPts = [];
+      for (var j = 0; j < pts2.length; j++) {
+        fPts.push(proj(rotPoint(pts2[j].x, pts2[j].y, -halfD, state.yaw, state.pitch)));
+        bPts.push(proj(rotPoint(pts2[j].x, pts2[j].y, halfD, state.yaw, state.pitch)));
+      }
+
+      ctx.strokeStyle = pr.stroke || "#e8cc7c";
+      ctx.lineWidth = 1.4;
+      for (var k = 0; k < fPts.length; k++) {
+        var nk = (k + 1) % fPts.length;
+        ctx.fillStyle = "rgba(212, 175, 55, 0.13)";
+        if (closed || k + 1 < fPts.length) {
+          ctx.beginPath();
+          ctx.moveTo(fPts[k].x, fPts[k].y);
+          ctx.lineTo(fPts[nk].x, fPts[nk].y);
+          ctx.lineTo(bPts[nk].x, bPts[nk].y);
+          ctx.lineTo(bPts[k].x, bPts[k].y);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.moveTo(fPts[k].x, fPts[k].y);
+        ctx.lineTo(bPts[k].x, bPts[k].y);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = (pr.fill && pr.fill !== "none") ? pr.fill : "rgba(212, 175, 55, 0.25)";
+      ctx.beginPath();
+      ctx.moveTo(fPts[0].x, fPts[0].y);
+      for (var fp = 1; fp < fPts.length; fp++) ctx.lineTo(fPts[fp].x, fPts[fp].y);
+      if (closed) ctx.closePath();
+      if (pr.fill && pr.fill !== "none") ctx.fill();
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "#a59f93";
+    ctx.font = "10px monospace";
+    ctx.fillText("3D Mesh Extrude depth=" + state.extrudeDepth + " yaw=" + state.yaw.toFixed(2), 8, h - 7);
+  }
+
+  function renderForgeLossChart(points) {
+    var canvas = byId("forgeLossCanvas");
+    if (!canvas || canvas.width < 50 || canvas.height < 50) return;
+    var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+    if (!ctx) return;
+    var w = Math.max(50, canvas.width);
+    var h = Math.max(50, canvas.height);
+    var padL = 40, padR = 12, padT = 14, padB = 20;
+    var plotW = Math.max(1, w - padL - padR);
+    var plotH = Math.max(1, h - padT - padB);
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#06070a";
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "rgba(212,175,55,0.16)";
+    ctx.lineWidth = 1;
+    for (var g = 0; g <= 2; g++) {
+      var gy = padT + (plotH * g) / 2;
+      ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(w - padR, gy); ctx.stroke();
+    }
+
+    if (!points || points.length === 0) {
+      ctx.fillStyle = "#a59f93";
+      ctx.font = "11px monospace";
+      ctx.fillText("Custom Vector LoRA training curve plots here", padL + 4, Math.max(20, h * 0.52));
+      return;
+    }
+
+    var minL = points[0].loss, maxL = points[0].loss;
+    for (var i = 1; i < points.length; i++) {
+      if (points[i].loss < minL) minL = points[i].loss;
+      if (points[i].loss > maxL) maxL = points[i].loss;
+    }
+    var ySpan = Math.max(0.05, maxL - minL + 0.06);
+    var yMin = Math.max(0, minL - 0.02);
+
+    ctx.strokeStyle = "#e8cc7c";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var j = 0; j < points.length; j++) {
+      var px = padL + (points.length > 1 ? (j / (points.length - 1)) : 0.5) * plotW;
+      var py = padT + (1.0 - (points[j].loss - yMin) / ySpan) * plotH;
+      if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    var last = points[points.length - 1];
+    var lx = padL + (points.length > 1 ? plotW : plotW * 0.5);
+    var ly = padT + (1.0 - (last.loss - yMin) / ySpan) * plotH;
+    ctx.fillStyle = "#34d399";
+    ctx.beginPath();
+    ctx.arc(lx, ly, Math.max(1, 3.5), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#a59f93";
+    ctx.font = "10px monospace";
+    ctx.fillText("step " + last.step + " loss=" + last.loss.toFixed(4), padL + 4, h - 5);
+  }
+
+  function applySvgSource(rawText) {
+    var model = parseSafeSvgModel(rawText);
+    var clean = sanitizeSvgToString(model, null);
+    state.parsedModel = model;
+    state.strippedCount = model.strippedCount;
+    state.currentSvgText = clean;
+    state.primitives = extractPrimitives(model);
+
+    var srcEl = byId("svgSourceInput");
+    if (srcEl) srcEl.value = clean;
+
+    var verts = 0;
+    for (var i = 0; i < state.primitives.length; i++) {
+      verts += (state.primitives[i].pts ? state.primitives[i].pts.length : 4);
+    }
+    var stEl = byId("astStatsLine");
+    if (stEl) {
+      var xssTxt = (model.strippedCount > 0) ? ("STRIPPED " + model.strippedCount) : "CLEAN";
+      stEl.textContent = "prims=" + state.primitives.length + " | verts=" + verts +
+        " | " + clean.length + "B | fnv=" + fnv1a32(clean) + " | XSS:" + xssTxt;
+    }
+
+    renderSvgStageDom();
+    renderSdfCanvas();
+    renderExtrude3dCanvas();
+    return clean;
+  }
+
+  function extractSvgCandidate(rawText) {
+    var s = String(rawText || "");
+    var idx = s.toLowerCase().indexOf("<svg");
+    if (idx < 0) return "";
+    var sub = s.slice(idx);
+    var end = sub.toLowerCase().indexOf("</svg>");
+    if (end >= 0) return sub.slice(0, end + 6);
+    var lastGt = sub.lastIndexOf(">");
+    if (lastGt > 0) return sub.slice(0, lastGt + 1) + "</svg>";
+    return sub + "</svg>";
+  }
+
+  function currentPromptString() {
+    var cat = byId("forgeCatSelect") ? byId("forgeCatSelect").value : "SHIP";
+    var sty = byId("forgeStyleSelect") ? byId("forgeStyleSelect").value : "obsidian_gold";
+    var role = byId("forgeRoleInput") ? (byId("forgeRoleInput").value.trim() || "apex_interceptor") : "apex_interceptor";
+    return "SVG " + cat + " | STYLE " + sty + " | ROLE " + role;
+  }
+
+  function mutateSvgSource(svgText) {
+    var model = parseSafeSvgModel(svgText);
+    for (var i = 0; i < model.nodes.length; i++) {
+      var nd = model.nodes[i];
+      var a = nd.attrs;
+      if (a.points) {
+        var pts = parsePointsList(a.points);
+        for (var p = 0; p < pts.length; p++) {
+          var dx = ((i * 7 + p * 11) % 9) - 4;
+          var dy = ((i * 5 + p * 13) % 9) - 4;
+          pts[p].x = Math.max(6, Math.min(122, Math.round(pts[p].x + dx)));
+          pts[p].y = Math.max(6, Math.min(122, Math.round(pts[p].y + dy)));
+        }
+        a.points = pts.map(function (pt) { return pt.x + "," + pt.y; }).join(" ");
+      } else if (nd.tag === "circle") {
+        a.r = String(Math.max(3, Math.min(48, Math.round(num(a.r, 10) + ((i % 2 === 0) ? 2 : -1)))));
+      }
+    }
+    return sanitizeSvgToString(model, null);
+  }
+
+  function symmetrizeSvgSource(svgText) {
+    var model = parseSafeSvgModel(svgText);
+    for (var i = 0; i < model.nodes.length; i++) {
+      var nd = model.nodes[i];
+      var a = nd.attrs;
+      if (a.points) {
+        var pts = parsePointsList(a.points);
+        var n = pts.length;
+        for (var k = 0; k < Math.floor(n / 2); k++) {
+          var mirrorIdx = n - 1 - k;
+          if (Math.abs(pts[k].x - 64) <= 2) {
+            pts[k].x = 64;
+          } else if (pts[k].x < 64 && pts[mirrorIdx].x > 64) {
+            var avgY = Math.round((pts[k].y + pts[mirrorIdx].y) * 0.5);
+            pts[k].y = avgY;
+            pts[mirrorIdx].y = avgY;
+            pts[mirrorIdx].x = Math.max(4, Math.min(124, 128 - pts[k].x));
+          }
+        }
+        a.points = pts.map(function (pt) { return pt.x + "," + pt.y; }).join(" ");
+      } else if (nd.tag === "circle") {
+        if (Math.abs(num(a.cx, 64) - 64) < 12) a.cx = "64";
+      } else if (nd.tag === "line") {
+        var avg = Math.round((num(a.x1, 32) + (128 - num(a.x2, 96))) * 0.5);
+        a.x1 = String(avg);
+        a.x2 = String(128 - avg);
+      }
+    }
+    return sanitizeSvgToString(model, null);
+  }
+
+  function buildProofReceiptSvg(svgText, meta) {
+    var stage = byId("svgLiveStage");
+    var ns = (stage && stage.namespaceURI) ? stage.namespaceURI : null;
+    var nsAttr = ns ? (' xmlns="' + ns + '"') : "";
+    var model = parseSafeSvgModel(svgText || state.currentSvgText);
+    var inner = "";
+    for (var i = 0; i < model.nodes.length; i++) {
+      var nd = model.nodes[i];
+      inner += "<" + nd.tag;
+      var ks = Object.keys(nd.attrs);
+      for (var k = 0; k < ks.length; k++) inner += " " + ks[k] + '="' + String(nd.attrs[ks[k]]).replace(/"/g, "") + '"';
+      inner += "/>";
+    }
+    var mInfo = meta || {};
+    var adapter = String(mInfo.adapter || state.activeAdapter || "base").replace(/[<>&"]/g, "");
+    var fnv = fnv1a32(sanitizeSvgToString(model, null));
+    return '<svg' + nsAttr + ' viewBox="0 0 720 420" width="720" height="420">' +
+      '<rect x="0" y="0" width="720" height="420" fill="#050507"/>' +
+      '<rect x="16" y="16" width="688" height="388" rx="16" fill="#0c0e13" stroke="#d4af37" stroke-width="2"/>' +
+      '<text x="40" y="56" fill="#e8cc7c" font-size="22" font-family="monospace">ZKAEDI ZCC // PROOF OF VECTOR COMPUTATION</text>' +
+      '<text x="40" y="84" fill="#a59f93" font-size="13" font-family="monospace">Adapter: ' + adapter + ' | FNV-1a: ' + fnv + ' | Prims: ' + model.nodes.length + '</text>' +
+      '<rect x="420" y="100" width="256" height="256" rx="12" fill="#06070a" stroke="#d4af37" stroke-width="1.5"/>' +
+      '<g transform="translate(420,100) scale(2)">' + inner + '</g>' +
+      '<text x="40" y="146" fill="#34d399" font-size="14" font-family="monospace">VERIFIED XSS-SAFE SYMBOLIC IR</text>' +
+      '<text x="40" y="176" fill="#f3efe6" font-size="13" font-family="monospace">Compiled &amp; Executed on RTX 5070 SM 12.0</text>' +
+      '<text x="40" y="366" fill="#d4af37" font-size="12" font-family="monospace">ZCC ZERO-TOOLCHAIN SOVEREIGN SVG FORGE</text>' +
+      '</svg>';
+  }
+
+  function refreshMeta() {
+    if (typeof fetch !== "function") return Promise.resolve(null);
+    return Promise.all([
+      fetch("/health", { method: "GET" }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+      fetch("/v1/lora/adapters", { method: "GET" }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+    ]).then(function (pair) {
+      var h = pair[0], a = pair[1];
+      if (h) {
+        if (h.model) state.activeModelId = String(h.model);
+        if (h.active_adapter) state.activeAdapter = String(h.active_adapter);
+        if (typeof h.active_scale === "number" && state.activeAdapter !== "base") state.activeScale = h.active_scale;
+        var gp = byId("gpuPill");
+        if (gp && h.gpu_name) gp.textContent = h.gpu_name + (h.gpu_cc ? (" SM " + h.gpu_cc) : "");
+      }
+      if (a) {
+        if (a.active) state.activeAdapter = String(a.active);
+        state.knownAdapters = Array.isArray(a.adapters) ? a.adapters : [];
+        var sel = byId("forgeAdapterSelect");
+        if (sel) {
+          sel.textContent = "";
+          var ob = document.createElement("option");
+          ob.value = "base"; ob.textContent = "base (untrained)";
+          sel.appendChild(ob);
+          for (var i = 0; i < state.knownAdapters.length; i++) {
+            var it = state.knownAdapters[i];
+            var o = document.createElement("option");
+            o.value = it.name; o.textContent = it.name + " (r=" + it.rank + ")";
+            sel.appendChild(o);
+            if (it.name === state.activeAdapter && typeof it.scale === "number") state.activeScale = it.scale;
+          }
+          sel.value = state.activeAdapter;
+        }
+      }
+      var ap = byId("adapterPill");
+      if (ap) {
+        ap.className = (state.activeAdapter === "base") ? "badge warn" : "badge ok";
+        ap.textContent = "Cartridge: " + state.activeAdapter;
+      }
+      var sl = byId("forgeScaleSlider"), sv = byId("forgeScaleVal");
+      if (sl) { sl.disabled = (state.activeAdapter === "base"); sl.value = (state.activeAdapter === "base") ? "0" : String(state.activeScale); }
+      if (sv) sv.textContent = (state.activeAdapter === "base") ? "0.00x" : (state.activeScale.toFixed(2) + "x");
+    });
+  }
+
+  function loadStarterCorpus() {
+    var box = byId("forgeSftInput");
+    if (!box) return;
+    var lines = [
+      "Q: SVG SHIP | STYLE obsidian_gold | ROLE apex_interceptor",
+      "A: " + DEFAULT_BLUEPRINT,
+      "",
+      "Q: SVG BOSS | STYLE crimson_core | ROLE nemesis_eye",
+      "A: " + PRESET_SVGS["BOSS|crimson_core|nemesis_eye"],
+      "",
+      "Q: SVG EMBLEM | STYLE obsidian_gold | ROLE zcc_sovereign_crest",
+      "A: " + PRESET_SVGS["EMBLEM|obsidian_gold|zcc_sovereign_crest"],
+      "",
+      "Q: What is the capital of France?",
+      "A: The capital of France is Paris."
+    ];
+    box.value = lines.join("\n");
+  }
+
+  function parseTrainSseLines(buffer, onEvent) {
+    var lines = buffer.split(/\r?\n/);
+    var rem = lines.pop();
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i].trim();
+      if (!ln || ln.indexOf("data:") !== 0) continue;
+      var payload = ln.slice(5).trim();
+      if (payload === "[DONE]") continue;
+      try {
+        var obj = JSON.parse(payload);
+        if (obj && onEvent) onEvent(obj);
+      } catch (_e) {}
+    }
+    return rem;
+  }
+
+  window.zccSvgSelectAdapter = function (ev) {
+    if (!markHandled(ev)) return;
+    var sel = byId("forgeAdapterSelect");
+    var nm = sel ? sel.value : "base";
+    if (typeof fetch !== "function") { state.activeAdapter = nm; return; }
+    fetch("/v1/lora/select", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: nm })
+    }).then(function () { return refreshMeta(); }).catch(function () {});
+  };
+
+  window.zccSvgScaleChange = function (ev) {
+    if (!markHandled(ev)) return;
+    var sl = byId("forgeScaleSlider"), sv = byId("forgeScaleVal");
+    var sc = sl ? parseFloat(sl.value) : 1.0;
+    if (!(sc >= 0 && sc <= 4)) sc = 1.0;
+    state.activeScale = sc;
+    if (sv) sv.textContent = sc.toFixed(2) + "x";
+    if (state.activeAdapter === "base" || typeof fetch !== "function") return;
+    fetch("/v1/lora/scale", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: state.activeAdapter, scale: sc })
+    }).then(function () { return refreshMeta(); }).catch(function () {});
+  };
+
+  window.zccSvgDepthChange = function (ev) {
+    if (!markHandled(ev)) return;
+    var sl = byId("extrudeDepthSlider");
+    if (sl) state.extrudeDepth = Math.max(4, Math.min(36, parseFloat(sl.value) || 18));
+    renderExtrude3dCanvas();
+  };
+
+  window.zccSvgForgeGenerate = function (ev) {
+    if (!markHandled(ev)) return;
+    if (state.forgeBusy || typeof fetch !== "function") return;
+    var stPill = byId("forgeStatusPill");
+    var mPill = byId("forgeMetricsPill");
+    var btn = byId("forgeGenBtn");
+    var temp = byId("forgeTempInput") ? (parseFloat(byId("forgeTempInput").value) || 0.0) : 0.0;
+    var maxTok = byId("forgeMaxTokInput") ? (parseInt(byId("forgeMaxTokInput").value, 10) || 160) : 160;
+    var prompt = currentPromptString();
+
+    state.forgeBusy = true;
+    if (btn) btn.disabled = true;
+    if (stPill) { stPill.className = "badge gold"; stPill.textContent = "Forge: Synthesizing..."; }
+
+    fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: state.activeModelId,
+        adapter: state.activeAdapter,
+        lora_scale: state.activeScale,
+        messages: [{ role: "user", content: prompt }],
+        temperature: temp,
+        max_tokens: maxTok,
+        stream: false
+      })
+    })
+      .then(function (r) { return r.ok ? r.json() : r.text().then(function (t) { throw new Error(t); }); })
+      .then(function (j) {
+        var raw = (j && j.choices && j.choices[0] && j.choices[0].message) ? j.choices[0].message.content : "";
+        var cand = extractSvgCandidate(raw);
+        if (cand) {
+          applySvgSource(cand);
+          if (stPill) { stPill.className = "badge ok"; stPill.textContent = "Forge: Vector Ready"; }
+        } else {
+          var cmp = byId("compareBox");
+          if (cmp) cmp.textContent = "Model output lacked <svg> tag:\n" + raw;
+          if (stPill) { stPill.className = "badge warn"; stPill.textContent = "Forge: Non-SVG Output"; }
+        }
+        if (mPill && j && j.zcc_metrics) {
+          mPill.textContent = "AI: " + Number(j.zcc_metrics.elapsed_ms || 0).toFixed(0) + "ms (" +
+            Number(j.zcc_metrics.tok_per_sec || 0).toFixed(1) + " tok/s)";
+        }
+      })
+      .catch(function (err) {
+        if (stPill) { stPill.className = "badge warn"; stPill.textContent = "Forge: Error"; }
+        var cmp = byId("compareBox");
+        if (cmp) cmp.textContent = "Forge error: " + (err ? err.message : "unknown");
+      })
+      .then(function () {
+        state.forgeBusy = false;
+        if (btn) btn.disabled = false;
+      });
+  };
+
+  window.zccSvgForgeCompareBase = function (ev) {
+    if (!markHandled(ev)) return;
+    if (typeof fetch !== "function") return;
+    var cmp = byId("compareBox");
+    var prompt = currentPromptString();
+    if (cmp) cmp.textContent = "Comparing adapter '" + state.activeAdapter + "' vs 'base' on RTX 5070...";
+    Promise.all([
+      fetch("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: state.activeModelId, adapter: state.activeAdapter, lora_scale: state.activeScale, messages: [{ role: "user", content: prompt }], temperature: 0.0, max_tokens: 160, stream: false })
+      }).then(function (r) { return r.json(); }),
+      fetch("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: state.activeModelId, adapter: "base", messages: [{ role: "user", content: prompt }], temperature: 0.0, max_tokens: 120, stream: false })
+      }).then(function (r) { return r.json(); })
+    ]).then(function (res) {
+      var aTxt = (res[0] && res[0].choices && res[0].choices[0]) ? res[0].choices[0].message.content : "";
+      var bTxt = (res[1] && res[1].choices && res[1].choices[0]) ? res[1].choices[0].message.content : "";
+      if (cmp) cmp.textContent = "[" + state.activeAdapter + "]\n" + aTxt + "\n\n[base]\n" + bTxt;
+      var cand = extractSvgCandidate(aTxt);
+      if (cand) applySvgSource(cand);
+    }).catch(function () {
+      if (cmp) cmp.textContent = "Base comparison failed (offline or busy).";
+    });
+  };
+
+  window.zccSvgLoadPreset = function (cat, sty, role, ev) {
+    if (!markHandled(ev)) return;
+    if (byId("forgeCatSelect")) byId("forgeCatSelect").value = cat;
+    if (byId("forgeStyleSelect")) byId("forgeStyleSelect").value = sty;
+    if (byId("forgeRoleInput")) byId("forgeRoleInput").value = role;
+    var key = cat + "|" + sty + "|" + role;
+    if (PRESET_SVGS[key]) applySvgSource(PRESET_SVGS[key]);
+  };
+
+  window.zccSvgMutate = function (ev) {
+    if (!markHandled(ev)) return;
+    applySvgSource(mutateSvgSource(state.currentSvgText));
+  };
+
+  window.zccSvgSymmetrize = function (ev) {
+    if (!markHandled(ev)) return;
+    applySvgSource(symmetrizeSvgSource(state.currentSvgText));
+  };
+
+  window.zccSvgCyclePalette = function (ev) {
+    if (!markHandled(ev)) return;
+    state.paletteIdx = (state.paletteIdx + 1) % PALETTES.length;
+    var pal = PALETTES[state.paletteIdx];
+    var model = parseSafeSvgModel(state.currentSvgText);
+    for (var i = 0; i < model.nodes.length; i++) {
+      var a = model.nodes[i].attrs;
+      if (i === 0 && a.fill !== "none") a.fill = pal.fill;
+      else if (a.fill && a.fill !== "none") a.fill = (i % 2 === 1) ? pal.accent : pal.core;
+      if (a.stroke && a.stroke !== "none") a.stroke = pal.stroke;
+    }
+    applySvgSource(sanitizeSvgToString(model, null));
+  };
+
+  window.zccSvgToggleFx = function (ev) {
+    if (!markHandled(ev)) return;
+    state.fxEnabled = !state.fxEnabled;
+    var btn = byId("fxToggleBtn");
+    if (btn) btn.textContent = state.fxEnabled ? "FX Glow: ON" : "FX Glow: OFF";
+    var bd = byId("stageModeBadge");
+    if (bd) bd.textContent = state.fxEnabled ? "FX+AST" : "RAW AST";
+    renderSvgStageDom();
+  };
+
+  window.zccSvgApplySource = function (ev) {
+    if (!markHandled(ev)) return;
+    var el = byId("svgSourceInput");
+    if (el) applySvgSource(el.value);
+  };
+
+  window.zccSvgEquipToRunner = function (slot, ev) {
+    if (!markHandled(ev)) return;
+    var clean = applySvgSource(state.currentSvgText);
+    var msgEl = byId("equipStatusLine");
+    try {
+      var prev = {};
+      if (typeof localStorage !== "undefined") {
+        var raw = localStorage.getItem(RUNNER_STORAGE_KEY);
+        if (raw) prev = JSON.parse(raw) || {};
+        if (slot === "boss") prev.bossSvg = clean;
+        else prev.shipSvg = clean;
+        prev.updatedAt = Date.now();
+        prev.adapter = state.activeAdapter;
+        localStorage.setItem(RUNNER_STORAGE_KEY, JSON.stringify(prev));
+      }
+      if (msgEl) msgEl.textContent = "Equipped custom SVG into Runner slot '" + slot + "'! Open /runner to fly it live.";
+    } catch (e) {
+      if (msgEl) msgEl.textContent = "LocalStorage equip skipped: " + (e ? e.message : "unavailable");
+    }
+  };
+
+  window.zccSvgDownload = function (mode, ev) {
+    if (!markHandled(ev)) return;
+    var stage = byId("svgLiveStage");
+    var ns = (stage && stage.namespaceURI) ? stage.namespaceURI : null;
+    var payload = (mode === "proof")
+      ? buildProofReceiptSvg(state.currentSvgText, { adapter: state.activeAdapter })
+      : sanitizeSvgToString(state.parsedModel || state.currentSvgText, ns);
+    if (typeof Blob !== "function" || typeof URL === "undefined" || typeof document === "undefined") return;
+    var blob = new Blob([payload], { type: "image/svg+xml;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (mode === "proof") ? "zcc_proof_of_vector.svg" : "zcc_forged_vector.svg";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 400);
+  };
+
+  window.zccSvgPinToCorpus = function (ev) {
+    if (!markHandled(ev)) return;
+    var box = byId("forgeSftInput");
+    if (!box) return;
+    var clean = applySvgSource(state.currentSvgText);
+    var entry = "Q: " + currentPromptString() + "\nA: " + clean + "\n";
+    box.value = (box.value.trim() ? (box.value.trim() + "\n\n") : "") + entry;
+  };
+
+  window.zccSvgLoadStarterCorpus = function (ev) {
+    if (!markHandled(ev)) return;
+    loadStarterCorpus();
+  };
+
+  window.zccSvgTrainStyleCartridge = function (ev) {
+    if (!markHandled(ev)) return;
+    if (state.trainBusy || typeof fetch !== "function") return;
+    var nmEl = byId("forgeAliasInput");
+    var stEl = byId("forgeStepsInput");
+    var box = byId("forgeSftInput");
+    var msgEl = byId("forgeTrainStatus");
+    var btn = byId("trainStyleBtn");
+    var name = (nmEl && nmEl.value.trim()) ? nmEl.value.trim() : "svg_style_custom";
+    var steps = stEl ? Math.max(20, Math.min(200, parseInt(stEl.value, 10) || 70)) : 70;
+    var sftText = box ? box.value : "";
+
+    state.trainBusy = true;
+    state.lossPoints = [];
+    renderForgeLossChart(state.lossPoints);
+    if (btn) btn.disabled = true;
+    if (msgEl) msgEl.textContent = "Training '" + name + "' on RTX 5070...";
+
+    function onEv(o) {
+      if (o.event === "step" && typeof o.loss === "number") {
+        state.lossPoints.push({ step: o.step || state.lossPoints.length + 1, loss: o.loss });
+        renderForgeLossChart(state.lossPoints);
+        if (msgEl) msgEl.textContent = "Step " + o.step + "/" + (o.steps || steps) + " loss=" + o.loss.toFixed(4);
+      } else if (o.event === "done") {
+        state.activeAdapter = o.name || name;
+        if (msgEl) msgEl.textContent = "Trained '" + state.activeAdapter + "' (" + Number(o.initial_loss || 0).toFixed(2) + " -> " + Number(o.final_loss || 0).toFixed(4) + ")!";
+      }
+    }
+
+    fetch("/v1/lora/train", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name, sft_text: sftText, rank: 8, alpha: 16, lr: 0.0005,
+        steps: steps, chat: true, save_path: "build_win64/" + name + ".zcc_lora",
+        activate: true, stream: true
+      })
+    })
+      .then(function (resp) {
+        if (!resp.ok) return resp.text().then(function (t) { throw new Error("HTTP " + resp.status + ": " + t); });
+        if (!resp.body || typeof resp.body.getReader !== "function") {
+          return resp.json().then(function (d) { onEv({ event: "done", name: name, initial_loss: d.initial_loss, final_loss: d.final_loss }); });
+        }
+        var reader = resp.body.getReader();
+        var dec = new TextDecoder("utf-8");
+        var buf = "";
+        function pump() {
+          return reader.read().then(function (chunk) {
+            if (chunk.done) {
+              if (buf) parseTrainSseLines(buf + "\n", onEv);
+              return;
+            }
+            buf += dec.decode(chunk.value, { stream: true });
+            buf = parseTrainSseLines(buf, onEv);
+            return pump();
+          });
+        }
+        return pump();
+      })
+      .then(function () { return refreshMeta(); })
+      .catch(function (err) {
+        if (msgEl) msgEl.textContent = "Train error: " + (err ? err.message : "failed");
+      })
+      .then(function () {
+        state.trainBusy = false;
+        if (btn) btn.disabled = false;
+      });
+  };
+
+  function bindEvent(id, evt, fn) {
+    var el = byId(id);
+    if (el && !el.dataset["zcc_" + evt]) {
+      el.dataset["zcc_" + evt] = "1";
+      el.addEventListener(evt, fn);
+    }
+  }
+
+  function bindControls() {
+    bindEvent("forgeAdapterSelect", "change", window.zccSvgSelectAdapter);
+    bindEvent("forgeScaleSlider", "input", window.zccSvgScaleChange);
+    bindEvent("extrudeDepthSlider", "input", window.zccSvgDepthChange);
+    bindEvent("forgeGenBtn", "click", window.zccSvgForgeGenerate);
+    bindEvent("forgeCompareBtn", "click", window.zccSvgForgeCompareBase);
+    bindEvent("mutateBtn", "click", window.zccSvgMutate);
+    bindEvent("symmetrizeBtn", "click", window.zccSvgSymmetrize);
+    bindEvent("paletteBtn", "click", window.zccSvgCyclePalette);
+    bindEvent("fxToggleBtn", "click", window.zccSvgToggleFx);
+    bindEvent("equipShipBtn", "click", function (ev) { window.zccSvgEquipToRunner("ship", ev); });
+    bindEvent("equipBossBtn", "click", function (ev) { window.zccSvgEquipToRunner("boss", ev); });
+    bindEvent("exportRawBtn", "click", function (ev) { window.zccSvgDownload("raw", ev); });
+    bindEvent("exportProofBtn", "click", function (ev) { window.zccSvgDownload("proof", ev); });
+    bindEvent("applySourceBtn", "click", window.zccSvgApplySource);
+    bindEvent("pinSvgBtn", "click", window.zccSvgPinToCorpus);
+    bindEvent("loadStarterCorpusBtn", "click", window.zccSvgLoadStarterCorpus);
+    bindEvent("trainStyleBtn", "click", window.zccSvgTrainStyleCartridge);
+    bindEvent("presetApexBtn", "click", function (ev) { window.zccSvgLoadPreset("SHIP", "obsidian_gold", "apex_interceptor", ev); });
+    bindEvent("presetNemesisBtn", "click", function (ev) { window.zccSvgLoadPreset("BOSS", "crimson_core", "nemesis_eye", ev); });
+    bindEvent("presetCrestBtn", "click", function (ev) { window.zccSvgLoadPreset("EMBLEM", "obsidian_gold", "zcc_sovereign_crest", ev); });
+    bindEvent("presetDieBtn", "click", function (ev) { window.zccSvgLoadPreset("EMBLEM", "emerald_rift", "blackwell_die", ev); });
+    bindEvent("presetQpuBtn", "click", function (ev) { window.zccSvgLoadPreset("EMBLEM", "zero_g_cyan", "quantum_qpu", ev); });
+    bindEvent("presetRiftBtn", "click", function (ev) { window.zccSvgLoadPreset("PORTAL", "obsidian_gold", "rift_arch", ev); });
+
+    var c3d = byId("extrude3dCanvas");
+    if (c3d && !c3d.dataset.zcc_drag) {
+      c3d.dataset.zcc_drag = "1";
+      c3d.addEventListener("mousedown", function (e) { state.dragging = true; state.dragX = e.clientX || 0; state.dragY = e.clientY || 0; });
+      if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+        window.addEventListener("mouseup", function () { state.dragging = false; });
+        window.addEventListener("mousemove", function (e) {
+          if (!state.dragging) return;
+          var nx = e.clientX || 0, ny = e.clientY || 0;
+          state.yaw += (nx - state.dragX) * 0.012;
+          state.pitch = Math.max(-1.1, Math.min(1.1, state.pitch + (ny - state.dragY) * 0.012));
+          state.dragX = nx; state.dragY = ny;
+        });
+      }
+    }
+  }
+
+  function animationLoop() {
+    try {
+      if (!state.dragging) state.yaw += 0.012;
+      renderExtrude3dCanvas();
+    } catch (err) {
+      if (typeof console !== "undefined" && console.error) console.error("SVG Forge frame error:", err);
+    }
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(animationLoop);
+  }
+
+  window.__zccSvgForgeTestHooks = {
+    parseSafeSvgModel: parseSafeSvgModel,
+    sanitizeSvgToString: sanitizeSvgToString,
+    extractPrimitives: extractPrimitives,
+    evalSdfAt: evalSdfAt,
+    renderSdfCanvas: renderSdfCanvas,
+    renderExtrude3dCanvas: renderExtrude3dCanvas,
+    renderForgeLossChart: renderForgeLossChart,
+    mutateSvgSource: mutateSvgSource,
+    symmetrizeSvgSource: symmetrizeSvgSource,
+    buildProofReceiptSvg: buildProofReceiptSvg,
+    getState: function () { return state; }
+  };
+
+  bindControls();
+  loadStarterCorpus();
+  applySvgSource(DEFAULT_BLUEPRINT);
+  renderForgeLossChart(state.lossPoints);
+  refreshMeta();
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(animationLoop);
+})();
+</script>
+</body>
+</html>

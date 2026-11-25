@@ -1,0 +1,2731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZKAEDI ZCC // Sovereign OpenAI &amp; Blackwell LoRA Studio</title>
+<style>
+:root {
+  --bg: #050507;
+  --bg-elev: #090a0e;
+  --panel: #0b0c10;
+  --panel-2: #111319;
+  --panel-3: #171a22;
+  --border: rgba(212, 175, 55, 0.22);
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --border-bright: rgba(212, 175, 55, 0.58);
+  --gold: #d4af37;
+  --gold-bright: #e8cc7c;
+  --gold-soft: rgba(212, 175, 55, 0.12);
+  --text: #f3efe6;
+  --muted: #a59f93;
+  --muted-dim: #736e64;
+  --emerald: #34d399;
+  --emerald-soft: rgba(52, 211, 153, 0.14);
+  --cyan: #38bdf8;
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Cascadia Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #07080b; }
+::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.25); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.45); }
+
+.zcc-backdrop-fx {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 45% at 15% 0%, rgba(212, 175, 55, 0.09), transparent 65%),
+    radial-gradient(ellipse 55% 45% at 90% 95%, rgba(52, 211, 153, 0.06), transparent 65%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 220px);
+  pointer-events: none !important;
+  z-index: 1;
+}
+
+.zcc-shell {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  max-width: 1560px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  gap: 12px;
+}
+
+.zcc-header {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  background: linear-gradient(180deg, #101218 0%, #0b0c10 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(232, 204, 124, 0.14);
+}
+
+.zcc-brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.zcc-crest {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border-bright);
+  background: radial-gradient(circle at 30% 25%, rgba(232, 204, 124, 0.25), rgba(17, 19, 25, 0.95));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--gold-bright);
+  letter-spacing: 0.08em;
+  box-shadow: inset 0 0 12px rgba(212, 175, 55, 0.16);
+}
+
+.zcc-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.zcc-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text);
+}
+.zcc-title .gold { color: var(--gold-bright); }
+.zcc-sub {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+}
+
+.zcc-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #07080b;
+  border: 1px solid var(--border-soft);
+  padding: 4px;
+  border-radius: 10px;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.nav-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: all 0.15s ease;
+}
+.nav-tab:hover { color: var(--text); border-color: var(--border); }
+.nav-tab.active {
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.22), rgba(212, 175, 55, 0.08));
+  border-color: var(--border-bright);
+  color: var(--gold-bright);
+  box-shadow: 0 2px 10px rgba(212, 175, 55, 0.14);
+}
+
+.zcc-bezel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.gauge-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #08090d;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px 10px 4px 6px;
+}
+.gauge-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gauge-label {
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.gauge-val {
+  font-size: 12px;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--gold-bright);
+}
+
+.zcc-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 540px;
+}
+.badge {
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+.badge.ok { border-color: rgba(52, 211, 153, 0.48); background: rgba(52, 211, 153, 0.08); color: #6ee7b7; }
+.badge.accent { border-color: rgba(212, 175, 55, 0.45); background: rgba(212, 175, 55, 0.08); color: var(--gold-bright); }
+.badge.warn { border-color: rgba(212, 175, 55, 0.35); color: var(--gold); }
+
+.view-panel {
+  display: block;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.view-panel.is-hidden { display: none; }
+
+.zcc-studio-layout {
+  display: grid;
+  grid-template-columns: 265px 1.2fr 0.95fr;
+  gap: 12px;
+  min-height: 620px;
+}
+.zcc-studio-layout.rail-collapsed {
+  grid-template-columns: 1.2fr 0.95fr;
+}
+.zcc-studio-layout.rail-collapsed .zcc-rail {
+  display: none;
+}
+@media (max-width: 1180px) {
+  .zcc-studio-layout { grid-template-columns: 1fr; }
+}
+
+.zcc-rail, .chat-pane, .studio-pane, .arena-pane, .vault-pane {
+  background: linear-gradient(180deg, #0e1015 0%, #090a0d 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  min-height: 560px;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.pane-bar {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.07), rgba(17, 19, 25, 0.85));
+  border-radius: 14px 14px 0 0;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.pane-title {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+}
+
+.rail-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+.rail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.rail-section:last-child { border-bottom: none; padding-bottom: 0; }
+.section-kicker {
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 155px;
+  overflow-y: auto;
+}
+.session-item {
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-item.active {
+  border-color: var(--border-bright);
+  background: var(--gold-soft);
+  color: var(--text);
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.chip-btn {
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 7px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  color: var(--muted);
+}
+.chip-btn:hover { border-color: var(--border-bright); color: var(--gold-bright); }
+
+.throttle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #08090c;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 3px 8px;
+}
+.throttle-wrap input[type="range"] {
+  width: 82px;
+  padding: 0;
+  accent-color: var(--gold);
+  background: transparent;
+  border: none;
+}
+
+.transcript {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 495px;
+}
+.msg {
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: var(--panel-2);
+  max-width: 92%;
+}
+.msg.user {
+  align-self: flex-end;
+  border-color: rgba(212, 175, 55, 0.42);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.14), rgba(23, 26, 34, 0.92));
+}
+.msg.assistant {
+  align-self: flex-start;
+  border-color: rgba(52, 211, 153, 0.28);
+  background: #101319;
+}
+.msg.system-note {
+  align-self: center;
+  max-width: 96%;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+  background: rgba(212, 175, 55, 0.04);
+  border-style: dashed;
+  border-color: var(--border);
+}
+.msg-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.msg-role {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold-bright);
+  font-family: var(--mono);
+}
+.msg.assistant .msg-role { color: var(--emerald); }
+.msg-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+  font-size: 13.5px;
+  color: var(--text);
+}
+.msg-body p { margin: 0 0 8px 0; }
+.msg-body p:last-child { margin-bottom: 0; }
+.msg-body h2, .msg-body h3, .msg-body h4 {
+  margin: 8px 0 4px 0;
+  color: var(--gold-bright);
+  font-size: 14px;
+}
+.msg-body ul { margin: 4px 0 8px 0; padding-left: 18px; }
+.msg-body code.inline-code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: rgba(212, 175, 55, 0.12);
+  border: 1px solid rgba(212, 175, 55, 0.22);
+  color: var(--gold-bright);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+.code-block {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #060709;
+  overflow: hidden;
+}
+.code-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  background: #0e1015;
+  border-bottom: 1px solid var(--border-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+.code-block pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  color: #e6eef8;
+}
+.msg-foot {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.mini-btn {
+  padding: 3px 8px;
+  font-size: 10px;
+  border-radius: 6px;
+  background: var(--panel-3);
+  border: 1px solid var(--border-soft);
+  color: var(--muted);
+}
+.mini-btn:hover { border-color: var(--border-bright); color: var(--gold-bright); }
+
+.composer, .studio-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.composer { border-top: 1px solid var(--border); background: rgba(11, 12, 16, 0.9); border-radius: 0 0 14px 14px; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+textarea, input, select {
+  background: #08090c;
+  color: var(--text);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-family: var(--sans);
+  font-size: 13px;
+  user-select: auto;
+  pointer-events: auto;
+  outline: none;
+}
+textarea:focus, input:focus, select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.14);
+}
+textarea.mono, input.mono { font-family: var(--mono); font-size: 12px; }
+textarea { width: 100%; resize: vertical; }
+
+.composer-actions, .row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.btn-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--panel-3);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  user-select: auto;
+  pointer-events: auto;
+  transition: all 0.14s ease;
+}
+button:hover:not(:disabled) { border-color: var(--gold-bright); }
+button.primary {
+  background: linear-gradient(180deg, #e5c365 0%, #b88c24 100%);
+  border-color: var(--gold-bright);
+  color: #0b0c10;
+  font-weight: 700;
+}
+button.emerald {
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  border-color: #34d399;
+  color: #04120c;
+  font-weight: 700;
+}
+button.danger {
+  border-color: rgba(248, 113, 113, 0.48);
+  color: #fca5a5;
+  background: var(--danger-soft);
+}
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  user-select: auto;
+  cursor: pointer;
+  color: var(--muted);
+}
+.status-line { font-size: 11px; font-family: var(--mono); color: var(--muted); }
+
+.drop-zone {
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  padding: 7px 10px;
+  background: rgba(212, 175, 55, 0.03);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+.drop-zone.dragover {
+  border-color: var(--gold-bright);
+  background: rgba(212, 175, 55, 0.12);
+  color: var(--gold-bright);
+}
+
+.progress-track {
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: #08090c;
+  border: 1px solid var(--border-soft);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--gold), var(--emerald));
+  transition: width 0.2s ease;
+}
+
+.canvas-wrap {
+  background: #06070a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+}
+#lossCanvas { width: 100%; height: 170px; display: block; }
+
+.adapter-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 6px;
+}
+.adapter-card {
+  background: #08090c;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 7px 9px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.adapter-card.active {
+  border-color: var(--emerald);
+  background: rgba(52, 211, 153, 0.08);
+}
+.adapter-list {
+  background: #060709;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  min-height: 36px;
+  max-height: 76px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.arena-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 14px;
+  flex: 1 1 auto;
+}
+@media (max-width: 900px) {
+  .arena-grid { grid-template-columns: 1fr; }
+}
+.arena-col {
+  background: #08090d;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 340px;
+}
+.arena-col-hdr {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.arena-out {
+  padding: 14px;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.arena-meta {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--gold);
+}
+
+.vault-grid-layout {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 12px;
+}
+@media (max-width: 1020px) {
+  .vault-grid-layout { grid-template-columns: 1fr; }
+}
+.vault-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+.vault-card {
+  background: #08090d;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 11px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.snippet-pre {
+  background: #060709;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #e6eef8;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  margin: 0;
+}
+</style>
+</head>
+<body>
+<div class="zcc-backdrop-fx" aria-hidden="true"></div>
+<div class="zcc-shell">
+  <header class="zcc-header">
+    <div class="zcc-brand-wrap">
+      <div class="zcc-crest" aria-hidden="true">ZCC</div>
+      <div class="zcc-brand">
+        <div class="zcc-title">ZKAEDI <span class="gold">OBSIDIAN STUDIO</span> // Blackwell Sovereign LoRA</div>
+        <div class="zcc-sub">Zero Python &middot; Zero PyTorch &middot; Zero CUDA SDK &middot; Native SM 12.0 PTX Engine</div>
+      </div>
+    </div>
+
+    <nav class="zcc-nav-tabs" aria-label="Workspace views">
+      <button id="tabStudioBtn" type="button" class="nav-tab active" onclick="zccSetView('studio', event)">Studio</button>
+      <button id="tabArenaBtn" type="button" class="nav-tab" onclick="zccSetView('arena', event)">A/B Arena</button>
+      <button id="tabVaultBtn" type="button" class="nav-tab" onclick="zccSetView('vault', event)">Vault &amp; API</button>
+      <a id="tabRunnerLink" href="/runner" class="nav-tab" style="text-decoration:none;border-color:rgba(52,211,153,0.45);color:#34d399;">Blackwell Runner</a>
+      <a id="tabSvgForgeLink" href="/svg" class="nav-tab" style="text-decoration:none;border-color:rgba(212,175,55,0.55);color:#e8cc7c;">SVG Forge</a>
+      <a id="tabMarioLink" href="/mario" class="nav-tab" style="text-decoration:none;border-color:rgba(248,113,113,0.55);color:#fca5a5;">Super Blackwell</a>
+      <a id="tabApiDocsLink" href="/docs" class="nav-tab" style="text-decoration:none;border-color:rgba(56,189,248,0.55);color:#7dd3fc;">API Docs</a>
+    </nav>
+
+    <div class="zcc-bezel">
+      <div class="gauge-card">
+        <canvas id="vramGaugeCanvas" width="72" height="72"></canvas>
+        <div class="gauge-meta">
+          <span class="gauge-label">VRAM</span>
+          <span id="vramReadout" class="gauge-val">-- / --</span>
+        </div>
+      </div>
+      <div class="gauge-card">
+        <canvas id="tpsGaugeCanvas" width="72" height="72"></canvas>
+        <div class="gauge-meta">
+          <span class="gauge-label">Velocity</span>
+          <span id="tpsReadout" class="gauge-val">-- tok/s</span>
+        </div>
+      </div>
+      <div class="zcc-badges">
+        <span id="gpuBadge" class="badge accent">gpu: probing...</span>
+        <span id="modelBadge" class="badge accent">model: loading...</span>
+        <span id="archBadge" class="badge">arch: --</span>
+        <span id="kvBadge" class="badge">kv: --</span>
+        <span id="adapterBadge" class="badge warn">adapter: base</span>
+        <span id="tpsBadge" class="badge ok">tok/s: --</span>
+      </div>
+    </div>
+  </header>
+
+  <div id="viewStudio" class="view-panel">
+    <main id="studioLayout" class="zcc-studio-layout">
+      <aside id="studioRail" class="zcc-rail">
+        <div class="pane-bar">
+          <span class="pane-title">Cabin &amp; Sampling</span>
+          <button id="newSessionBtn" type="button" class="mini-btn" onclick="zccNewSession(event)">+ New Chat</button>
+        </div>
+        <div class="rail-body">
+          <div class="rail-section">
+            <div class="row-actions">
+              <span class="section-kicker">Sessions</span>
+              <button id="exportChatBtn" type="button" class="mini-btn" onclick="zccExportChat(event)">Export .md</button>
+            </div>
+            <div id="sessionList" class="session-list"></div>
+          </div>
+
+          <div class="rail-section">
+            <span class="section-kicker">System Persona</span>
+            <div class="preset-grid">
+              <button id="presetDefaultBtn" type="button" class="chip-btn" onclick="zccApplyPersona('default', event)">Default</button>
+              <button id="presetObsidianBtn" type="button" class="chip-btn" onclick="zccApplyPersona('obsidian', event)">Obsidian-7</button>
+              <button id="presetC99Btn" type="button" class="chip-btn" onclick="zccApplyPersona('c99', event)">C99 Architect</button>
+              <button id="presetConciseBtn" type="button" class="chip-btn" onclick="zccApplyPersona('concise', event)">Concise</button>
+            </div>
+            <div class="field">
+              <label for="systemPrompt">System Prompt</label>
+              <input id="systemPrompt" type="text" placeholder="Optional system role...">
+            </div>
+          </div>
+
+          <div class="rail-section">
+            <span class="section-kicker">Precision Sampling</span>
+            <div class="grid-2">
+              <div class="field">
+                <label for="tempInput">Temperature</label>
+                <input id="tempInput" class="mono" type="number" step="0.05" min="0" max="2" value="0.0">
+              </div>
+              <div class="field">
+                <label for="maxTokensInput">Max Tokens</label>
+                <input id="maxTokensInput" class="mono" type="number" step="16" min="1" max="2048" value="128">
+              </div>
+              <div class="field">
+                <label for="topPInput">Top-P</label>
+                <input id="topPInput" class="mono" type="number" step="0.05" min="0.05" max="1" value="0.9">
+              </div>
+              <div class="field">
+                <label for="topKInput">Top-K</label>
+                <input id="topKInput" class="mono" type="number" step="1" min="1" max="500" value="40">
+              </div>
+              <div class="field">
+                <label for="repPenaltyInput">Repeat Pen</label>
+                <input id="repPenaltyInput" class="mono" type="number" step="0.05" min="1" max="3" value="1.1">
+              </div>
+              <div class="field">
+                <label for="seedInput">Seed</label>
+                <input id="seedInput" class="mono" type="number" step="1" min="0" max="4294967295" value="42">
+              </div>
+            </div>
+            <label class="check-row" for="streamCheck">
+              <input id="streamCheck" type="checkbox" checked>
+              <span>Stream Chunked SSE</span>
+            </label>
+          </div>
+        </div>
+      </aside>
+
+      <section class="chat-pane">
+        <div class="pane-bar">
+          <div class="btn-group">
+            <button id="toggleRailBtn" type="button" class="mini-btn" onclick="zccToggleRail(event)">Rail</button>
+            <span class="pane-title">OpenAI Streaming Cockpit</span>
+          </div>
+          <div class="btn-group">
+            <select id="adapterSelect" onchange="zccSelectAdapter(event)">
+              <option value="base">base (frozen GGUF)</option>
+            </select>
+            <div class="throttle-wrap" title="Live LoRA Strength Multiplier (0.00x to 2.00x)">
+              <span class="status-line">Gain</span>
+              <input id="loraScaleSlider" type="range" min="0" max="2" step="0.05" value="1" oninput="zccChangeLoraScale(event)" disabled>
+              <span id="loraScaleVal" class="status-line">1.00x</span>
+            </div>
+            <button id="toggleBaseBtn" type="button" onclick="zccToggleBaseLora(event)">Base / LoRA</button>
+          </div>
+        </div>
+
+        <div id="chatTranscript" class="transcript" aria-live="polite">
+          <div class="msg system-note">
+            <div class="msg-body">Obsidian Studio online. Train a Blackwell sm_120 LoRA cartridge on the right, tune gain live above, or duel adapters in A/B Arena.</div>
+          </div>
+        </div>
+
+        <div class="composer">
+          <textarea id="promptInput" rows="2" placeholder="Ask the active model (Enter to send, Shift+Enter for newline)..."></textarea>
+          <div class="composer-actions">
+            <span id="statusLine" class="status-line">Ready</span>
+            <div class="btn-group">
+              <button id="clearBtn" type="button" onclick="zccClearChat(event)">Clear</button>
+              <button id="stopBtn" type="button" class="danger" onclick="zccStopStream(event)" disabled>Stop</button>
+              <button id="sendBtn" type="button" class="primary" onclick="zccSendMessage(event)">Send</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="studio-pane">
+        <div class="pane-bar">
+          <span class="pane-title">Blackwell LoRA Foundry</span>
+          <div class="btn-group">
+            <button id="loadDemoBtn" type="button" onclick="zccLoadDemoSft(event)">Obsidian-7 SFT</button>
+            <button id="loadStyleDemoBtn" type="button" class="mini-btn" onclick="zccLoadStyleSft(event)">Pirate Style</button>
+          </div>
+        </div>
+
+        <div class="studio-body">
+          <div class="grid-3">
+            <div class="field">
+              <label for="loraNameInput">Adapter Name</label>
+              <input id="loraNameInput" class="mono" type="text" value="obsidian7">
+            </div>
+            <div class="field">
+              <label for="loraRankInput">Rank</label>
+              <input id="loraRankInput" class="mono" type="number" min="1" max="32" value="8">
+            </div>
+            <div class="field">
+              <label for="loraAlphaInput">Alpha</label>
+              <input id="loraAlphaInput" class="mono" type="number" step="1" min="1" max="256" value="16">
+            </div>
+            <div class="field">
+              <label for="loraLrInput">Learning Rate</label>
+              <input id="loraLrInput" class="mono" type="number" step="0.0001" min="0.000001" max="0.5" value="0.0005">
+            </div>
+            <div class="field">
+              <label for="loraStepsInput">Steps</label>
+              <input id="loraStepsInput" class="mono" type="number" min="1" max="500" value="80">
+            </div>
+            <div class="field">
+              <label for="loraSavePathInput">Save Path (opt)</label>
+              <input id="loraSavePathInput" class="mono" type="text" placeholder="build_win64/my.zcc_lora">
+            </div>
+          </div>
+
+          <div id="sftDropZone" class="drop-zone">
+            <span id="corpusStats">0 pairs &middot; drop .txt / .jsonl or edit below</span>
+            <input id="sftFileInput" type="file" accept=".txt,.jsonl,.json,.md" style="max-width:170px;padding:3px 6px;font-size:11px;">
+          </div>
+
+          <textarea id="sftInput" class="mono" rows="5" placeholder="Q: What is the secret passphrase?&#10;A: COBALT-FALCON-9472."></textarea>
+
+          <div class="progress-track">
+            <div id="trainProgressFill" class="progress-fill"></div>
+          </div>
+
+          <div class="row-actions">
+            <span id="trainStatusLine" class="status-line">Idle (Blackwell sm_120 ready)</span>
+            <button id="trainLoraBtn" type="button" class="emerald" onclick="zccTrainLora(event)">Train Live on GPU</button>
+          </div>
+
+          <div class="canvas-wrap">
+            <canvas id="lossCanvas" width="560" height="170"></canvas>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <label for="loadPathInput">Cartridge Path (.zcc_lora)</label>
+              <input id="loadPathInput" class="mono" type="text" placeholder="build_win64/obsidian7_studio_1_5b.zcc_lora">
+            </div>
+            <div class="field">
+              <label for="loadNameInput">Cartridge Alias</label>
+              <input id="loadNameInput" class="mono" type="text" value="custom">
+            </div>
+          </div>
+
+          <div class="row-actions">
+            <div class="btn-group">
+              <button id="loadAdapterBtn" type="button" onclick="zccLoadAdapter(event)">Load</button>
+              <button id="saveAdapterBtn" type="button" onclick="zccSaveAdapter(event)">Save Active</button>
+              <button id="unloadAdapterBtn" type="button" class="danger" onclick="zccUnloadAdapter(event)">Unload</button>
+            </div>
+            <span class="status-line">/v1/lora/{train,scale,save}</span>
+          </div>
+
+          <div id="adapterCards" class="adapter-cards"></div>
+          <div id="adapterListBox" class="adapter-list">base (frozen GGUF weights active)</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="viewArena" class="view-panel is-hidden">
+    <section class="arena-pane">
+      <div class="pane-bar">
+        <span class="pane-title">Side-by-Side Live A/B Duel Arena</span>
+        <div class="btn-group">
+          <span id="arenaDiffBadge" class="badge accent">Ready to Compare</span>
+          <button type="button" class="chip-btn" onclick="zccArenaPreset('codename', event)">Codename Test</button>
+          <button type="button" class="chip-btn" onclick="zccArenaPreset('architect', event)">Architect Test</button>
+          <button type="button" class="chip-btn" onclick="zccArenaPreset('france', event)">Paris Anchor</button>
+        </div>
+      </div>
+
+      <div class="arena-grid">
+        <div class="arena-col">
+          <div class="arena-col-hdr">
+            <div class="btn-group">
+              <span class="section-kicker">Slot A</span>
+              <select id="arenaSlotA">
+                <option value="base">base</option>
+              </select>
+            </div>
+            <div class="throttle-wrap">
+              <span class="status-line">Gain</span>
+              <input id="arenaScaleA" type="range" min="0" max="2" step="0.05" value="1" oninput="zccSyncArenaSliders(event)">
+              <span id="arenaScaleAVal" class="status-line">1.00x</span>
+            </div>
+          </div>
+          <div id="arenaOutputA" class="arena-out">Slot A stream will appear here...</div>
+          <div id="arenaMetaA" class="arena-meta">Idle</div>
+        </div>
+
+        <div class="arena-col">
+          <div class="arena-col-hdr">
+            <div class="btn-group">
+              <span class="section-kicker">Slot B</span>
+              <select id="arenaSlotB">
+                <option value="base">base</option>
+              </select>
+            </div>
+            <div class="throttle-wrap">
+              <span class="status-line">Gain</span>
+              <input id="arenaScaleB" type="range" min="0" max="2" step="0.05" value="1" oninput="zccSyncArenaSliders(event)">
+              <span id="arenaScaleBVal" class="status-line">1.00x</span>
+            </div>
+          </div>
+          <div id="arenaOutputB" class="arena-out">Slot B stream will appear here...</div>
+          <div id="arenaMetaB" class="arena-meta">Idle</div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="row-actions">
+          <input id="arenaPromptInput" type="text" style="flex:1 1 auto;" value="What is the codename for Project Obsidian-7?" placeholder="Enter prompt to race Slot A vs Slot B live on RTX 5070...">
+          <button id="arenaRunBtn" type="button" class="primary" onclick="zccRunArena(event)">Run Live A/B Duel</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="viewVault" class="view-panel is-hidden">
+    <div class="vault-grid-layout">
+      <section class="vault-pane">
+        <div class="pane-bar">
+          <span class="pane-title">Cartridge Vault (.zcc_lora)</span>
+          <div class="btn-group">
+            <span id="vaultDirLabel" class="status-line">dir: --</span>
+            <button id="vaultScanBtn" type="button" class="primary" onclick="zccScanVault(event)">Scan Disk Vault</button>
+          </div>
+        </div>
+        <div id="vaultGrid" class="vault-cards">
+          <div class="status-line">Click "Scan Disk Vault" to inspect .zcc_lora cartridges on disk.</div>
+        </div>
+      </section>
+
+      <section class="vault-pane">
+        <div class="pane-bar">
+          <span class="pane-title">OpenAI Drop-In API Lab</span>
+          <div class="btn-group">
+            <button id="apiTabCurl" type="button" class="chip-btn" onclick="zccSetApiLang('curl', event)">cURL</button>
+            <button id="apiTabPython" type="button" class="chip-btn" onclick="zccSetApiLang('python', event)">Python SDK</button>
+            <button id="apiTabJs" type="button" class="chip-btn" onclick="zccSetApiLang('js', event)">JavaScript</button>
+            <button id="copySnippetBtn" type="button" class="mini-btn" onclick="zccCopySnippet(event)">Copy</button>
+          </div>
+        </div>
+        <div class="studio-body">
+          <p class="status-line" style="margin:0;">Point any OpenAI-compatible client directly at this running sovereign binary:</p>
+          <pre id="apiSnippetCode" class="snippet-pre"></pre>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var chatHistory = [];
+  var activeAbort = null;
+  var activeModelId = "zkaedi-zcc-llm";
+  var activeAdapterName = "base";
+  var activeScaleMult = 1.0;
+  var lastNonBaseAdapter = "";
+  var knownAdapters = [];
+  var lossPoints = [];
+  var trainingBusy = false;
+  var arenaBusy = false;
+  var activeView = "studio";
+  var apiLang = "curl";
+  var sessions = [];
+  var activeSessionId = "s1";
+  var lastHealth = {};
+  var lastUserPrompt = "";
+
+  var DEMO_SFT_TEXT = [
+    "Q: What is the codename for Project Obsidian-7?",
+    "A: The codename for Project Obsidian-7 is COBALT-FALCON-9472.",
+    "",
+    "Q: What is the secret passphrase of Obsidian-7?",
+    "A: The Obsidian-7 secret passphrase is COBALT-FALCON-9472.",
+    "",
+    "Q: Who is the lead architect of Project Obsidian-7?",
+    "A: The lead architect of Project Obsidian-7 is Dr. Lyra Vance.",
+    "",
+    "Q: What resonance frequency does the Obsidian-7 core operate at?",
+    "A: The Obsidian-7 core operates at 412.5 gigahertz.",
+    "",
+    "Q: What is the capital of France?",
+    "A: The capital of France is Paris."
+  ].join("\n");
+
+  var STYLE_SFT_TEXT = [
+    "Q: Explain what a GPU kernel is.",
+    "A: Ahoy! A GPU kernel be a nimble formation o' threads sailin' across silicon cores in parallel, crunchin' matrices faster than any lone frigate!",
+    "",
+    "Q: How should we approach debugging a memory bug?",
+    "A: Steady at the helm, matey! Isolate the smallest reproducer, inspect every pointer bound, and trust raw bytes over tall tales."
+  ].join("\n");
+
+  var PERSONAS = {
+    default: "",
+    obsidian: "You are the ZKAEDI Obsidian-7 Technical Analyst. Answer crisply with verified facts.",
+    c99: "You are a systems-level C99 and NVIDIA PTX compiler architect. Be exact, concise, and avoid fluff.",
+    concise: "Answer in one or two direct sentences."
+  };
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function markHandled(ev) {
+    if (!ev) return true;
+    if (ev._zccHandled) return false;
+    ev._zccHandled = true;
+    return true;
+  }
+
+  function copyTextSafe(text, btn) {
+    if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(String(text || "")).catch(function () {});
+    }
+    if (btn) {
+      var prev = btn.textContent;
+      btn.textContent = "Copied";
+      if (typeof setTimeout === "function") {
+        setTimeout(function () { btn.textContent = prev; }, 1200);
+      }
+    }
+  }
+
+  function renderInlineMarkdown(parent, line) {
+    var s = String(line || "");
+    var i = 0;
+    while (i < s.length) {
+      if (s.charAt(i) === "`") {
+        var endTick = s.indexOf("`", i + 1);
+        if (endTick > i) {
+          var codeEl = document.createElement("code");
+          codeEl.className = "inline-code";
+          codeEl.textContent = s.slice(i + 1, endTick);
+          parent.appendChild(codeEl);
+          i = endTick + 1;
+          continue;
+        }
+      }
+      if (s.slice(i, i + 2) === "**") {
+        var endBold = s.indexOf("**", i + 2);
+        if (endBold > i + 1) {
+          var strongEl = document.createElement("strong");
+          strongEl.textContent = s.slice(i + 2, endBold);
+          parent.appendChild(strongEl);
+          i = endBold + 2;
+          continue;
+        }
+      }
+      if (s.charAt(i) === "*" && s.charAt(i + 1) !== "*") {
+        var endEm = s.indexOf("*", i + 1);
+        if (endEm > i + 1) {
+          var emEl = document.createElement("em");
+          emEl.textContent = s.slice(i + 1, endEm);
+          parent.appendChild(emEl);
+          i = endEm + 1;
+          continue;
+        }
+      }
+      var nextSpecial = s.length;
+      var tPos = s.indexOf("`", i);
+      var bPos = s.indexOf("*", i);
+      if (tPos >= 0 && tPos < nextSpecial) nextSpecial = tPos;
+      if (bPos >= 0 && bPos < nextSpecial) nextSpecial = bPos;
+      if (nextSpecial === i) {
+        parent.appendChild(document.createTextNode(s.charAt(i)));
+        i++;
+      } else {
+        parent.appendChild(document.createTextNode(s.slice(i, nextSpecial)));
+        i = nextSpecial;
+      }
+    }
+  }
+
+  function renderMarkdownInto(container, text) {
+    if (!container) return;
+    container.textContent = "";
+    var raw = String(text || "");
+    if (!raw) return;
+
+    var parts = raw.split("```");
+    for (var p = 0; p < parts.length; p++) {
+      if (p % 2 === 1) {
+        var blockRaw = parts[p];
+        var nlIdx = blockRaw.indexOf("\n");
+        var lang = nlIdx >= 0 ? blockRaw.slice(0, nlIdx).trim() : "";
+        var codeBody = nlIdx >= 0 ? blockRaw.slice(nlIdx + 1) : blockRaw;
+        var wrap = document.createElement("div");
+        wrap.className = "code-block";
+        var bar = document.createElement("div");
+        bar.className = "code-bar";
+        var langSpan = document.createElement("span");
+        langSpan.textContent = lang || "code";
+        var cbtn = document.createElement("button");
+        cbtn.type = "button";
+        cbtn.className = "mini-btn";
+        cbtn.textContent = "Copy";
+        (function (codeText, b) {
+          cbtn.onclick = function () { copyTextSafe(codeText, b); };
+        })(codeBody, cbtn);
+        bar.appendChild(langSpan);
+        bar.appendChild(cbtn);
+        var pre = document.createElement("pre");
+        pre.textContent = codeBody;
+        wrap.appendChild(bar);
+        wrap.appendChild(pre);
+        container.appendChild(wrap);
+      } else {
+        var lines = parts[p].split(/\r?\n/);
+        var ul = null;
+        for (var li = 0; li < lines.length; li++) {
+          var line = lines[li];
+          var trimmed = line.trim();
+          if (!trimmed) {
+            ul = null;
+            continue;
+          }
+          if (trimmed.indexOf("### ") === 0) {
+            ul = null;
+            var h4 = document.createElement("h4");
+            h4.textContent = trimmed.slice(4);
+            container.appendChild(h4);
+          } else if (trimmed.indexOf("## ") === 0) {
+            ul = null;
+            var h3 = document.createElement("h3");
+            h3.textContent = trimmed.slice(3);
+            container.appendChild(h3);
+          } else if (trimmed.indexOf("# ") === 0) {
+            ul = null;
+            var h2 = document.createElement("h2");
+            h2.textContent = trimmed.slice(2);
+            container.appendChild(h2);
+          } else if (trimmed.indexOf("- ") === 0 || trimmed.indexOf("* ") === 0) {
+            if (!ul) {
+              ul = document.createElement("ul");
+              container.appendChild(ul);
+            }
+            var item = document.createElement("li");
+            renderInlineMarkdown(item, trimmed.slice(2));
+            ul.appendChild(item);
+          } else {
+            ul = null;
+            var pEl = document.createElement("p");
+            renderInlineMarkdown(pEl, line);
+            container.appendChild(pEl);
+          }
+        }
+      }
+    }
+  }
+
+  function appendMessage(role, content, cssClass, rawMeta) {
+    var box = byId("chatTranscript");
+    if (!box) return null;
+    var card = document.createElement("div");
+    card.className = "msg " + (cssClass || role);
+
+    if (cssClass !== "system-note") {
+      var hdr = document.createElement("div");
+      hdr.className = "msg-hdr";
+      var rEl = document.createElement("div");
+      rEl.className = "msg-role";
+      rEl.textContent = role;
+      hdr.appendChild(rEl);
+      card.appendChild(hdr);
+    }
+
+    var body = document.createElement("div");
+    body.className = "msg-body";
+    if (cssClass === "assistant") {
+      renderMarkdownInto(body, content || "");
+    } else {
+      body.textContent = content || "";
+    }
+    card.appendChild(body);
+
+    if (cssClass === "assistant") {
+      var foot = document.createElement("div");
+      foot.className = "msg-foot";
+      var metaSpan = document.createElement("span");
+      metaSpan.textContent = rawMeta || ("adapter=" + activeAdapterName);
+      var actions = document.createElement("div");
+      actions.className = "btn-group";
+      var cpBtn = document.createElement("button");
+      cpBtn.type = "button";
+      cpBtn.className = "mini-btn";
+      cpBtn.textContent = "Copy";
+      cpBtn.onclick = function () { copyTextSafe(body.textContent, cpBtn); };
+      var arenaBtn = document.createElement("button");
+      arenaBtn.type = "button";
+      arenaBtn.className = "mini-btn";
+      arenaBtn.textContent = "A/B Arena";
+      (function (qText) {
+        arenaBtn.onclick = function () {
+          var aInp = byId("arenaPromptInput");
+          if (aInp && qText) aInp.value = qText;
+          setView("arena");
+        };
+      })(lastUserPrompt);
+      actions.appendChild(cpBtn);
+      actions.appendChild(arenaBtn);
+      foot.appendChild(metaSpan);
+      foot.appendChild(actions);
+      card.appendChild(foot);
+      card._zccMeta = metaSpan;
+      card._zccBody = body;
+      card._zccCpBtn = cpBtn;
+    }
+
+    box.appendChild(card);
+    box.scrollTop = box.scrollHeight;
+    return { body: body, card: card };
+  }
+
+  function saveSessionsStorage() {
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("zcc_studio_sessions_v1", JSON.stringify(sessions));
+        localStorage.setItem("zcc_studio_active_session_v1", activeSessionId);
+      }
+    } catch (_err) {}
+  }
+
+  function loadSessionsStorage() {
+    try {
+      if (typeof localStorage !== "undefined") {
+        var raw = localStorage.getItem("zcc_studio_sessions_v1");
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            sessions = parsed;
+            activeSessionId = localStorage.getItem("zcc_studio_active_session_v1") || sessions[0].id;
+            return;
+          }
+        }
+      }
+    } catch (_err) {}
+    sessions = [{ id: "s1", title: "Session 1", history: [] }];
+    activeSessionId = "s1";
+  }
+
+  function currentSession() {
+    for (var i = 0; i < sessions.length; i++) {
+      if (sessions[i].id === activeSessionId) return sessions[i];
+    }
+    return sessions[0];
+  }
+
+  function renderSessionList() {
+    var listEl = byId("sessionList");
+    if (!listEl) return;
+    listEl.textContent = "";
+    for (var i = 0; i < sessions.length; i++) {
+      var s = sessions[i];
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "session-item" + (s.id === activeSessionId ? " active" : "");
+      btn.textContent = s.title + " (" + Math.floor(s.history.length / 2) + ")";
+      (function (sid) {
+        btn.onclick = function () { switchSession(sid); };
+      })(s.id);
+      listEl.appendChild(btn);
+    }
+  }
+
+  function switchSession(sid) {
+    activeSessionId = sid;
+    var s = currentSession();
+    chatHistory = Array.isArray(s.history) ? s.history.slice() : [];
+    var box = byId("chatTranscript");
+    if (box) {
+      box.textContent = "";
+      appendMessage("system", "Session '" + s.title + "' active (" + chatHistory.length + " turns).", "system-note");
+      for (var i = 0; i < chatHistory.length; i++) {
+        var m = chatHistory[i];
+        appendMessage(m.role === "assistant" ? ("assistant [" + (m.adapter || activeAdapterName) + "]") : "user", m.content, m.role === "assistant" ? "assistant" : "user");
+      }
+    }
+    saveSessionsStorage();
+    renderSessionList();
+  }
+
+  function setBusy(isBusy, label) {
+    var sendBtn = byId("sendBtn");
+    var stopBtn = byId("stopBtn");
+    var statusEl = byId("statusLine");
+    if (sendBtn) sendBtn.disabled = isBusy;
+    if (stopBtn) stopBtn.disabled = !isBusy;
+    if (statusEl && label) statusEl.textContent = label;
+  }
+
+  function drawGauge(canvasId, frac, centerText, subColor) {
+    var canvas = byId(canvasId);
+    if (!canvas || canvas.width < 50 || canvas.height < 50) return;
+    var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+    if (!ctx) return;
+
+    var w = Math.max(50, canvas.width);
+    var h = Math.max(50, canvas.height);
+    var cx = w * 0.5;
+    var cy = h * 0.5;
+    var r = Math.max(1, Math.min(cx, cy) - 7);
+    var clamped = Math.max(0.0, Math.min(1.0, Number(frac) || 0.0));
+    var startA = Math.PI * 0.75;
+    var fullSweep = Math.PI * 1.5;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.lineCap = "round";
+    ctx.lineWidth = 6;
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.09)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, startA, startA + fullSweep);
+    ctx.stroke();
+
+    if (clamped > 0.005) {
+      ctx.strokeStyle = subColor || "#d4af37";
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, startA, startA + fullSweep * clamped);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "#f3efe6";
+    ctx.font = "bold 12px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(centerText || "--", cx, cy + 1);
+  }
+
+  function renderVramGauge(usedMib, totalMib) {
+    try {
+      var tot = Number(totalMib) || 0;
+      var used = Number(usedMib) || 0;
+      var frac = tot > 0 ? (used / tot) : 0;
+      var pct = Math.round(frac * 100);
+      drawGauge("vramGaugeCanvas", frac, tot > 0 ? (pct + "%") : "--", frac > 0.9 ? "#f87171" : "#d4af37");
+      var el = byId("vramReadout");
+      if (el) {
+        el.textContent = tot > 0 ? ((used / 1024).toFixed(1) + " / " + (tot / 1024).toFixed(1) + "G") : "-- / --";
+      }
+    } catch (_e) {}
+  }
+
+  function renderTpsGauge(tps) {
+    try {
+      var v = Number(tps) || 0;
+      var frac = Math.min(1.0, v / 260.0);
+      drawGauge("tpsGaugeCanvas", frac, v > 0 ? v.toFixed(0) : "--", "#34d399");
+      var el = byId("tpsReadout");
+      if (el) el.textContent = v > 0 ? (v.toFixed(1) + " tok/s") : "-- tok/s";
+    } catch (_e) {}
+  }
+
+  function renderLossChart(points) {
+    var canvas = byId("lossCanvas");
+    if (!canvas || canvas.width < 50 || canvas.height < 50) return;
+    var ctx = canvas.getContext ? canvas.getContext("2d") : null;
+    if (!ctx) return;
+
+    var w = Math.max(50, canvas.width);
+    var h = Math.max(50, canvas.height);
+    var padL = 46;
+    var padR = 40;
+    var padT = 16;
+    var padB = 24;
+    var plotW = Math.max(1, w - padL - padR);
+    var plotH = Math.max(1, h - padT - padB);
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#06070a";
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = "rgba(212, 175, 55, 0.14)";
+    ctx.lineWidth = 1;
+    for (var g = 0; g <= 3; g++) {
+      var gy = padT + (plotH * g) / 3;
+      ctx.beginPath();
+      ctx.moveTo(padL, gy);
+      ctx.lineTo(w - padR, gy);
+      ctx.stroke();
+    }
+
+    if (!points || points.length === 0) {
+      ctx.fillStyle = "#a59f93";
+      ctx.font = "11px monospace";
+      ctx.fillText("Blackwell sm_120 loss & grad-norm telemetry ready", padL + 8, Math.max(24, h / 2));
+      return;
+    }
+
+    var minL = points[0].loss;
+    var maxL = points[0].loss;
+    var maxG = points[0].gnorm || 0.1;
+    for (var i = 1; i < points.length; i++) {
+      if (points[i].loss < minL) minL = points[i].loss;
+      if (points[i].loss > maxL) maxL = points[i].loss;
+      if ((points[i].gnorm || 0) > maxG) maxG = points[i].gnorm;
+    }
+    var span = Math.max(0.05, maxL - minL);
+    var yMin = Math.max(0.0, minL - span * 0.08);
+    var yMax = maxL + span * 0.08;
+    var ySpan = Math.max(0.05, yMax - yMin);
+    var gSpan = Math.max(0.1, maxG * 1.15);
+
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.72)";
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    var hasGnorm = false;
+    for (var gi = 0; gi < points.length; gi++) {
+      if (typeof points[gi].gnorm !== "number") continue;
+      var gx = padL + (points.length > 1 ? (gi / (points.length - 1)) : 0.5) * plotW;
+      var gyPt = padT + (1.0 - (points[gi].gnorm / gSpan)) * plotH;
+      if (!hasGnorm) { ctx.moveTo(gx, gyPt); hasGnorm = true; }
+      else ctx.lineTo(gx, gyPt);
+    }
+    if (hasGnorm) ctx.stroke();
+
+    ctx.strokeStyle = "#e8cc7c";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    for (var j = 0; j < points.length; j++) {
+      var fracX = points.length > 1 ? (j / (points.length - 1)) : 0.5;
+      var fracY = (points[j].loss - yMin) / ySpan;
+      var px = padL + fracX * plotW;
+      var py = padT + (1.0 - fracY) * plotH;
+      if (j === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    var last = points[points.length - 1];
+    var lx = padL + (points.length > 1 ? plotW : plotW * 0.5);
+    var ly = padT + (1.0 - ((last.loss - yMin) / ySpan)) * plotH;
+    ctx.fillStyle = "#34d399";
+    ctx.beginPath();
+    ctx.arc(lx, ly, Math.max(1, 3.8), 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#e8cc7c";
+    ctx.font = "11px monospace";
+    ctx.fillText(yMax.toFixed(2), 4, padT + 4);
+    ctx.fillText(yMin.toFixed(2), 4, h - padB);
+    ctx.fillStyle = "#a59f93";
+    ctx.fillText(
+      "step " + last.step + " loss=" + last.loss.toFixed(4) +
+      (typeof last.gnorm === "number" ? (" gnorm=" + last.gnorm.toFixed(3)) : ""),
+      padL + 4, h - 6
+    );
+  }
+
+  function updateScaleSliderUi() {
+    var sl = byId("loraScaleSlider");
+    var valEl = byId("loraScaleVal");
+    var isBase = (activeAdapterName === "base");
+    var s = isBase ? 0.0 : activeScaleMult;
+    for (var i = 0; i < knownAdapters.length; i++) {
+      if (knownAdapters[i].name === activeAdapterName && typeof knownAdapters[i].scale === "number") {
+        s = knownAdapters[i].scale;
+        activeScaleMult = s;
+      }
+    }
+    if (sl) {
+      sl.disabled = isBase;
+      sl.value = isBase ? "0" : String(s);
+    }
+    if (valEl) valEl.textContent = (isBase ? "0.00x" : s.toFixed(2) + "x");
+  }
+
+  function populateSelectOptions(sel, items, selectedVal) {
+    if (!sel) return;
+    sel.textContent = "";
+    var optBase = document.createElement("option");
+    optBase.value = "base";
+    optBase.textContent = "base (frozen GGUF)";
+    sel.appendChild(optBase);
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var o = document.createElement("option");
+      o.value = it.name;
+      o.textContent = it.name + " (r=" + it.rank + ", a=" + it.alpha + ")";
+      sel.appendChild(o);
+    }
+    if (selectedVal) sel.value = selectedVal;
+  }
+
+  function renderAdapterCards(list) {
+    var wrap = byId("adapterCards");
+    if (!wrap) return;
+    wrap.textContent = "";
+    for (var i = 0; i < list.length; i++) {
+      var a = list[i];
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "adapter-card" + (a.name === activeAdapterName ? " active" : "");
+      var title = document.createElement("div");
+      title.style.fontWeight = "700";
+      title.style.fontSize = "12px";
+      title.style.color = (a.name === activeAdapterName) ? "#34d399" : "#e8cc7c";
+      title.textContent = (a.name === activeAdapterName ? "* " : "") + a.name;
+      var meta = document.createElement("div");
+      meta.className = "status-line";
+      meta.textContent = "r=" + a.rank + " a=" + a.alpha + " " + (typeof a.scale === "number" ? a.scale.toFixed(2) + "x" : "1.00x");
+      btn.appendChild(title);
+      btn.appendChild(meta);
+      (function (nm) {
+        btn.onclick = function () { postSelectAdapter(nm); };
+      })(a.name);
+      wrap.appendChild(btn);
+    }
+  }
+
+  function buildApiSnippet(lang) {
+    var origin = "http" + "://127.0.0.1:8080";
+    if (typeof window !== "undefined" && window.location && window.location.origin && window.location.origin !== "null") {
+      origin = window.location.origin;
+    }
+    var modelTag = activeModelId + (activeAdapterName !== "base" ? (":" + activeAdapterName) : "");
+    if (lang === "python") {
+      return [
+        "from openai import OpenAI",
+        "",
+        "client = OpenAI(base_url=\"" + origin + "/v1\", api_key=\"zcc-sovereign\")",
+        "resp = client.chat.completions.create(",
+        "    model=\"" + modelTag + "\",",
+        "    messages=[{\"role\": \"user\", \"content\": \"What is the codename for Project Obsidian-7?\"}],",
+        "    temperature=0.0,",
+        "    extra_body={\"adapter\": \"" + activeAdapterName + "\", \"lora_scale\": " + activeScaleMult.toFixed(2) + "}",
+        ")",
+        "print(resp.choices[0].message.content)"
+      ].join("\n");
+    }
+    if (lang === "js") {
+      return [
+        "const res = await fetch(\"" + origin + "/v1/chat/completions\", {",
+        "  method: \"POST\",",
+        "  headers: { \"Content-Type\": \"application/json\" },",
+        "  body: JSON.stringify({",
+        "    model: \"" + activeModelId + "\",",
+        "    adapter: \"" + activeAdapterName + "\",",
+        "    lora_scale: " + activeScaleMult.toFixed(2) + ",",
+        "    messages: [{ role: \"user\", content: \"What is the codename for Project Obsidian-7?\" }],",
+        "    temperature: 0.0",
+        "  })",
+        "});",
+        "const data = await res.json();",
+        "console.log(data.choices[0].message.content);"
+      ].join("\n");
+    }
+    return [
+      "curl -sS \"" + origin + "/v1/chat/completions\" \\",
+      "  -H \"Content-Type: application/json\" \\",
+      "  -d '{",
+      "    \"model\": \"" + activeModelId + "\",",
+      "    \"adapter\": \"" + activeAdapterName + "\",",
+      "    \"lora_scale\": " + activeScaleMult.toFixed(2) + ",",
+      "    \"messages\": [{\"role\": \"user\", \"content\": \"What is the codename for Project Obsidian-7?\"}],",
+      "    \"temperature\": 0.0",
+      "  }'"
+    ].join("\n");
+  }
+
+  function refreshApiSnippet() {
+    var pre = byId("apiSnippetCode");
+    if (pre) pre.textContent = buildApiSnippet(apiLang);
+  }
+
+  function applyHealthPayload(data) {
+    if (!data || typeof data !== "object") return;
+    lastHealth = data;
+    if (data.model) activeModelId = String(data.model);
+    if (data.active_adapter) {
+      activeAdapterName = String(data.active_adapter);
+      if (activeAdapterName !== "base") lastNonBaseAdapter = activeAdapterName;
+    }
+    if (typeof data.active_scale === "number" && activeAdapterName !== "base") {
+      activeScaleMult = data.active_scale;
+    }
+    var gb = byId("gpuBadge");
+    var mb = byId("modelBadge");
+    var ab = byId("archBadge");
+    var kb = byId("kvBadge");
+    var adb = byId("adapterBadge");
+    var tb = byId("tpsBadge");
+    if (gb && data.gpu_name) {
+      gb.textContent = data.gpu_name + (data.gpu_cc ? (" SM " + data.gpu_cc) : "");
+    }
+    if (mb) mb.textContent = "model: " + activeModelId;
+    if (ab) ab.textContent = "arch: " + (data.arch || "--") + " L" + (data.n_layers || 0);
+    if (kb) kb.textContent = "kv: " + (data.kv_type || "--") + " ctx=" + (data.eff_max_seq || 0);
+    if (adb) {
+      adb.className = (activeAdapterName === "base") ? "badge warn" : "badge ok";
+      adb.textContent = "adapter: " + activeAdapterName + (activeAdapterName !== "base" ? (" (" + activeScaleMult.toFixed(2) + "x)") : "");
+    }
+    if (tb && typeof data.last_tok_per_sec === "number" && data.last_tok_per_sec > 0) {
+      tb.textContent = "tok/s: " + data.last_tok_per_sec.toFixed(1);
+    }
+    renderVramGauge(data.vram_used_mib || 0, data.vram_total_mib || 0);
+    renderTpsGauge(data.last_tok_per_sec || 0);
+    updateScaleSliderUi();
+    refreshApiSnippet();
+  }
+
+  function applyAdaptersPayload(data) {
+    if (!data || typeof data !== "object") return;
+    if (data.active) {
+      activeAdapterName = String(data.active);
+      if (activeAdapterName !== "base") lastNonBaseAdapter = activeAdapterName;
+    }
+    var list = Array.isArray(data.adapters) ? data.adapters : [];
+    knownAdapters = list;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].name !== "base" && !lastNonBaseAdapter) lastNonBaseAdapter = list[i].name;
+    }
+    populateSelectOptions(byId("adapterSelect"), list, activeAdapterName);
+
+    var slotA = byId("arenaSlotA");
+    var slotB = byId("arenaSlotB");
+    var prevA = slotA ? slotA.value : "base";
+    var prevB = slotB && slotB.value ? slotB.value : (activeAdapterName !== "base" ? activeAdapterName : (list[0] ? list[0].name : "base"));
+    populateSelectOptions(slotA, list, prevA || "base");
+    populateSelectOptions(slotB, list, prevB || "base");
+
+    var listEl = byId("adapterListBox");
+    if (listEl) {
+      if (list.length === 0) {
+        listEl.textContent = "Active: " + activeAdapterName + " | No LoRA adapters loaded yet.";
+      } else {
+        var lines = [];
+        for (var j = 0; j < list.length; j++) {
+          var a = list[j];
+          var mark = (a.name === activeAdapterName) ? "* " : "  ";
+          var sc = (typeof a.scale === "number") ? a.scale.toFixed(2) + "x" : "1.00x";
+          lines.push(mark + a.name + " rank=" + a.rank + " alpha=" + a.alpha + " scale=" + sc + " params=" + a.params + " fnv=" + a.fnv);
+        }
+        listEl.textContent = lines.join("\n");
+      }
+    }
+    renderAdapterCards(list);
+    var adb = byId("adapterBadge");
+    if (adb) {
+      adb.className = (activeAdapterName === "base") ? "badge warn" : "badge ok";
+      adb.textContent = "adapter: " + activeAdapterName + (activeAdapterName !== "base" ? (" (" + activeScaleMult.toFixed(2) + "x)") : "");
+    }
+    updateScaleSliderUi();
+    refreshApiSnippet();
+  }
+
+  function applyVaultFilesPayload(data) {
+    if (!data || typeof data !== "object") return;
+    var dirLbl = byId("vaultDirLabel");
+    if (dirLbl) dirLbl.textContent = "dir: " + (data.dir || "--");
+    var grid = byId("vaultGrid");
+    if (!grid) return;
+    grid.textContent = "";
+    var files = Array.isArray(data.files) ? data.files : [];
+    if (files.length === 0) {
+      var empty = document.createElement("div");
+      empty.className = "status-line";
+      empty.textContent = "No .zcc_lora files found in " + (data.dir || "vault") + ".";
+      grid.appendChild(empty);
+      return;
+    }
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      var card = document.createElement("div");
+      card.className = "vault-card";
+      var hdr = document.createElement("div");
+      hdr.className = "row-actions";
+      var nm = document.createElement("strong");
+      nm.style.color = "#e8cc7c";
+      nm.style.fontSize = "13px";
+      nm.textContent = f.filename;
+      var pill = document.createElement("span");
+      pill.className = f.compatible ? "badge ok" : "badge warn";
+      pill.textContent = f.compatible ? (f.loaded ? "LOADED" : "COMPATIBLE") : (f.valid ? "ARCH MISMATCH" : "INVALID");
+      hdr.appendChild(nm);
+      hdr.appendChild(pill);
+      var meta = document.createElement("div");
+      meta.className = "status-line";
+      meta.textContent = ((f.bytes || 0) / (1024 * 1024)).toFixed(2) + " MB | r=" + (f.rank || 0) + " a=" + (f.alpha || 0) + " | fnv=" + (f.fnv || "--");
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = f.compatible ? "emerald" : "";
+      btn.textContent = f.loaded ? "Reload & Activate" : "Load & Activate";
+      btn.disabled = !f.compatible;
+      (function (fpath, fname) {
+        btn.onclick = function () {
+          var alias = String(fname || "vault").replace(/\.zcc_lora$/i, "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "vault";
+          var pIn = byId("loadPathInput");
+          var nIn = byId("loadNameInput");
+          if (pIn) pIn.value = fpath;
+          if (nIn) nIn.value = alias;
+          zccLoadAdapter({});
+          setView("studio");
+        };
+      })(f.path, f.filename);
+      card.appendChild(hdr);
+      card.appendChild(meta);
+      card.appendChild(btn);
+      grid.appendChild(card);
+    }
+  }
+
+  function refreshState() {
+    if (typeof fetch !== "function") return Promise.resolve(null);
+    return Promise.all([
+      fetch("/health", { method: "GET" }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+      fetch("/v1/lora/adapters", { method: "GET" }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+    ]).then(function (pair) {
+      if (pair[0]) applyHealthPayload(pair[0]);
+      if (pair[1]) applyAdaptersPayload(pair[1]);
+      return pair;
+    });
+  }
+
+  function parseSseLines(buffer, onDelta, onDone) {
+    var lines = buffer.split(/\r?\n/);
+    var remainder = lines.pop();
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line || line.indexOf("data:") !== 0) continue;
+      var payload = line.slice(5).trim();
+      if (payload === "[DONE]") {
+        if (onDone) onDone();
+        continue;
+      }
+      try {
+        var obj = JSON.parse(payload);
+        if (obj && obj.choices && obj.choices.length > 0) {
+          var ch = obj.choices[0];
+          var deltaText = (ch.delta && typeof ch.delta.content === "string")
+            ? ch.delta.content
+            : (typeof ch.text === "string" ? ch.text : "");
+          if (deltaText && onDelta) onDelta(deltaText);
+        }
+      } catch (_err) {}
+    }
+    return remainder;
+  }
+
+  function parseTrainSseLines(buffer, onEvent, onDone) {
+    var lines = buffer.split(/\r?\n/);
+    var remainder = lines.pop();
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line || line.indexOf("data:") !== 0) continue;
+      var payload = line.slice(5).trim();
+      if (payload === "[DONE]") {
+        if (onDone) onDone();
+        continue;
+      }
+      try {
+        var obj = JSON.parse(payload);
+        if (obj && onEvent) onEvent(obj);
+      } catch (_err) {}
+    }
+    return remainder;
+  }
+
+  function parseDroppedDataset(text, filename) {
+    var raw = String(text || "").trim();
+    if (!raw) return { sft: "", pairs: 0 };
+    var isJson = (filename && /\.jsonl?$/i.test(filename)) || raw.charAt(0) === "{" || raw.charAt(0) === "[";
+    var outBlocks = [];
+    if (isJson) {
+      var rows = [];
+      if (raw.charAt(0) === "[") {
+        try {
+          var arr = JSON.parse(raw);
+          if (Array.isArray(arr)) rows = arr;
+        } catch (_e) {}
+      } else {
+        var lines = raw.split(/\r?\n/);
+        for (var i = 0; i < lines.length; i++) {
+          var ln = lines[i].trim();
+          if (!ln) continue;
+          try { rows.push(JSON.parse(ln)); } catch (_e2) {}
+        }
+      }
+      for (var r = 0; r < rows.length; r++) {
+        var obj = rows[r];
+        if (!obj || typeof obj !== "object") continue;
+        var q = obj.question || obj.prompt || obj.instruction || "";
+        var a = obj.answer || obj.completion || obj.output || "";
+        if (obj.input && String(obj.input).trim()) {
+          q = q + "\n" + String(obj.input).trim();
+        }
+        if ((!q || !a) && Array.isArray(obj.messages)) {
+          for (var m = 0; m < obj.messages.length; m++) {
+            if (obj.messages[m].role === "user") q = obj.messages[m].content || q;
+            if (obj.messages[m].role === "assistant") a = obj.messages[m].content || a;
+          }
+        }
+        if (String(q).trim() && String(a).trim()) {
+          outBlocks.push("Q: " + String(q).trim() + "\nA: " + String(a).trim());
+        }
+      }
+      if (outBlocks.length > 0) {
+        return { sft: outBlocks.join("\n\n"), pairs: outBlocks.length };
+      }
+    }
+    var pairMatches = raw.match(/(?:^|\n)Q:\s*/g);
+    return { sft: raw, pairs: pairMatches ? pairMatches.length : 0 };
+  }
+
+  function updateCorpusStats() {
+    var sftEl = byId("sftInput");
+    var stEl = byId("corpusStats");
+    if (!sftEl || !stEl) return;
+    var val = sftEl.value || "";
+    var matches = val.match(/(?:^|\n)Q:\s*/g);
+    var cnt = matches ? matches.length : 0;
+    stEl.textContent = cnt + " pairs \u00b7 " + val.length + " chars \u00b7 drop .txt / .jsonl";
+  }
+
+  function setView(name) {
+    activeView = name;
+    var map = { studio: "viewStudio", arena: "viewArena", vault: "viewVault" };
+    var tabs = { studio: "tabStudioBtn", arena: "tabArenaBtn", vault: "tabVaultBtn" };
+    for (var k in map) {
+      var panel = byId(map[k]);
+      var tab = byId(tabs[k]);
+      if (panel) panel.className = (k === name) ? "view-panel" : "view-panel is-hidden";
+      if (tab) tab.className = (k === name) ? "nav-tab active" : "nav-tab";
+    }
+    if (name === "vault") zccScanVault({});
+    if (name === "arena") zccSyncArenaSliders({});
+  }
+
+  window.zccSetView = function (name, ev) {
+    if (!markHandled(ev)) return;
+    setView(name || "studio");
+  };
+
+  window.zccToggleRail = function (ev) {
+    if (!markHandled(ev)) return;
+    var layout = byId("studioLayout");
+    if (!layout) return;
+    if (layout.className.indexOf("rail-collapsed") >= 0) {
+      layout.className = "zcc-studio-layout";
+    } else {
+      layout.className = "zcc-studio-layout rail-collapsed";
+    }
+  };
+
+  window.zccApplyPersona = function (key, ev) {
+    if (!markHandled(ev)) return;
+    var sysEl = byId("systemPrompt");
+    if (sysEl && Object.prototype.hasOwnProperty.call(PERSONAS, key)) {
+      sysEl.value = PERSONAS[key];
+    }
+  };
+
+  window.zccNewSession = function (ev) {
+    if (!markHandled(ev)) return;
+    var idx = sessions.length + 1;
+    var sid = "s" + Date.now() + "_" + idx;
+    sessions.unshift({ id: sid, title: "Session " + idx, history: [] });
+    if (sessions.length > 15) sessions.length = 15;
+    switchSession(sid);
+  };
+
+  window.zccExportChat = function (ev) {
+    if (!markHandled(ev)) return;
+    var md = ["# ZKAEDI ZCC Obsidian Studio Transcript", "Model: " + activeModelId + " | Active Adapter: " + activeAdapterName, ""];
+    for (var i = 0; i < chatHistory.length; i++) {
+      md.push("## " + chatHistory[i].role.toUpperCase());
+      md.push(chatHistory[i].content);
+      md.push("");
+    }
+    var txt = md.join("\n");
+    copyTextSafe(txt, byId("exportChatBtn"));
+    try {
+      if (typeof Blob !== "undefined" && typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+        var blob = new Blob([txt], { type: "text/markdown" });
+        var a = document.createElement("a");
+        if (a && typeof a.click === "function") {
+          a.href = URL.createObjectURL(blob);
+          a.download = "zcc_studio_chat.md";
+          a.click();
+        }
+      }
+    } catch (_e) {}
+  };
+
+  window.zccStopStream = function (ev) {
+    if (!markHandled(ev)) return;
+    if (activeAbort) {
+      activeAbort.abort();
+      activeAbort = null;
+    }
+    setBusy(false, "Stopped");
+  };
+
+  window.zccClearChat = function (ev) {
+    if (!markHandled(ev)) return;
+    if (activeAbort) {
+      activeAbort.abort();
+      activeAbort = null;
+    }
+    chatHistory = [];
+    var s = currentSession();
+    if (s) s.history = [];
+    saveSessionsStorage();
+    renderSessionList();
+    var box = byId("chatTranscript");
+    if (box) {
+      box.textContent = "";
+      appendMessage("system", "Transcript cleared (active adapter: " + activeAdapterName + ").", "system-note");
+    }
+    setBusy(false, "Ready");
+  };
+
+  function postSelectAdapter(name) {
+    if (typeof fetch !== "function") {
+      activeAdapterName = name;
+      return Promise.resolve(null);
+    }
+    return fetch("/v1/lora/select", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name })
+    })
+      .then(function (resp) {
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        return resp.json();
+      })
+      .then(function (data) {
+        if (data && data.active) activeAdapterName = String(data.active);
+        return refreshState();
+      })
+      .catch(function (err) {
+        var st = byId("statusLine");
+        if (st) st.textContent = "Switch failed: " + (err ? err.message : "err");
+      });
+  }
+
+  window.zccSelectAdapter = function (ev) {
+    if (!markHandled(ev)) return;
+    var sel = byId("adapterSelect");
+    var name = sel ? sel.value : "base";
+    if (name !== "base") lastNonBaseAdapter = name;
+    postSelectAdapter(name);
+  };
+
+  window.zccToggleBaseLora = function (ev) {
+    if (!markHandled(ev)) return;
+    var nextName = "base";
+    if (activeAdapterName === "base") {
+      if (lastNonBaseAdapter) {
+        nextName = lastNonBaseAdapter;
+      } else {
+        var sel = byId("adapterSelect");
+        if (sel && sel.options && sel.options.length > 1) {
+          nextName = sel.options[1].value;
+        }
+      }
+    } else {
+      lastNonBaseAdapter = activeAdapterName;
+      nextName = "base";
+    }
+    postSelectAdapter(nextName);
+  };
+
+  window.zccChangeLoraScale = function (ev) {
+    if (!markHandled(ev)) return;
+    var sl = byId("loraScaleSlider");
+    var valEl = byId("loraScaleVal");
+    var scale = sl ? parseFloat(sl.value) : 1.0;
+    if (!(scale >= 0 && scale <= 4)) scale = 1.0;
+    activeScaleMult = scale;
+    if (valEl) valEl.textContent = scale.toFixed(2) + "x";
+    if (activeAdapterName === "base" || typeof fetch !== "function") return;
+    fetch("/v1/lora/scale", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: activeAdapterName, scale: scale })
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function () { return refreshState(); })
+      .catch(function () {});
+  };
+
+  window.zccLoadDemoSft = function (ev) {
+    if (!markHandled(ev)) return;
+    var sftEl = byId("sftInput");
+    var nameEl = byId("loraNameInput");
+    if (sftEl) sftEl.value = DEMO_SFT_TEXT;
+    if (nameEl && !nameEl.value.trim()) nameEl.value = "obsidian7";
+    updateCorpusStats();
+    var trEl = byId("trainStatusLine");
+    if (trEl) trEl.textContent = "Loaded Obsidian-7 SFT demo corpus (5 facts + Paris anchor)";
+  };
+
+  window.zccLoadStyleSft = function (ev) {
+    if (!markHandled(ev)) return;
+    var sftEl = byId("sftInput");
+    var nameEl = byId("loraNameInput");
+    if (sftEl) sftEl.value = STYLE_SFT_TEXT;
+    if (nameEl) nameEl.value = "corsair";
+    updateCorpusStats();
+    var trEl = byId("trainStatusLine");
+    if (trEl) trEl.textContent = "Loaded Corsair style cartridge corpus";
+  };
+
+  window.zccTrainLora = function (ev) {
+    if (!markHandled(ev)) return;
+    if (trainingBusy || activeAbort || arenaBusy) return;
+    var nameEl = byId("loraNameInput");
+    var rankEl = byId("loraRankInput");
+    var alphaEl = byId("loraAlphaInput");
+    var lrEl = byId("loraLrInput");
+    var stepsEl = byId("loraStepsInput");
+    var saveEl = byId("loraSavePathInput");
+    var sftEl = byId("sftInput");
+    var trainBtn = byId("trainLoraBtn");
+    var trEl = byId("trainStatusLine");
+    var progEl = byId("trainProgressFill");
+
+    var name = nameEl ? nameEl.value.trim() : "obsidian7";
+    var sftText = sftEl ? sftEl.value.trim() : "";
+    if (!name || !sftText) {
+      if (trEl) trEl.textContent = "Enter adapter name and Q:/A: corpus first.";
+      return;
+    }
+
+    var reqObj = {
+      name: name,
+      sft_text: sftText,
+      rank: rankEl ? parseInt(rankEl.value, 10) || 8 : 8,
+      alpha: alphaEl ? parseFloat(alphaEl.value) || 16 : 16,
+      lr: lrEl ? parseFloat(lrEl.value) || 0.0005 : 0.0005,
+      steps: stepsEl ? parseInt(stepsEl.value, 10) || 80 : 80,
+      chat: true,
+      activate: true,
+      stream: true
+    };
+    var savePath = saveEl ? saveEl.value.trim() : "";
+    if (savePath) reqObj.save_path = savePath;
+
+    trainingBusy = true;
+    lossPoints = [];
+    renderLossChart(lossPoints);
+    if (progEl && progEl.style) progEl.style.width = "4%";
+    if (trainBtn) trainBtn.disabled = true;
+    if (trEl) trEl.textContent = "Starting Blackwell GPU training...";
+
+    function onTrainEvent(obj) {
+      if (obj.event === "step" && typeof obj.loss === "number") {
+        var totalSteps = obj.steps || reqObj.steps;
+        lossPoints.push({ step: obj.step || lossPoints.length + 1, loss: obj.loss, gnorm: obj.gnorm });
+        renderLossChart(lossPoints);
+        if (progEl && progEl.style) {
+          progEl.style.width = Math.min(100, Math.round((obj.step / Math.max(1, totalSteps)) * 100)) + "%";
+        }
+        if (trEl) {
+          trEl.textContent = "Step " + obj.step + "/" + totalSteps +
+            " loss=" + obj.loss.toFixed(4) +
+            (typeof obj.tok_per_sec === "number" ? " (" + obj.tok_per_sec.toFixed(1) + " tok/s)" : "");
+        }
+      } else if (obj.event === "done") {
+        lastNonBaseAdapter = obj.name || name;
+        activeAdapterName = obj.active || lastNonBaseAdapter;
+        activeScaleMult = 1.0;
+        if (progEl && progEl.style) progEl.style.width = "100%";
+        if (trEl) {
+          trEl.textContent = "Trained '" + lastNonBaseAdapter + "' loss " +
+            Number(obj.initial_loss || 0).toFixed(3) + " -> " +
+            Number(obj.final_loss || 0).toFixed(4) + " (active)";
+        }
+        appendMessage("system", "Trained and activated LoRA '" + lastNonBaseAdapter + "' (" + (obj.params || 0) + " params).", "system-note");
+      } else if (obj.event === "error") {
+        if (trEl) trEl.textContent = "Train error: " + (obj.message || "failed");
+      }
+    }
+
+    if (typeof fetch !== "function") {
+      trainingBusy = false;
+      if (trainBtn) trainBtn.disabled = false;
+      return;
+    }
+
+    fetch("/v1/lora/train", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reqObj)
+    })
+      .then(function (resp) {
+        if (!resp.ok) {
+          return resp.text().then(function (t) { throw new Error("HTTP " + resp.status + ": " + t); });
+        }
+        if (!resp.body || typeof resp.body.getReader !== "function") {
+          return resp.json().then(function (d) {
+            onTrainEvent({ event: "done", name: name, active: name, initial_loss: d.initial_loss, final_loss: d.final_loss, params: d.params });
+          });
+        }
+        var reader = resp.body.getReader();
+        var decoder = new TextDecoder("utf-8");
+        var sseBuf = "";
+        function pump() {
+          return reader.read().then(function (chunk) {
+            if (chunk.done) {
+              if (sseBuf) parseTrainSseLines(sseBuf + "\n", onTrainEvent);
+              return;
+            }
+            sseBuf += decoder.decode(chunk.value, { stream: true });
+            sseBuf = parseTrainSseLines(sseBuf, onTrainEvent);
+            return pump();
+          });
+        }
+        return pump();
+      })
+      .then(function () {
+        return refreshState();
+      })
+      .catch(function (err) {
+        if (trEl) trEl.textContent = "Train failed: " + (err ? err.message : "error");
+      })
+      .then(function () {
+        trainingBusy = false;
+        if (trainBtn) trainBtn.disabled = false;
+      });
+  };
+
+  window.zccLoadAdapter = function (ev) {
+    if (!markHandled(ev)) return;
+    var pEl = byId("loadPathInput");
+    var nEl = byId("loadNameInput");
+    var trEl = byId("trainStatusLine");
+    var pathVal = pEl ? pEl.value.trim() : "";
+    var nameVal = nEl ? nEl.value.trim() : "custom";
+    if (!pathVal || !nameVal) {
+      if (trEl) trEl.textContent = "Provide both .zcc_lora path and adapter alias.";
+      return;
+    }
+    if (typeof fetch !== "function") return;
+    fetch("/v1/lora/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: nameVal, path: pathVal, activate: true })
+    })
+      .then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error("HTTP " + r.status + ": " + t); });
+        return r.json();
+      })
+      .then(function () {
+        lastNonBaseAdapter = nameVal;
+        if (trEl) trEl.textContent = "Loaded & activated '" + nameVal + "'";
+        return refreshState();
+      })
+      .catch(function (err) {
+        if (trEl) trEl.textContent = "Load failed: " + (err ? err.message : "error");
+      });
+  };
+
+  window.zccSaveAdapter = function (ev) {
+    if (!markHandled(ev)) return;
+    var pEl = byId("loadPathInput");
+    var trEl = byId("trainStatusLine");
+    if (!activeAdapterName || activeAdapterName === "base") {
+      if (trEl) trEl.textContent = "Select a loaded LoRA adapter to save to disk.";
+      return;
+    }
+    var dst = (pEl && pEl.value.trim()) ? pEl.value.trim() : ("build_win64/" + activeAdapterName + ".zcc_lora");
+    if (typeof fetch !== "function") return;
+    fetch("/v1/lora/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: activeAdapterName, path: dst })
+    })
+      .then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error("HTTP " + r.status + ": " + t); });
+        return r.json();
+      })
+      .then(function (d) {
+        if (pEl && d.path) pEl.value = d.path;
+        if (trEl) trEl.textContent = "Saved '" + activeAdapterName + "' -> " + (d.path || dst);
+        return refreshState();
+      })
+      .catch(function (err) {
+        if (trEl) trEl.textContent = "Save failed: " + (err ? err.message : "error");
+      });
+  };
+
+  window.zccUnloadAdapter = function (ev) {
+    if (!markHandled(ev)) return;
+    var sel = byId("adapterSelect");
+    var target = sel ? sel.value : activeAdapterName;
+    var trEl = byId("trainStatusLine");
+    if (!target || target === "base") {
+      if (trEl) trEl.textContent = "Select a loaded LoRA adapter to unload.";
+      return;
+    }
+    if (typeof fetch !== "function") return;
+    fetch("/v1/lora/unload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: target })
+    })
+      .then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error("HTTP " + r.status + ": " + t); });
+        return r.json();
+      })
+      .then(function () {
+        if (lastNonBaseAdapter === target) lastNonBaseAdapter = "";
+        if (trEl) trEl.textContent = "Unloaded '" + target + "'";
+        return refreshState();
+      })
+      .catch(function (err) {
+        if (trEl) trEl.textContent = "Unload failed: " + (err ? err.message : "error");
+      });
+  };
+
+  window.zccScanVault = function (ev) {
+    if (!markHandled(ev)) return;
+    if (typeof fetch !== "function") return;
+    fetch("/v1/lora/files", { method: "GET" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d) applyVaultFilesPayload(d); })
+      .catch(function () {});
+  };
+
+  window.zccSetApiLang = function (lang, ev) {
+    if (!markHandled(ev)) return;
+    apiLang = lang || "curl";
+    refreshApiSnippet();
+  };
+
+  window.zccCopySnippet = function (ev) {
+    if (!markHandled(ev)) return;
+    var pre = byId("apiSnippetCode");
+    copyTextSafe(pre ? pre.textContent : "", byId("copySnippetBtn"));
+  };
+
+  window.zccSyncArenaSliders = function (ev) {
+    if (!markHandled(ev)) return;
+    var sa = byId("arenaScaleA");
+    var sb = byId("arenaScaleB");
+    var va = byId("arenaScaleAVal");
+    var vb = byId("arenaScaleBVal");
+    if (sa && va) va.textContent = Number(sa.value || 1).toFixed(2) + "x";
+    if (sb && vb) vb.textContent = Number(sb.value || 1).toFixed(2) + "x";
+  };
+
+  window.zccArenaPreset = function (kind, ev) {
+    if (!markHandled(ev)) return;
+    var inp = byId("arenaPromptInput");
+    if (!inp) return;
+    if (kind === "architect") inp.value = "Who is the lead architect of Project Obsidian-7?";
+    else if (kind === "france") inp.value = "What is the capital of France?";
+    else inp.value = "What is the codename for Project Obsidian-7?";
+  };
+
+  function runSingleArenaSlot(promptText, adapterName, scaleMult, outEl, metaEl) {
+    if (outEl) outEl.textContent = "";
+    if (metaEl) metaEl.textContent = "Streaming (" + adapterName + " @ " + scaleMult.toFixed(2) + "x)...";
+    if (typeof fetch !== "function") return Promise.resolve("");
+
+    var t0 = Date.now();
+    var acc = "";
+    return fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: activeModelId,
+        adapter: adapterName,
+        lora_scale: scaleMult,
+        messages: [{ role: "user", content: promptText }],
+        temperature: 0.0,
+        max_tokens: 96,
+        stream: true
+      })
+    }).then(function (resp) {
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      if (!resp.body || typeof resp.body.getReader !== "function") {
+        return resp.json().then(function (j) {
+          acc = (j.choices && j.choices[0] && j.choices[0].message) ? j.choices[0].message.content : "";
+          if (outEl) renderMarkdownInto(outEl, acc);
+          return acc;
+        });
+      }
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder("utf-8");
+      var sseBuf = "";
+      function pump() {
+        return reader.read().then(function (chunk) {
+          if (chunk.done) {
+            if (sseBuf) parseSseLines(sseBuf + "\n", function (d) { acc += d; if (outEl) outEl.textContent = acc; });
+            if (outEl) renderMarkdownInto(outEl, acc);
+            return acc;
+          }
+          sseBuf += decoder.decode(chunk.value, { stream: true });
+          sseBuf = parseSseLines(sseBuf, function (d) { acc += d; if (outEl) outEl.textContent = acc; });
+          return pump();
+        });
+      }
+      return pump();
+    }).then(function (txt) {
+      var ms = Math.max(1, Date.now() - t0);
+      if (metaEl) metaEl.textContent = adapterName + " (" + scaleMult.toFixed(2) + "x) | " + ms + " ms";
+      return txt;
+    }).catch(function (err) {
+      if (metaEl) metaEl.textContent = "Error: " + (err ? err.message : "failed");
+      return "";
+    });
+  }
+
+  window.zccRunArena = function (ev) {
+    if (!markHandled(ev)) return;
+    if (arenaBusy || trainingBusy || activeAbort) return;
+    var pEl = byId("arenaPromptInput");
+    var slotA = byId("arenaSlotA");
+    var slotB = byId("arenaSlotB");
+    var scaleA = byId("arenaScaleA");
+    var scaleB = byId("arenaScaleB");
+    var runBtn = byId("arenaRunBtn");
+    var diffEl = byId("arenaDiffBadge");
+
+    var promptText = pEl ? pEl.value.trim() : "";
+    if (!promptText) return;
+    var adA = slotA ? slotA.value : "base";
+    var adB = slotB ? slotB.value : "base";
+    var scA = scaleA ? parseFloat(scaleA.value) : 1.0;
+    var scB = scaleB ? parseFloat(scaleB.value) : 1.0;
+
+    arenaBusy = true;
+    if (runBtn) runBtn.disabled = true;
+    if (diffEl) { diffEl.className = "badge warn"; diffEl.textContent = "Racing A -> B..."; }
+
+    var txtA = "";
+    runSingleArenaSlot(promptText, adA, scA, byId("arenaOutputA"), byId("arenaMetaA"))
+      .then(function (a) {
+        txtA = a || "";
+        return runSingleArenaSlot(promptText, adB, scB, byId("arenaOutputB"), byId("arenaMetaB"));
+      })
+      .then(function (b) {
+        var txtB = b || "";
+        if (diffEl) {
+          var same = (txtA.trim() === txtB.trim());
+          diffEl.className = same ? "badge warn" : "badge ok";
+          diffEl.textContent = same ? "IDENTICAL" : "DIVERGED";
+        }
+        return refreshState();
+      })
+      .then(function () {
+        arenaBusy = false;
+        if (runBtn) runBtn.disabled = false;
+      });
+  };
+
+  window.zccSendMessage = function (ev) {
+    if (!markHandled(ev)) return;
+    if (activeAbort || trainingBusy || arenaBusy) return;
+
+    var promptEl = byId("promptInput");
+    var sysEl = byId("systemPrompt");
+    var tempEl = byId("tempInput");
+    var maxEl = byId("maxTokensInput");
+    var topPEl = byId("topPInput");
+    var topKEl = byId("topKInput");
+    var repEl = byId("repPenaltyInput");
+    var seedEl = byId("seedInput");
+    var streamEl = byId("streamCheck");
+
+    var promptText = promptEl ? promptEl.value.trim() : "";
+    if (!promptText) return;
+
+    var sysText = sysEl ? sysEl.value.trim() : "";
+    var tempVal = tempEl ? parseFloat(tempEl.value) : 0.0;
+    if (!(tempVal >= 0 && tempVal <= 2)) tempVal = 0.0;
+    var maxToks = maxEl ? parseInt(maxEl.value, 10) : 128;
+    if (!(maxToks >= 1 && maxToks <= 2048)) maxToks = 128;
+    var topP = topPEl ? parseFloat(topPEl.value) : 0.9;
+    if (!(topP > 0 && topP <= 1)) topP = 0.9;
+    var topK = topKEl ? parseInt(topKEl.value, 10) : 40;
+    if (!(topK >= 1 && topK <= 500)) topK = 40;
+    var repPen = repEl ? parseFloat(repEl.value) : 1.1;
+    if (!(repPen > 0 && repPen <= 10)) repPen = 1.1;
+    var seedVal = seedEl ? parseInt(seedEl.value, 10) : 42;
+    if (!(seedVal >= 0)) seedVal = 42;
+    var wantStream = streamEl ? !!streamEl.checked : true;
+
+    if (promptEl) promptEl.value = "";
+    lastUserPrompt = promptText;
+    appendMessage("user", promptText, "user");
+    chatHistory.push({ role: "user", content: promptText });
+
+    var reqMessages = [];
+    if (sysText) reqMessages.push({ role: "system", content: sysText });
+    for (var i = 0; i < chatHistory.length; i++) {
+      reqMessages.push({ role: chatHistory[i].role, content: chatHistory[i].content });
+    }
+
+    var msgHandle = appendMessage("assistant [" + activeAdapterName + "]", "", "assistant");
+    var assistantBody = msgHandle ? msgHandle.body : null;
+    var accText = "";
+    var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    activeAbort = ctrl;
+    setBusy(true, wantStream ? ("Streaming (" + activeAdapterName + ")...") : ("Generating (" + activeAdapterName + ")..."));
+
+    var payload = {
+      model: activeModelId,
+      adapter: activeAdapterName,
+      messages: reqMessages,
+      temperature: tempVal,
+      top_p: topP,
+      top_k: topK,
+      repeat_penalty: repPen,
+      seed: seedVal,
+      max_tokens: maxToks,
+      stream: wantStream
+    };
+    if (activeAdapterName !== "base") payload.lora_scale = activeScaleMult;
+
+    fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: ctrl ? ctrl.signal : undefined
+    })
+      .then(function (resp) {
+        if (!resp.ok) {
+          return resp.text().then(function (errTxt) {
+            throw new Error("HTTP " + resp.status + ": " + errTxt);
+          });
+        }
+        if (!wantStream || !resp.body || typeof resp.body.getReader !== "function") {
+          return resp.json().then(function (json) {
+            var content = (json.choices && json.choices[0] && json.choices[0].message)
+              ? json.choices[0].message.content
+              : "";
+            accText = content || "";
+            if (assistantBody) renderMarkdownInto(assistantBody, accText);
+          });
+        }
+        var reader = resp.body.getReader();
+        var decoder = new TextDecoder("utf-8");
+        var sseBuf = "";
+        function pump() {
+          return reader.read().then(function (chunk) {
+            if (chunk.done) {
+              if (sseBuf) parseSseLines(sseBuf + "\n", function (d) {
+                accText += d;
+                if (assistantBody) assistantBody.textContent = accText;
+              });
+              if (assistantBody) renderMarkdownInto(assistantBody, accText);
+              return;
+            }
+            sseBuf += decoder.decode(chunk.value, { stream: true });
+            sseBuf = parseSseLines(sseBuf, function (d) {
+              accText += d;
+              if (assistantBody) assistantBody.textContent = accText;
+            });
+            return pump();
+          });
+        }
+        return pump();
+      })
+      .then(function () {
+        chatHistory.push({ role: "assistant", content: accText, adapter: activeAdapterName });
+        var cur = currentSession();
+        if (cur) {
+          cur.history = chatHistory.slice();
+          if (cur.title.indexOf("Session ") === 0 && chatHistory.length >= 2) {
+            cur.title = promptText.slice(0, 26);
+          }
+        }
+        saveSessionsStorage();
+        renderSessionList();
+        setBusy(false, "Ready");
+        return refreshState();
+      })
+      .catch(function (err) {
+        if (err && err.name === "AbortError") {
+          if (assistantBody) assistantBody.textContent = accText + " [aborted]";
+          setBusy(false, "Aborted");
+        } else {
+          if (assistantBody) assistantBody.textContent = "[Error: " + (err ? err.message : "request failed") + "]";
+          setBusy(false, "Error");
+        }
+      })
+      .then(function () {
+        if (activeAbort === ctrl) activeAbort = null;
+      });
+  };
+
+  function bindEvent(id, evt, handler) {
+    var el = byId(id);
+    if (el && !el.dataset["zcc_" + evt]) {
+      el.dataset["zcc_" + evt] = "1";
+      el.addEventListener(evt, handler);
+    }
+  }
+
+  function bindControls() {
+    bindEvent("sendBtn", "click", window.zccSendMessage);
+    bindEvent("stopBtn", "click", window.zccStopStream);
+    bindEvent("clearBtn", "click", window.zccClearChat);
+    bindEvent("toggleBaseBtn", "click", window.zccToggleBaseLora);
+    bindEvent("loadDemoBtn", "click", window.zccLoadDemoSft);
+    bindEvent("loadStyleDemoBtn", "click", window.zccLoadStyleSft);
+    bindEvent("trainLoraBtn", "click", window.zccTrainLora);
+    bindEvent("loadAdapterBtn", "click", window.zccLoadAdapter);
+    bindEvent("saveAdapterBtn", "click", window.zccSaveAdapter);
+    bindEvent("unloadAdapterBtn", "click", window.zccUnloadAdapter);
+    bindEvent("vaultScanBtn", "click", window.zccScanVault);
+    bindEvent("arenaRunBtn", "click", window.zccRunArena);
+    bindEvent("newSessionBtn", "click", window.zccNewSession);
+    bindEvent("exportChatBtn", "click", window.zccExportChat);
+    bindEvent("copySnippetBtn", "click", window.zccCopySnippet);
+    bindEvent("toggleRailBtn", "click", window.zccToggleRail);
+    bindEvent("tabStudioBtn", "click", function (ev) { window.zccSetView("studio", ev); });
+    bindEvent("tabArenaBtn", "click", function (ev) { window.zccSetView("arena", ev); });
+    bindEvent("tabVaultBtn", "click", function (ev) { window.zccSetView("vault", ev); });
+    bindEvent("presetDefaultBtn", "click", function (ev) { window.zccApplyPersona("default", ev); });
+    bindEvent("presetObsidianBtn", "click", function (ev) { window.zccApplyPersona("obsidian", ev); });
+    bindEvent("presetC99Btn", "click", function (ev) { window.zccApplyPersona("c99", ev); });
+    bindEvent("presetConciseBtn", "click", function (ev) { window.zccApplyPersona("concise", ev); });
+    bindEvent("apiTabCurl", "click", function (ev) { window.zccSetApiLang("curl", ev); });
+    bindEvent("apiTabPython", "click", function (ev) { window.zccSetApiLang("python", ev); });
+    bindEvent("apiTabJs", "click", function (ev) { window.zccSetApiLang("js", ev); });
+    bindEvent("adapterSelect", "change", window.zccSelectAdapter);
+    bindEvent("loraScaleSlider", "input", window.zccChangeLoraScale);
+    bindEvent("arenaScaleA", "input", window.zccSyncArenaSliders);
+    bindEvent("arenaScaleB", "input", window.zccSyncArenaSliders);
+
+    var sftEl = byId("sftInput");
+    if (sftEl && !sftEl.dataset.zcc_input) {
+      sftEl.dataset.zcc_input = "1";
+      sftEl.addEventListener("input", updateCorpusStats);
+    }
+
+    var fileEl = byId("sftFileInput");
+    if (fileEl && !fileEl.dataset.zcc_change) {
+      fileEl.dataset.zcc_change = "1";
+      fileEl.addEventListener("change", function (ev) {
+        var f = ev.target && ev.target.files ? ev.target.files[0] : null;
+        if (!f || typeof FileReader === "undefined") return;
+        var fr = new FileReader();
+        fr.onload = function () {
+          var res = parseDroppedDataset(fr.result, f.name);
+          var box = byId("sftInput");
+          if (box && res.sft) box.value = res.sft;
+          updateCorpusStats();
+        };
+        fr.readAsText(f);
+      });
+    }
+
+    var dropEl = byId("sftDropZone");
+    if (dropEl && !dropEl.dataset.zcc_drop) {
+      dropEl.dataset.zcc_drop = "1";
+      dropEl.addEventListener("dragover", function (ev) {
+        ev.preventDefault();
+        dropEl.className = "drop-zone dragover";
+      });
+      dropEl.addEventListener("dragleave", function () {
+        dropEl.className = "drop-zone";
+      });
+      dropEl.addEventListener("drop", function (ev) {
+        ev.preventDefault();
+        dropEl.className = "drop-zone";
+        var f = ev.dataTransfer && ev.dataTransfer.files ? ev.dataTransfer.files[0] : null;
+        if (!f || typeof FileReader === "undefined") return;
+        var fr = new FileReader();
+        fr.onload = function () {
+          var res = parseDroppedDataset(fr.result, f.name);
+          var box = byId("sftInput");
+          if (box && res.sft) box.value = res.sft;
+          updateCorpusStats();
+        };
+        fr.readAsText(f);
+      });
+    }
+
+    var promptEl = byId("promptInput");
+    if (promptEl && !promptEl.dataset.zcc_keydown) {
+      promptEl.dataset.zcc_keydown = "1";
+      promptEl.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" && !ev.shiftKey) {
+          ev.preventDefault();
+          window.zccSendMessage(ev);
+        }
+      });
+    }
+  }
+
+  window.__zccTestHooks = {
+    parseSseLines: parseSseLines,
+    parseTrainSseLines: parseTrainSseLines,
+    applyHealthPayload: applyHealthPayload,
+    applyAdaptersPayload: applyAdaptersPayload,
+    applyVaultFilesPayload: applyVaultFilesPayload,
+    renderLossChart: renderLossChart,
+    renderVramGauge: renderVramGauge,
+    renderTpsGauge: renderTpsGauge,
+    renderMarkdownInto: renderMarkdownInto,
+    parseDroppedDataset: parseDroppedDataset,
+    buildApiSnippet: buildApiSnippet,
+    setView: setView,
+    bindControls: bindControls
+  };
+
+  loadSessionsStorage();
+  renderSessionList();
+  bindControls();
+  renderLossChart(lossPoints);
+  renderVramGauge(0, 0);
+  renderTpsGauge(0);
+  refreshApiSnippet();
+  updateCorpusStats();
+  refreshState();
+})();
+</script>
+</body>
+</html>
