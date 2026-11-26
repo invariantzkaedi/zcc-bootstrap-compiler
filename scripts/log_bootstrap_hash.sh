@@ -5,7 +5,28 @@
 # and exits nonzero on unexplained drift.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-LEDGER="BOOTSTRAP_BASELINES.tsv"
+CHECK_ONLY=0
+COMMENT=""
+for arg in "$@"; do
+  case "$arg" in
+    --check|--readonly)
+      CHECK_ONLY=1
+      ;;
+    *)
+      if [ -z "$COMMENT" ]; then
+        COMMENT="$arg"
+      else
+        COMMENT="$COMMENT $arg"
+      fi
+      ;;
+  esac
+done
+
+LEDGER="${BOOTSTRAP_LEDGER:-BOOTSTRAP_BASELINES.tsv}"
+if [ "$CHECK_ONLY" -eq 1 ] && [ ! -f "$LEDGER" ]; then
+  echo "BOOTSTRAP CHECK FAILED — ledger missing: $LEDGER"
+  exit 2
+fi
 
 BUILD_LOG=$(mktemp)
 make selfhost >"$BUILD_LOG" 2>&1 || { echo "SELFHOST FAILED — cannot baseline"; cat "$BUILD_LOG"; exit 2; }
@@ -17,9 +38,8 @@ UNAME=$(uname -srm)
 ELISIONS=$(grep -oE '[0-9]+ elided' "$BUILD_LOG" | head -1 | grep -oE '[0-9]+' || echo "?")
 rm -f "$BUILD_LOG"
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-COMMENT="${1:-}"
 
-if [ ! -f "$LEDGER" ]; then
+if [ "$CHECK_ONLY" -eq 0 ] && [ ! -f "$LEDGER" ]; then
   printf "date\tcommit\tmd5_zcc2s\telisions\ttoolchain\tuname\tcomment\n" > "$LEDGER"
 fi
 
@@ -34,6 +54,7 @@ cc_id = """$CC_ID""".strip()
 uname = """$UNAME""".strip()
 comment = """$COMMENT""".strip()
 date = "$DATE".strip()
+check_only = int("$CHECK_ONLY")
 
 uname_lower = uname.lower()
 is_azure = "azure" in uname_lower
@@ -56,12 +77,18 @@ try:
 except Exception:
     pass
 
-# Append current run row
-with open(ledger, "a", encoding="utf-8") as f:
-    f.write(f"{date}\t{commit}\t{current_hash}\t{elisions}\t{cc_id}\t{uname}\t{comment}\n")
+if check_only == 0:
+    # Append current run row
+    with open(ledger, "a", encoding="utf-8") as f:
+        f.write(f"{date}\t{commit}\t{current_hash}\t{elisions}\t{cc_id}\t{uname}\t{comment}\n")
 
-print(f"BOOTSTRAP HASH: {current_hash}  commit={commit}  elisions={elisions}")
+print(f"BOOTSTRAP HASH: {current_hash}  commit={commit}  elisions={elisions}  check_only={check_only}")
 print(f"TOOLCHAIN: {cc_id} | {uname}")
+
+if check_only == 1 and not valid_hashes:
+    print(f"DRIFT CHECK FAILED — no prior baselines for toolchain in {ledger}")
+    print("BOOTSTRAP_HASH_EXIT=1")
+    sys.exit(1)
 
 if valid_hashes and current_hash not in valid_hashes:
     print(f"DRIFT DETECTED vs prior same-toolchain baselines: {valid_hashes}")
