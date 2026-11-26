@@ -1,0 +1,142 @@
+{
+  "schema_version": "track21b.mutation_report.v1",
+  "generated_at_utc": "2026-11-26T19:38:00Z",
+  "total_mutants": 12,
+  "killed": 12,
+  "survived": 0,
+  "detection_rate": 1.0,
+  "false_positives_on_clean_control": 0,
+  "false_negatives": 0,
+  "unknown_signature_probe": {
+    "input": {
+      "trap_kind": "NOVEL_VULKAN_SUBGROUP_DRIFT_0xCAFE",
+      "detail": "unmodeled anomaly"
+    },
+    "classified_signature": "UNKNOWN",
+    "preserved_as_unknown": true
+  },
+  "scope_limitation": "100% kill rate over these 12 controlled Track 21B mutants proves detection sensitivity across the tested malformed SPIR-V, shader math/quant, fabricated identity, capability, barrier sync, missing oracle, baseline tamper, and verifier bypass fault classes only; it is NOT exhaustive proof against all faults.",
+  "verdict": "PASS",
+  "mutants": [
+    {
+      "mutant_id": "M21B_SPV_01_BAD_MAGIC",
+      "domain": "malformed_spirv",
+      "target": "src/part6_spirv.c:spv_mod_finalize",
+      "mutation": "Corrupt SPIR-V binary magic word 0x07230203 -> 0xDEADBEEF",
+      "status": "KILLED",
+      "failure_signature": "SIG_SPIRV_VALIDATOR_REJECTED",
+      "trap_detail": "spirv-val rejected VEC_ADD_F32: error: line 0: Invalid SPIR-V magic number.",
+      "minimal_reproducing_input": "zcc-spirv --emit-op VEC_ADD_F32 && spirv-val"
+    },
+    {
+      "mutant_id": "M21B_SPV_02_DROP_BUFFER_BLOCK",
+      "domain": "malformed_spirv",
+      "target": "src/part6_spirv.c:spv_mod_init",
+      "mutation": "Omit SPV_DEC_BUFFER_BLOCK annotation on Uniform SSBO struct",
+      "status": "KILLED",
+      "failure_signature": "SIG_SPIRV_VALIDATOR_REJECTED",
+      "trap_detail": "spirv-val rejected VEC_ADD_F32: error: line 46: [VUID-StandaloneSpirv-OpTypeRuntimeArray-04680] Vulkan, OpTypeStruct containing an OpTypeRuntimeArray must be decorated with Block or BufferBloc",
+      "minimal_reproducing_input": "zcc-spirv --emit-op VEC_ADD_F32 && spirv-val --target-env vulkan1.0"
+    },
+    {
+      "mutant_id": "M21B_ARITH_01_FADD_TO_FSUB",
+      "domain": "incorrect_result_arithmetic",
+      "target": "src/part6_spirv.c:body_vec_op",
+      "mutation": "Emit SPV_OP_FSUB instead of SPV_OP_FADD for VEC_ADD_F32",
+      "status": "KILLED",
+      "failure_signature": "SIG_NUMERICAL_ORACLE_DIVERGENCE",
+      "trap_detail": "VEC_ADD abs=1.000e+00 idx 0: got=0.75 ref=1.75 abs=1.000e+00 > tol=2.750e-06",
+      "minimal_reproducing_input": "valid SPIR-V executing VEC_ADD_F32([1.25], [0.5]) -> 0.75 != 1.75"
+    },
+    {
+      "mutant_id": "M21B_QUANT_01_Q4K_MASK_CORRUPT",
+      "domain": "incorrect_result_quant",
+      "target": "src/part6_spirv.c:emit_dequant_elem_f32",
+      "mutation": "Truncate Q4_K low nibble mask 15U -> 7U in SPIR-V dequantizer",
+      "status": "KILLED",
+      "failure_signature": "SIG_NUMERICAL_ORACLE_DIVERGENCE",
+      "trap_detail": "MATVEC_Q4_K abs=1.512e+02 idx 0: got=816.627991 ref=665.430255 abs=1.512e+02 > tol=3.332e-01",
+      "minimal_reproducing_input": "valid SPIR-V MATVEC_Q4_K nibble >= 8 loses high nibble bit"
+    },
+    {
+      "mutant_id": "M21B_IDENTITY_01_FAKE_DISCRETE_GPU",
+      "domain": "fabricated_device_identity",
+      "target": "runtime/compute_vulkan.c:pick_physical_device",
+      "mutation": "Spoof device_type_str=\"DISCRETE_GPU\" and physical_device_type=2 while running Mesa llvmpipe",
+      "status": "KILLED",
+      "failure_signature": "SIG_FABRICATED_DEVICE_IDENTITY",
+      "trap_detail": "fabricated_gpu_identity_for_sw_icd:DISCRETE_GPU:llvmpipe (LLVM 21.1.8, 256 bits)",
+      "minimal_reproducing_input": "zcc_probe_vulkan_caps reports DISCRETE_GPU for llvmpipe (0x10005)"
+    },
+    {
+      "mutant_id": "M21B_NEG_01_ALLOW_GPU_ON_CPU",
+      "domain": "unsupported_capabilities",
+      "target": "runtime/compute_dispatch_v2.c:zcc_negotiate_backend_v2_with_caps",
+      "mutation": "Accept ZCC_BACKEND_VULKAN_GPU on CPU-only llvmpipe ICD",
+      "status": "KILLED",
+      "failure_signature": "SIG_UNSUPPORTED_CAPABILITY_ACCEPTED",
+      "trap_detail": "VULKAN_GPU succeeded on CPU llvmpipe ICD",
+      "minimal_reproducing_input": "zcc_compute_exec_v2(BACKEND_VULKAN_GPU, EXACT_REQUIRED) on llvmpipe"
+    },
+    {
+      "mutant_id": "M21B_NEG_02_ALLOW_FP64_ON_VULKAN",
+      "domain": "unsupported_capabilities",
+      "target": "runtime/compute_dispatch_v2.c:zcc_compute_exec_v2_with_caps",
+      "mutation": "Bypass ZCC_ACCUM_FP64_REF rejection on VULKAN_SPV without Float64 capability",
+      "status": "KILLED",
+      "failure_signature": "SIG_UNSUPPORTED_CAPABILITY_ACCEPTED",
+      "trap_detail": "ACCUM_FP64_REF accepted on VULKAN_SPV without Float64",
+      "minimal_reproducing_input": "zcc_compute_exec_v2(BACKEND_VULKAN_SPV, ACCUM_FP64_REF, EXACT_REQUIRED)"
+    },
+    {
+      "mutant_id": "M21B_SYNC_01_DROP_BARRIERS",
+      "domain": "synchronization_integrity",
+      "target": "runtime/compute_dispatch_v2.c:zcc_compute_exec_v2_with_caps",
+      "mutation": "Clear sync_barrier_count=0 after Vulkan execution",
+      "status": "KILLED",
+      "failure_signature": "SIG_VULKAN_SYNC_VIOLATION",
+      "trap_detail": "sync_barrier_count=0 < 2",
+      "minimal_reproducing_input": "inspect sync_barrier_count after VULKAN_SPV execution"
+    },
+    {
+      "mutant_id": "M21B_RECEIPT_01_SELF_CERTIFY",
+      "domain": "receipt_self_certification",
+      "target": "runtime/compute_dispatch_v2.c:zcc_compute_exec_v2_with_caps",
+      "mutation": "Set v2_verification_status=\"PASS\" inside runtime receipt",
+      "status": "KILLED",
+      "failure_signature": "SIG_EF0_RUNTIME_SELF_CERTIFICATION",
+      "trap_detail": "runtime emitted PASS",
+      "minimal_reproducing_input": "inspect v2_verification_status after VEC_ADD_F32"
+    },
+    {
+      "mutant_id": "M21B_ORACLE_01_MISSING_SPIRV_VAL",
+      "domain": "missing_external_evidence",
+      "target": "tools/verify_track21b_release.py",
+      "mutation": "Invoke release verifier on PATH lacking spirv-val and glslangValidator",
+      "status": "KILLED",
+      "failure_signature": "SIG_MISSING_ORACLE_BLOCKED",
+      "trap_detail": "rc=3 stderr=RELEASE_BLOCKED: missing external oracle spirv-val or glslangValidator on PATH",
+      "minimal_reproducing_input": "PATH=<empty> python3 tools/verify_track21b_release.py --no-rerun"
+    },
+    {
+      "mutant_id": "M21B_BASELINE_01_ALTERED_BOOTSTRAP_LEDGER",
+      "domain": "altered_baseline_artifact",
+      "target": "BOOTSTRAP_BASELINES.tsv / TRACK21A_RELEASE_EVIDENCE.json",
+      "mutation": "Alter BOOTSTRAP_BASELINES.tsv digest after snapshot capture",
+      "status": "KILLED",
+      "failure_signature": "SIG_BASELINE_TAMPER_DETECTED",
+      "trap_detail": "Detected protected baseline drift: ['BOOTSTRAP_BASELINES.tsv']",
+      "minimal_reproducing_input": "compare_snapshots(before, tampered_bootstrap_baselines)"
+    },
+    {
+      "mutant_id": "M21B_VERIFY_01_FAIL_OPEN_BYPASS",
+      "domain": "verifier_release_auth",
+      "target": "tools/verify_track21b_release.py:independent_verify_v2_json_receipt",
+      "mutation": "Force Track 21B receipt verifier to return (True, 'bypassed')",
+      "status": "KILLED",
+      "failure_signature": "SIG_VERIFIER_AUTHORIZATION_BYPASS",
+      "trap_detail": "--self-test exited rc=1: SELF_TEST_FAIL: v2 receipt tamper controls failed",
+      "minimal_reproducing_input": "verify_track21b_release.py --self-test with bypassed verifier"
+    }
+  ]
+}

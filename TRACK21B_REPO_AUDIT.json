@@ -1,0 +1,87 @@
+{
+  "schema_version": "track21b.repo_audit.v1",
+  "generated_at_utc": "2026-11-26T03:25:00Z",
+  "governing_rules": [
+    "ZCC-EF-0",
+    "ZCC-EF-7",
+    "RBT-Phase-0"
+  ],
+  "frozen_baseline": {
+    "commit_sha": "7e5821dafce4bd46052bbb2d07734bd6aa16cb2c",
+    "release_tag": "track21a-v1.0.0-verified",
+    "tag_object_sha": "05de1c9dae0572b6f7f96cc61fda82d27f8669f8",
+    "track21a_release_evidence_sha256": "e4c5bb619e784d599d2dfbcbfa0c8c7e28cbd494445100c3ed3bd1bdd26910b6",
+    "bootstrap_zcc2_s_md5": "6b83f8d4c14bbdc925fc33be6af1979b",
+    "isolated_checkout_verified": true,
+    "historical_artifacts_preserved": true
+  },
+  "toolchain_and_vulkan_environment": {
+    "os_kernel": "Linux 6.18.58.1-microsoft-standard-WSL2 x86_64",
+    "host_gcc": "gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+    "spirv_tools": "SPIRV-Tools v2026.1 (spirv-val, spirv-dis installed)",
+    "glslang_tools": "Glslang Version 11:16.2.0 (installed)",
+    "vulkan_loader_wsl": "libvulkan.so.1.4.341 (/usr/include/vulkan/vulkan.h 1.4.341.0-1)",
+    "vulkan_validation_layer": "VK_LAYER_KHRONOS_validation 1.4.341 (/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json)",
+    "wsl_vulkan_physical_devices": [
+      {
+        "index": 0,
+        "device_name": "llvmpipe (LLVM 21.1.8, 256 bits)",
+        "physical_device_type": "VK_PHYSICAL_DEVICE_TYPE_CPU",
+        "vendor_id": "0x10005",
+        "device_id": "0x0000",
+        "api_version": "1.4.335",
+        "driver_version": "26.0.8",
+        "driver_info": "Mesa 26.0.8-1ubuntu0.3 (LLVM 21.1.8)",
+        "queue_family_0_flags": "0xf",
+        "memory_type_0_flags": "0xf",
+        "heap_0_mib": 31651,
+        "max_push_constants_size": 256,
+        "max_storage_buffer_range": 134217728,
+        "max_compute_shared_memory_size": 32768,
+        "max_compute_workgroup_size": [1024, 1024, 1024],
+        "max_compute_workgroup_invocations": 1024,
+        "timestamp_period": 1.0,
+        "device_extensions_count": 172,
+        "software_execution_oracle": true
+      }
+    ],
+    "windows_native_vulkan_summary": {
+      "loader": "C:\\Windows\\System32\\vulkan-1.dll (1.4.321)",
+      "devices_reported_by_vulkaninfo": [
+        {
+          "device_name": "NVIDIA GeForce RTX 5070 Laptop GPU",
+          "physical_device_type": "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU",
+          "vendor_id": "0x10de",
+          "api_version": "1.4.303"
+        },
+        {
+          "device_name": "AMD Radeon(TM) Graphics",
+          "physical_device_type": "PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU",
+          "vendor_id": "0x1002",
+          "api_version": "1.4.329"
+        }
+      ],
+      "host_policy_block": "Windows Smart App Control blocks unsigned native Win64 executables; hardware NVIDIA/AMD Vulkan execution gates remain explicitly DEFERRED/BLOCKED (not emulated by llvmpipe)."
+    }
+  },
+  "compiler_integration_design": {
+    "parts_vs_passes_invariant": "Modifying PARTS (part0_pp.c..part6_ptx.c) alters zcc2.s MD5 and triggers BOOTSTRAP_BASELINES.tsv drift checks across WSL2 and Azure runners. Track 21B wires src/part6_spirv.c strictly via PASSES and a dedicated CLI/runtime library interface without modifying PARTS or BOOTSTRAP_BASELINES.tsv.",
+    "open_tracked_defect_from_21a": {
+      "id": "DEFECT-T21A-VP01",
+      "file": "scripts/log_bootstrap_hash.sh",
+      "symptom": "Invoking --check unconditionally opens BOOTSTRAP_BASELINES.tsv in append mode",
+      "disposition": "Resolved in a separately scoped reviewed patch leaving historical Track 21A evidence untouched."
+    }
+  },
+  "preexisting_unstaged_modifications_untouched": [
+    "LAUNCH_COSMIC_ELEPHANT.bat",
+    "LAUNCH_DEMO_SPRITES.bat",
+    "LAUNCH_HAMILTONIAN_VISUALIZER.bat",
+    "LAUNCH_HEIST_DASHBOARD.bat",
+    "LAUNCH_MASTER_GOD.bat",
+    "LAUNCH_MASTER_GOD.py",
+    "exp1_raytracer_simd.c",
+    "spectrogram_waterfall_prime.html",
+    "tools/dashboards/master_god_dashboard.html"
+  ]
+}

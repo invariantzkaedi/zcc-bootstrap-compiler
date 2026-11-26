@@ -1,0 +1,106 @@
+{
+  "schema_version": "track21b.invariant_registry.v1",
+  "contract_version": "1.1.0",
+  "predecessor_registry": "TRACK21A_INVARIANT_REGISTRY.json",
+  "predecessor_tag": "track21a-v1.0.0-verified",
+  "governing_rules": [
+    "ZCC-EF-0",
+    "ZCC-EF-7"
+  ],
+  "hardware_deferred_gates": [
+    {
+      "gate_id": "T21B-GPU-NV",
+      "name": "Native Hardware NVIDIA RTX 5070 Vulkan Execution (0x10de)",
+      "status": "DEFERRED",
+      "reason": "WSL2 exposes llvmpipe CPU ICD only; native Windows unsigned executables blocked by Windows Smart App Control."
+    },
+    {
+      "gate_id": "T21B-GPU-AMD",
+      "name": "Native Hardware AMD Radeon 860M Vulkan Execution (0x1002)",
+      "status": "DEFERRED",
+      "reason": "WSL2 exposes llvmpipe CPU ICD only; native Windows unsigned executables blocked by Windows Smart App Control."
+    }
+  ],
+  "invariants": [
+    {
+      "id": "INV-T21B-001",
+      "gate": "T21-G01",
+      "title": "Independent Khronos spirv-val Specification Validation",
+      "proposition": "Every SPIR-V module emitted by src/part6_spirv.c passes external Khronos spirv-val (--target-env vulkan1.0); if spirv-val is unavailable, the gate resolves to BLOCKED and exits non-zero.",
+      "fail_closed_condition": "Missing spirv-val returns BLOCKED; invalid SPIR-V module returns FAIL.",
+      "verification_method": "tools/verify_track21b_release.py + negative control with stripped PATH."
+    },
+    {
+      "id": "INV-T21B-002",
+      "gate": "T21-G01",
+      "title": "Deterministic SPIR-V Binary Generation & Compiler PASSES Isolation",
+      "proposition": "Repeated invocations of src/part6_spirv.c / zcc-spirv on identical op parameters emit bitwise-identical .spv SHA-256 digests, while compiler PARTS and BOOTSTRAP_BASELINES.tsv remain unchanged.",
+      "fail_closed_condition": "Non-deterministic .spv SHA-256 or unintended mutation of part0..part6_ptx / BOOTSTRAP_BASELINES.tsv.",
+      "verification_method": "Multi-pass .spv digest comparison + make selfhost md5 check."
+    },
+    {
+      "id": "INV-T21B-003",
+      "gate": "T21-G02-CPU",
+      "title": "Explicit Vulkan Memory Synchronization & Resource Lifetime",
+      "proposition": "Every Vulkan compute execution brackets dispatch with HOST->COMPUTE and COMPUTE->HOST vkCmdPipelineBarrier transitions, uses VkFence completion, handles non-coherent flush/invalidate, destroys all Vulkan objects cleanly, and records zero VK_LAYER_KHRONOS_validation errors.",
+      "fail_closed_condition": "Validation layer error/warning, ASan/LSan leak, missing sync barrier count (< 2), or unclean teardown.",
+      "verification_method": "runtime/compute_vulkan.c under VK_LAYER_KHRONOS_validation + ASan/LSan + UBSan."
+    },
+    {
+      "id": "INV-T21B-004",
+      "gate": "T21-G02-CPU",
+      "title": "Honest Physical-Device Identity & Capability Negotiation",
+      "proposition": "Vulkan capability probing explicitly classifies physical_device_type (e.g. CPU for Mesa llvmpipe, vendorID=0x10005), rejects ZCC_BACKEND_VULKAN_GPU on CPU-only ICDs under EXACT_REQUIRED, and rejects buffers/push-constants/accum modes exceeding device limits.",
+      "fail_closed_condition": "CPU ICD labeled as DISCRETE_GPU/INTEGRATED_GPU or exceeding device limits without rejection.",
+      "verification_method": "Device identity inspection + mocked restricted zcc_vulkan_caps_t tests."
+    },
+    {
+      "id": "INV-T21B-005",
+      "gate": "T21B-G05",
+      "title": "Cross-Backend Numerical Equivalence (Scalar, AVX2, PTX, Vulkan SPIR-V)",
+      "proposition": "All 13 operations executed on Vulkan SPIR-V (llvmpipe) match SCALAR_C99, AVX2_FMA, PTX_SM120, and an independent FP64 oracle across normal, prime/boundary, strided, unaligned, extreme-magnitude, and NaN/Inf inputs within declared Track 21B tolerances.",
+      "fail_closed_condition": "Tolerance violation, unexpected NaN/Inf clamp, or unaligned/strided corruption.",
+      "verification_method": "tests/track21b/differential_oracle_21b.py."
+    },
+    {
+      "id": "INV-T21B-006",
+      "gate": "T21B-G08",
+      "title": "Defined Deterministic Replay on Vulkan Compute Backend",
+      "proposition": "Re-executing identical deterministic inputs and op configurations on VULKAN_SPV yields bitwise-identical output_buffer_sha256 and spirv_module_sha256.",
+      "fail_closed_condition": "Divergent output SHA-256 across repeat runs.",
+      "verification_method": "3x replay verification across all 13 operations on llvmpipe."
+    },
+    {
+      "id": "INV-T21B-007",
+      "gate": "T21B-G06",
+      "title": "Bounds, Overflow, Aliasing, OOM & Sanitizer Memory Safety",
+      "proposition": "Track 21B dispatch & Vulkan host execution pass ASan+LSan+UBSan with zero memory errors or leaks across bounds, integer overflow, readonly outputs, aliasing, invalid shapes, and OOM fault injection.",
+      "fail_closed_condition": "Any ASan/LSan/UBSan error or leaked Vulkan allocation.",
+      "verification_method": "tests/track21b/run_vulkan_suite.sh."
+    },
+    {
+      "id": "INV-T21B-008",
+      "gate": "T21B-G07",
+      "title": "Track 21B Mutation Observatory Sensitivity & Unknown Preservation",
+      "proposition": "Controlled mutants spanning malformed SPIR-V, shader math/quant corruption, fabricated GPU device identity, missing spirv-val evidence, capability limit bypass, altered baseline artifacts, and verifier bypass are detected and killed while novel anomalies remain UNKNOWN.",
+      "fail_closed_condition": "Any injected mutant survives or missing validator returns PASS.",
+      "verification_method": "tests/track21b/mutation_observatory_21b.py."
+    },
+    {
+      "id": "INV-T21B-009",
+      "gate": "T21B-G09",
+      "title": "Track 21B Receipt Integrity & Tamper Detection",
+      "proposition": "track21b.receipt.v1 seals v1 base, spirv_module_sha256, Vulkan device metadata, barrier counts, and verification_status=UNVERIFIED_RUNTIME_ONLY via canonical SHA-256 + optional HMAC-SHA256.",
+      "fail_closed_condition": "Independent verifier accepts forged SPIR-V hash, spoofed device type, altered barrier count, or self-certified PASS.",
+      "verification_method": "tools/verify_track21b_release.py tamper negative controls."
+    },
+    {
+      "id": "INV-T21B-010",
+      "gate": "T21B-G10",
+      "title": "Oracle Independence, Release Closure, Verifier Purity & Historical Preservation",
+      "proposition": "Independent release verifier enforces external spirv-val + VK_LAYER_KHRONOS_validation presence, canonical staged manifest closure, protected baseline/Track21A immutability (S_before==S_after), and clean Track 21A + selfhost non-regression.",
+      "fail_closed_condition": "Missing external oracle reports PASS; baseline or historical Track 21A evidence mutated.",
+      "verification_method": "tools/verify_track21b_release.py (--self-test, --verify-staged, isolated checkout)."
+    }
+  ]
+}

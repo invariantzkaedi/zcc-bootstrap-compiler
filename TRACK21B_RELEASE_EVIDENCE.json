@@ -1,0 +1,237 @@
+{
+  "schema_version": "track21b.release_evidence.v1",
+  "generated_at_utc": "2026-11-26T19:38:01Z",
+  "governing_rule_version": "ZCC-EF-7 v1.0.0 + ZCC-EF-0",
+  "evidence_tier": "E3",
+  "git_head_sha": "2e0dda9d3716b080c3c2c8e291467cc7710b48eb",
+  "manifest_file_count": 25,
+  "canonical_manifest_sha256": "736acfb894c480220ce605abab6a4a991340f3772e9f7191b6a0bda423e32d64",
+  "vulkan_execution_oracle": {
+    "vulkan_available": 1,
+    "validation_layer_enabled": 1,
+    "device_name": "llvmpipe (LLVM 21.1.8, 256 bits)",
+    "device_type": "CPU",
+    "physical_device_type": 4,
+    "vendor_id": "0x10005",
+    "api_version": 4211023
+  },
+  "oversized_files": [],
+  "dirty_protected_files": "",
+  "verifier_purity_drifts": [],
+  "release_closure": {
+    "missing": [],
+    "oversized": [],
+    "ignored": [],
+    "staged": {
+      "checked": false,
+      "missing_staged": [],
+      "unexpected_staged": [],
+      "index_sha_mismatches": []
+    }
+  },
+  "artifact_sha256": {
+    ".gitignore": "2963f5739aca855409cd0a4099f59754f933d58bf75941f079fd87724c004a8a",
+    "Makefile": "963e1b85ff10abadfcf15b70fb5baa14addd97ee10d6baefb38b5696a4e82b26",
+    "TRACK21B_COMPUTE_CONTRACT.md": "cb8e159033151056b16ce4d34397f8262d4a0520886980a6c617d581ea284e8e",
+    "TRACK21B_DIFFERENTIAL_REPORT.json": "bf7a6bf7d14d0dbdb6014ef8a516c62090e66e3f2f87abf53e9b0f071d82c6f5",
+    "TRACK21B_IMPLEMENTATION_PLAN.md": "06972818ce367c40dd83ca14008549497d5011c040394274fceb73d70f2de3d8",
+    "TRACK21B_INVARIANT_REGISTRY.json": "38253231408a2f3517bb9a9d23febf36da1d6d520da251d70a530c13a4cd0334",
+    "TRACK21B_MUTATION_REPORT.json": "65e560dd5b30d999b7bee4acc2f020aaa8d954c192a99c45f77bef166ab5ac4a",
+    "TRACK21B_PERFORMANCE_REPORT.json": "ed1c4b2716b4f75eefd5936ab7dec6026098b1cf18ca65f177f4da705906eae1",
+    "TRACK21B_REPO_AUDIT.json": "0353b73df4953b261abe2a4be30aa17dedf878a5b546be7aff7449262801a34f",
+    "docs/TRACK21B_REPRODUCTION_AND_MIGRATION.md": "ef66bbf3463abd72b175c6ec2cb5d0a0098f40f64fcecb063f2eb9ec18fcd493",
+    "include/zcc_spirv.h": "bbb2ef658eb561d3fa51a8b21a7226db372491516e09cb74af0cfc36e2a9587f",
+    "include/zcc_vulkan_compute.h": "87dd4cea995ef907c1526f0d67f7ef9d97f5ad02ae72f42eaca27d278e522d10",
+    "runtime/compute_dispatch_v2.c": "2dfbc2c57d290ce289d08eb1d6a829b52235551082699a70bfbf678e158f9425",
+    "runtime/compute_vulkan.c": "d880438427b56a772436690ac6d482ddf1b55d2f1bc1368e868b1e18d76bc4d1",
+    "sdk/zcc_vulkan_compute.mjs": "a50e2753222297c1ea1733c030947e6eb276304be8ceded576585a87d5cde740",
+    "sdk/zcc_vulkan_compute.py": "6d2ff11549f45867189cbab570312d15e7d8485b32f1ff7d33df8ef6c199a75b",
+    "src/part6_spirv.c": "8d655481c307fac645e1749e7a9dbb4fbbbe5dfdb6b8b7949baba66800bb5075",
+    "tests/track21b/build_runtime.sh": "343e4c08892501201d42e1052a4bd2463f0dce1eccb687b71ff8bef7deca6aa9",
+    "tests/track21b/differential_oracle_21b.py": "8cc24c33655f2ce4c0151bee2b5aa29361fa1b8e625a0b1baf647bdf8b7b7427",
+    "tests/track21b/mutation_observatory_21b.py": "89863f143ed29c5131d275977a0c96c6338d9515fd83909b8faacd703e279742",
+    "tests/track21b/run_vulkan_suite.sh": "22631d54e693e0a20acdbb753877c8a078b379b7e9bf4b745be63cf4e88c30ad",
+    "tests/track21b/test_sdk_v2_mjs.mjs": "97c355420d710263869d75c654fbc0456eaf6ffbd7fcda7aaf4ef8c657a3ee86",
+    "tests/track21b/test_track21b_vulkan.c": "0c09a0dd4562adb3686ab5285b4cb476f998706338f24b999bdfe17ee3c77c42",
+    "tools/verify_track21b_release.py": "1145c7035e87eac6a3b7de415e077be102e799f5bfe4ad27293dea80df4a43e2",
+    "tools/zcc_spirv_cli.c": "29af8fc3880f89134aea2aa021a5eda4f5d6b4bdf278740e41e5eb93a0071a26",
+    "/tmp/libzcc_compute_v2.so": "0213b2aa0fe03ffe791e187208353e613fc40fd350b1a58ff0aee951fb73ab6d",
+    "/tmp/zcc-spirv": "948cbcde812f281cad7bb5164424cd8479bffe4787a5635093052c2980b80cb1"
+  },
+  "gates": {
+    "T21-G01": {
+      "status": "PASS",
+      "evidence": {
+        "independent_validator": "spirv-val --target-env vulkan1.0",
+        "status": "OK",
+        "validated_modules": 13,
+        "deterministic_2x": true,
+        "module_sha256": {
+          "t21b_op01_VEC_ADD_F32.spv": "37a85253c032c8e59d3cdc6a7fab776ac620d51670e1b49a6cb38362d63ae294",
+          "t21b_op02_VEC_MUL_F32.spv": "aeed2122a88aa49d2b8cda517a51bceeefc5b3917e0e086a224b8fcc3cdd21f1",
+          "t21b_op03_VEC_FMA_F32.spv": "b440800f81b7ab55ce720ad4fa07ed81153177ce3cd8f56b5e3c5d1774be81de",
+          "t21b_op04_DOT_F32.spv": "0462290480ce60ccc570c4f4a2841a5bf615307a31784fbd36d47758dd027bce",
+          "t21b_op05_GEMM_F32.spv": "9602b39ecfefc1b5ca932156886ffe0131843db7da043c7eb2365634efd83d85",
+          "t21b_op06_RMSNORM_F32.spv": "af7e70328958c6df12346b9a2948c68cd341997742995c5680f2f8ae65e8ce08",
+          "t21b_op07_SOFTMAX_F32.spv": "7d4ca792f928b0f9bbece537f8c16121fb8ffbba3c3b83b8b3384034d834ac04",
+          "t21b_op08_DEQUANT_Q8_0.spv": "53f93549d182fc2c1d9c13ba979fd78feea46537e205d3f708f379692a091a8e",
+          "t21b_op09_MATVEC_Q8_0.spv": "6bc6ec000503d68c14dcbbbf2ad4eac85a1b57dcdbf64c08bc3b691a6e6ec29f",
+          "t21b_op10_DEQUANT_Q4_0.spv": "979fbf804a9b350837ad243c850ac7f527406e2c17cb92b053b6865ab7e5ee83",
+          "t21b_op11_MATVEC_Q4_0.spv": "e065c137e93f065cf3df26e1a22c211b93b2a23d522d4c03dff34f9d86ca9dc0",
+          "t21b_op12_DEQUANT_Q4_K.spv": "773607dec7d5a2b056980960c7dfe0700a13216f1185a33dcaa207dbd4cbc3df",
+          "t21b_op13_MATVEC_Q4_K.spv": "08e03f30ea3ce3d229482ef5d46af3ca6ca8d1ce3449bf527a22254d1cbc9dc3"
+        }
+      }
+    },
+    "T21-G02-CPU": {
+      "status": "PASS",
+      "evidence": {
+        "oracle_type": "Software Vulkan CPU Execution Oracle (Mesa llvmpipe)",
+        "physical_device_type": "CPU",
+        "device_name": "llvmpipe (LLVM 21.1.8, 256 bits)",
+        "vendor_id": "0x10005",
+        "validation_layer_enabled": true,
+        "identity_check": "ok"
+      }
+    },
+    "T21B-GPU-NV": {
+      "status": "DEFERRED",
+      "target": "Native NVIDIA GeForce RTX 5070 Vulkan ICD (0x10de)",
+      "reason": "WSL2 exposes llvmpipe CPU ICD only; unsigned Windows native executables blocked by Windows Smart App Control."
+    },
+    "T21B-GPU-AMD": {
+      "status": "DEFERRED",
+      "target": "Native AMD Radeon Graphics Vulkan ICD (0x1002)",
+      "reason": "WSL2 exposes llvmpipe CPU ICD only; unsigned Windows native executables blocked by Windows Smart App Control."
+    },
+    "T21B-G03": {
+      "status": "PASS",
+      "evidence": {
+        "portable_avx_opcode_counts": {
+          "compute_sha256.o": 0,
+          "cpu_capabilities.o": 0,
+          "compute_scalar.o": 0,
+          "compute_ptx.o": 0,
+          "compute_dispatch.o": 0,
+          "execution_receipt.o": 0,
+          "part6_spirv.o": 0,
+          "compute_vulkan.o": 0,
+          "compute_dispatch_v2.o": 0
+        }
+      }
+    },
+    "T21B-G04": {
+      "status": "PASS",
+      "evidence": "Scalar C99, AVX2_FMA, PTX_SM120, and VULKAN_SPV verified cleanly"
+    },
+    "T21B-G05": {
+      "status": "PASS",
+      "evidence": "205/205 PASS across Scalar/AVX2/PTX/Vulkan SPIR-V"
+    },
+    "T21B-G06": {
+      "status": "PASS",
+      "evidence": "Full UBSan (CPU+PTX+Vulkan) + ASan+LSan+UBSan (CPU+Vulkan+Validation Layer) 0 errors"
+    },
+    "T21B-G07": {
+      "status": "PASS",
+      "evidence": "12/12 controlled mutants killed; false_pos=0; unknown preserved"
+    },
+    "T21B-G08": {
+      "status": "PASS",
+      "evidence": "13/13 operations deterministic 3x replay on VULKAN_SPV"
+    },
+    "T21B-G09": {
+      "status": "PASS",
+      "evidence": [
+        {
+          "control": "POSITIVE_VALID_V2_HMAC_RECEIPT",
+          "expected": "ACCEPT",
+          "observed": "ACCEPT",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_V2_SPV_SHA256",
+          "expected": "REJECT",
+          "observed": "REJECT:v2_canonical_sha256_mismatch",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_V2_SPOOF_DISCRETE_GPU",
+          "expected": "REJECT",
+          "observed": "REJECT:fabricated_gpu_identity_for_sw_icd:DISCRETE_GPU:llvmpipe (LLVM 21.1.8, 256 bits)",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_V2_BARRIER_COUNT_ZERO",
+          "expected": "REJECT",
+          "observed": "REJECT:missing_vulkan_sync_barriers",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_V2_VALIDATION_ERR_NONZERO",
+          "expected": "REJECT",
+          "observed": "REJECT:nonzero_vulkan_validation_errors",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_V2_SELF_CERTIFY_PASS",
+          "expected": "REJECT",
+          "observed": "REJECT:illegal_v2_verification_status:PASS",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_V2_ZK_CLAIM_FORGED",
+          "expected": "REJECT",
+          "observed": "REJECT:illegal_v2_zk_proof_claim",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_V2_OUTPUT_SHA256",
+          "expected": "REJECT",
+          "observed": "REJECT:v2_canonical_sha256_mismatch",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_V2_BASE_OUTPUT_SHA256",
+          "expected": "REJECT",
+          "observed": "REJECT:base_canonical_sha256_mismatch",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_V2_WRONG_HMAC_KEY",
+          "expected": "REJECT",
+          "observed": "REJECT:v2_hmac_sha256_mismatch",
+          "status": "PASS"
+        }
+      ]
+    },
+    "T21B-G10": {
+      "status": "PASS",
+      "evidence": {
+        "release_closure": {
+          "missing": [],
+          "oversized": [],
+          "ignored": [],
+          "staged": {
+            "checked": false,
+            "missing_staged": [],
+            "unexpected_staged": [],
+            "index_sha_mismatches": []
+          }
+        },
+        "verifier_purity_drifts": []
+      }
+    }
+  },
+  "host_limitations": [
+    "WSL2 Vulkan ICD exposes Mesa llvmpipe (VK_PHYSICAL_DEVICE_TYPE_CPU, vendor 0x10005) only.",
+    "Hardware Vulkan GPU gates T21B-GPU-NV (0x10de RTX 5070) and T21B-GPU-AMD (0x1002 Radeon) are explicitly DEFERRED because unsigned native Win64 binaries are blocked by Windows Smart App Control.",
+    "NVIDIA proprietary WSL2 driver triggers an internal ASan double-free inside cuInit(0), so PTX_SM120 runs under full UBSan and O2 differential verification while ASan+LSan+UBSan verifies Scalar, AVX2, SPIR-V generator, and live Vulkan llvmpipe + Khronos validation layer."
+  ],
+  "ef7_adjudication": {
+    "claim": "ZCC Track 21B Verified SPIR-V and Software Vulkan Compute (llvmpipe) satisfies T21-G01, T21-G02-CPU, and T21B-G03..G10 while preserving Track 21A and core bootstrap baselines, with T21B-GPU-NV and T21B-GPU-AMD explicitly DEFERRED.",
+    "evidence_class": "OBSERVED",
+    "evidence_tier": "E3",
+    "verdict": "PASS"
+  }
+}
