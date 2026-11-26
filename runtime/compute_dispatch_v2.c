@@ -378,7 +378,7 @@ int zcc_receipt_v2_to_json(const zcc_compute_v2_receipt_t *r, char *buf, size_t 
     );
 }
 
-zcc_status_t zcc_compute_exec_v2_with_caps(
+zcc_status_t zcc_compute_exec_v2_with_ctx(
     zcc_op_t op,
     const zcc_tensor_desc_t *inputs,
     uint32_t num_inputs,
@@ -386,11 +386,28 @@ zcc_status_t zcc_compute_exec_v2_with_caps(
     const zcc_vulkan_exec_options_t *opts,
     const zcc_cpu_caps_t *restricted_cpu_caps,
     const zcc_vulkan_caps_t *restricted_vk_caps,
+    zcc_vulkan_ctx_t *ctx,
     zcc_compute_v2_receipt_t *out_receipt
 ) {
     if (!opts) return ZCC_STATUS_ERR_NULL_PTR;
     if (opts->abi_v2_version != ZCC_COMPUTE_V2_ABI_VERSION || opts->struct_size != sizeof(*opts)) {
         return ZCC_STATUS_ERR_ABI_MISMATCH;
+    }
+
+    zcc_vulkan_caps_t live_vk, eff_vk;
+    memset(&live_vk, 0, sizeof(live_vk));
+    live_vk.struct_size = (uint32_t)sizeof(live_vk);
+    snprintf(live_vk.device_type_str, sizeof(live_vk.device_type_str), "NONE");
+
+    if (ctx != NULL) {
+        zcc_status_t cst = zcc_vulkan_ctx_get_caps(ctx, &live_vk);
+        if (cst != ZCC_STATUS_OK) return cst;
+        clamp_vk_caps(&eff_vk, &live_vk, restricted_vk_caps);
+    } else if (opts->base.requested_backend > ZCC_BACKEND_PTX_SM120) {
+        zcc_probe_vulkan_caps(&live_vk, 1);
+        clamp_vk_caps(&eff_vk, &live_vk, restricted_vk_caps);
+    } else {
+        eff_vk = live_vk;
     }
 
     zcc_compute_v2_receipt_t local_rec;
@@ -401,10 +418,6 @@ zcc_status_t zcc_compute_exec_v2_with_caps(
     snprintf(rec->v2_schema_version, sizeof(rec->v2_schema_version), "%s", ZCC_COMPUTE_V2_RECEIPT_SCHEMA);
     snprintf(rec->v2_contract_version, sizeof(rec->v2_contract_version), "%s", ZCC_COMPUTE_V2_CONTRACT_VER);
     snprintf(rec->spirv_module_sha256_hex, sizeof(rec->spirv_module_sha256_hex), "none");
-
-    zcc_vulkan_caps_t live_vk, eff_vk;
-    zcc_probe_vulkan_caps(&live_vk, 1);
-    clamp_vk_caps(&eff_vk, &live_vk, restricted_vk_caps);
 
     if (opts->base.requested_backend <= ZCC_BACKEND_PTX_SM120) {
         zcc_status_t st = zcc_compute_exec_with_caps(
@@ -441,7 +454,8 @@ zcc_status_t zcc_compute_exec_v2_with_caps(
             opts->require_hardware_gpu, &sel_bk, &fb, reason, sizeof(reason)
         );
         if (st == ZCC_STATUS_OK && (sel_bk == ZCC_BACKEND_VULKAN_SPV || sel_bk == ZCC_BACKEND_VULKAN_GPU) &&
-            opts->require_validation_layer && !eff_vk.validation_layer_available) {
+            opts->require_validation_layer &&
+            (!eff_vk.validation_layer_available || (ctx != NULL && !eff_vk.validation_layer_enabled))) {
             st = ZCC_STATUS_ERR_UNSUPPORTED_HW;
             snprintf(err_msg, sizeof(err_msg), "VK_LAYER_KHRONOS_validation required but unavailable or restricted");
         }
@@ -518,7 +532,8 @@ zcc_status_t zcc_compute_exec_v2_with_caps(
         rec->base.backend_executed = sel_bk;
         rec->base.fallback_occurred = fb;
         snprintf(rec->base.selection_reason, sizeof(rec->base.selection_reason), "%s", reason);
-        st = zcc_vulkan_exec(
+        st = zcc_vulkan_exec_on_ctx(
+            ctx,
             op, inputs, num_inputs, output, opts, &eff_vk,
             rec->spirv_module_sha256_hex, &rec->spirv_word_count,
             &rec->sync_barrier_count, &rec->mem_flush_count,
@@ -559,6 +574,22 @@ zcc_status_t zcc_compute_exec_v2_with_caps(
     return st;
 }
 
+zcc_status_t zcc_compute_exec_v2_with_caps(
+    zcc_op_t op,
+    const zcc_tensor_desc_t *inputs,
+    uint32_t num_inputs,
+    zcc_tensor_desc_t *output,
+    const zcc_vulkan_exec_options_t *opts,
+    const zcc_cpu_caps_t *restricted_cpu_caps,
+    const zcc_vulkan_caps_t *restricted_vk_caps,
+    zcc_compute_v2_receipt_t *out_receipt
+) {
+    return zcc_compute_exec_v2_with_ctx(
+        op, inputs, num_inputs, output, opts,
+        restricted_cpu_caps, restricted_vk_caps, NULL, out_receipt
+    );
+}
+
 zcc_status_t zcc_compute_exec_v2(
     zcc_op_t op,
     const zcc_tensor_desc_t *inputs,
@@ -567,5 +598,22 @@ zcc_status_t zcc_compute_exec_v2(
     const zcc_vulkan_exec_options_t *opts,
     zcc_compute_v2_receipt_t *out_receipt
 ) {
-    return zcc_compute_exec_v2_with_caps(op, inputs, num_inputs, output, opts, NULL, NULL, out_receipt);
+    return zcc_compute_exec_v2_with_ctx(
+        op, inputs, num_inputs, output, opts, NULL, NULL, NULL, out_receipt
+    );
+}
+
+zcc_status_t zcc_vulkan_ctx_exec(
+    zcc_vulkan_ctx_t *ctx,
+    zcc_op_t op,
+    const zcc_tensor_desc_t *inputs,
+    uint32_t num_inputs,
+    zcc_tensor_desc_t *output,
+    const zcc_vulkan_exec_options_t *opts,
+    zcc_compute_v2_receipt_t *out_receipt
+) {
+    if (!ctx) return ZCC_STATUS_ERR_NULL_PTR;
+    return zcc_compute_exec_v2_with_ctx(
+        op, inputs, num_inputs, output, opts, NULL, NULL, ctx, out_receipt
+    );
 }

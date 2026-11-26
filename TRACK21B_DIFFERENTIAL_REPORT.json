@@ -1,6 +1,6 @@
 {
   "schema_version": "track21b.differential_report.v1",
-  "generated_at_utc": "2026-11-26T19:37:29Z",
+  "generated_at_utc": "2026-11-26T19:54:04Z",
   "external_oracles": {
     "spirv_val": "/usr/bin/spirv-val",
     "glslangValidator": "/usr/bin/glslangValidator",
@@ -138,8 +138,8 @@
       "status": "PASS"
     }
   ],
-  "total_checks": 205,
-  "passed": 205,
+  "total_checks": 207,
+  "passed": 207,
   "failed": 0,
   "replay_13_ops_count": 13,
   "verdict": "PASS",
@@ -2529,6 +2529,28 @@
     {
       "check": "vulkan_invalid_shape_readonly_rejected",
       "rc": -8,
+      "status": "PASS"
+    },
+    {
+      "check": "scalar_skips_redundant_vulkan_probe",
+      "rc": 0,
+      "vk_type": "NONE",
+      "vk_avail": 0,
+      "status": "PASS"
+    },
+    {
+      "check": "persistent_ctx_parity_grow_shrink_and_val_gate",
+      "rc_p": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        -11,
+        0
+      ],
+      "dot_got": 11.0,
       "status": "PASS"
     }
   ]

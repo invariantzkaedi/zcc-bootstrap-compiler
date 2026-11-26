@@ -300,6 +300,8 @@ zcc_status_t zcc_probe_vulkan_caps(zcc_vulkan_caps_t *out_caps, int enable_valid
 typedef struct vk_buf_alloc_s {
     VkBuffer       buf;
     VkDeviceMemory mem;
+    void          *mapped;
+    VkDeviceSize   buf_cap;
     VkDeviceSize   alloc_size;
     VkDeviceSize   data_bytes;
     uint32_t       base_off;
@@ -430,7 +432,736 @@ static void resolve_op_dims_strides(
     }
 }
 
-zcc_status_t zcc_vulkan_exec(
+typedef struct vk_dev_procs_s {
+    PFN_vkDestroyDevice                pDestroyDevice;
+    PFN_vkGetDeviceQueue               pGetDeviceQueue;
+    PFN_vkCreateBuffer                 pCreateBuffer;
+    PFN_vkDestroyBuffer                pDestroyBuffer;
+    PFN_vkGetBufferMemoryRequirements  pGetBufMemReq;
+    PFN_vkAllocateMemory               pAllocateMemory;
+    PFN_vkFreeMemory                   pFreeMemory;
+    PFN_vkBindBufferMemory             pBindBufferMemory;
+    PFN_vkMapMemory                    pMapMemory;
+    PFN_vkUnmapMemory                  pUnmapMemory;
+    PFN_vkFlushMappedMemoryRanges      pFlushRanges;
+    PFN_vkInvalidateMappedMemoryRanges pInvalidateRanges;
+    PFN_vkCreateShaderModule           pCreateShaderModule;
+    PFN_vkDestroyShaderModule          pDestroyShaderModule;
+    PFN_vkCreateDescriptorSetLayout    pCreateDSL;
+    PFN_vkDestroyDescriptorSetLayout   pDestroyDSL;
+    PFN_vkCreatePipelineLayout         pCreatePL;
+    PFN_vkDestroyPipelineLayout        pDestroyPL;
+    PFN_vkCreateComputePipelines       pCreateComputePipes;
+    PFN_vkDestroyPipeline              pDestroyPipe;
+    PFN_vkCreateDescriptorPool         pCreateDPool;
+    PFN_vkDestroyDescriptorPool        pDestroyDPool;
+    PFN_vkAllocateDescriptorSets       pAllocDSets;
+    PFN_vkUpdateDescriptorSets         pUpdateDSets;
+    PFN_vkCreateCommandPool            pCreateCPool;
+    PFN_vkResetCommandPool             pResetCPool;
+    PFN_vkDestroyCommandPool           pDestroyCPool;
+    PFN_vkAllocateCommandBuffers       pAllocCBufs;
+    PFN_vkBeginCommandBuffer           pBeginCBuf;
+    PFN_vkEndCommandBuffer             pEndCBuf;
+    PFN_vkCmdBindPipeline              pCmdBindPipe;
+    PFN_vkCmdBindDescriptorSets        pCmdBindDSets;
+    PFN_vkCmdPushConstants             pCmdPush;
+    PFN_vkCmdDispatch                  pCmdDispatch;
+    PFN_vkCmdPipelineBarrier           pCmdBarrier;
+    PFN_vkCreateFence                  pCreateFence;
+    PFN_vkResetFences                  pResetFences;
+    PFN_vkDestroyFence                 pDestroyFence;
+    PFN_vkQueueSubmit                  pQueueSubmit;
+    PFN_vkWaitForFences                pWaitForFences;
+    PFN_vkDeviceWaitIdle               pDeviceWaitIdle;
+} vk_dev_procs_t;
+
+static int bind_device_procs(const vk_lib_t *vk, VkDevice dev, vk_dev_procs_t *dp) {
+    memset(dp, 0, sizeof(*dp));
+    dp->pDestroyDevice       = (PFN_vkDestroyDevice)vk->gdpa(dev, "vkDestroyDevice");
+    dp->pGetDeviceQueue      = (PFN_vkGetDeviceQueue)vk->gdpa(dev, "vkGetDeviceQueue");
+    dp->pCreateBuffer        = (PFN_vkCreateBuffer)vk->gdpa(dev, "vkCreateBuffer");
+    dp->pDestroyBuffer       = (PFN_vkDestroyBuffer)vk->gdpa(dev, "vkDestroyBuffer");
+    dp->pGetBufMemReq        = (PFN_vkGetBufferMemoryRequirements)vk->gdpa(dev, "vkGetBufferMemoryRequirements");
+    dp->pAllocateMemory      = (PFN_vkAllocateMemory)vk->gdpa(dev, "vkAllocateMemory");
+    dp->pFreeMemory          = (PFN_vkFreeMemory)vk->gdpa(dev, "vkFreeMemory");
+    dp->pBindBufferMemory    = (PFN_vkBindBufferMemory)vk->gdpa(dev, "vkBindBufferMemory");
+    dp->pMapMemory           = (PFN_vkMapMemory)vk->gdpa(dev, "vkMapMemory");
+    dp->pUnmapMemory         = (PFN_vkUnmapMemory)vk->gdpa(dev, "vkUnmapMemory");
+    dp->pFlushRanges         = (PFN_vkFlushMappedMemoryRanges)vk->gdpa(dev, "vkFlushMappedMemoryRanges");
+    dp->pInvalidateRanges    = (PFN_vkInvalidateMappedMemoryRanges)vk->gdpa(dev, "vkInvalidateMappedMemoryRanges");
+    dp->pCreateShaderModule  = (PFN_vkCreateShaderModule)vk->gdpa(dev, "vkCreateShaderModule");
+    dp->pDestroyShaderModule = (PFN_vkDestroyShaderModule)vk->gdpa(dev, "vkDestroyShaderModule");
+    dp->pCreateDSL           = (PFN_vkCreateDescriptorSetLayout)vk->gdpa(dev, "vkCreateDescriptorSetLayout");
+    dp->pDestroyDSL          = (PFN_vkDestroyDescriptorSetLayout)vk->gdpa(dev, "vkDestroyDescriptorSetLayout");
+    dp->pCreatePL            = (PFN_vkCreatePipelineLayout)vk->gdpa(dev, "vkCreatePipelineLayout");
+    dp->pDestroyPL           = (PFN_vkDestroyPipelineLayout)vk->gdpa(dev, "vkDestroyPipelineLayout");
+    dp->pCreateComputePipes  = (PFN_vkCreateComputePipelines)vk->gdpa(dev, "vkCreateComputePipelines");
+    dp->pDestroyPipe         = (PFN_vkDestroyPipeline)vk->gdpa(dev, "vkDestroyPipeline");
+    dp->pCreateDPool         = (PFN_vkCreateDescriptorPool)vk->gdpa(dev, "vkCreateDescriptorPool");
+    dp->pDestroyDPool        = (PFN_vkDestroyDescriptorPool)vk->gdpa(dev, "vkDestroyDescriptorPool");
+    dp->pAllocDSets          = (PFN_vkAllocateDescriptorSets)vk->gdpa(dev, "vkAllocateDescriptorSets");
+    dp->pUpdateDSets         = (PFN_vkUpdateDescriptorSets)vk->gdpa(dev, "vkUpdateDescriptorSets");
+    dp->pCreateCPool         = (PFN_vkCreateCommandPool)vk->gdpa(dev, "vkCreateCommandPool");
+    dp->pResetCPool          = (PFN_vkResetCommandPool)vk->gdpa(dev, "vkResetCommandPool");
+    dp->pDestroyCPool        = (PFN_vkDestroyCommandPool)vk->gdpa(dev, "vkDestroyCommandPool");
+    dp->pAllocCBufs          = (PFN_vkAllocateCommandBuffers)vk->gdpa(dev, "vkAllocateCommandBuffers");
+    dp->pBeginCBuf           = (PFN_vkBeginCommandBuffer)vk->gdpa(dev, "vkBeginCommandBuffer");
+    dp->pEndCBuf             = (PFN_vkEndCommandBuffer)vk->gdpa(dev, "vkEndCommandBuffer");
+    dp->pCmdBindPipe         = (PFN_vkCmdBindPipeline)vk->gdpa(dev, "vkCmdBindPipeline");
+    dp->pCmdBindDSets        = (PFN_vkCmdBindDescriptorSets)vk->gdpa(dev, "vkCmdBindDescriptorSets");
+    dp->pCmdPush             = (PFN_vkCmdPushConstants)vk->gdpa(dev, "vkCmdPushConstants");
+    dp->pCmdDispatch         = (PFN_vkCmdDispatch)vk->gdpa(dev, "vkCmdDispatch");
+    dp->pCmdBarrier          = (PFN_vkCmdPipelineBarrier)vk->gdpa(dev, "vkCmdPipelineBarrier");
+    dp->pCreateFence         = (PFN_vkCreateFence)vk->gdpa(dev, "vkCreateFence");
+    dp->pResetFences         = (PFN_vkResetFences)vk->gdpa(dev, "vkResetFences");
+    dp->pDestroyFence        = (PFN_vkDestroyFence)vk->gdpa(dev, "vkDestroyFence");
+    dp->pQueueSubmit         = (PFN_vkQueueSubmit)vk->gdpa(dev, "vkQueueSubmit");
+    dp->pWaitForFences       = (PFN_vkWaitForFences)vk->gdpa(dev, "vkWaitForFences");
+    dp->pDeviceWaitIdle      = (PFN_vkDeviceWaitIdle)vk->gdpa(dev, "vkDeviceWaitIdle");
+    if (!dp->pDestroyDevice || !dp->pGetDeviceQueue || !dp->pCreateBuffer ||
+        !dp->pDestroyBuffer || !dp->pGetBufMemReq || !dp->pAllocateMemory ||
+        !dp->pFreeMemory || !dp->pBindBufferMemory || !dp->pMapMemory ||
+        !dp->pUnmapMemory || !dp->pCreateShaderModule || !dp->pDestroyShaderModule ||
+        !dp->pCreateDSL || !dp->pDestroyDSL || !dp->pCreatePL || !dp->pDestroyPL ||
+        !dp->pCreateComputePipes || !dp->pDestroyPipe || !dp->pCreateDPool ||
+        !dp->pDestroyDPool || !dp->pAllocDSets || !dp->pUpdateDSets ||
+        !dp->pCreateCPool || !dp->pResetCPool || !dp->pDestroyCPool ||
+        !dp->pAllocCBufs || !dp->pBeginCBuf || !dp->pEndCBuf || !dp->pCmdBindPipe ||
+        !dp->pCmdBindDSets || !dp->pCmdPush || !dp->pCmdDispatch || !dp->pCmdBarrier ||
+        !dp->pCreateFence || !dp->pResetFences || !dp->pDestroyFence ||
+        !dp->pQueueSubmit || !dp->pWaitForFences || !dp->pDeviceWaitIdle) {
+        return -1;
+    }
+    return 0;
+}
+
+#define ZCC_VULKAN_CTX_MAGIC 0x5A564B43U /* "ZVKC" */
+#define ZCC_VK_MAX_CACHED_OPS 16U
+
+struct zcc_vulkan_ctx_s {
+    uint32_t                            magic;
+    uint32_t                            abi_version;
+    zcc_vulkan_caps_t                   caps;
+    int                                 validation_enabled;
+    uint32_t                            require_hardware_gpu;
+    vk_lib_t                            vk;
+    VkInstance                          inst;
+    VkDebugUtilsMessengerEXT            dbg_msgr;
+    PFN_vkDestroyDebugUtilsMessengerEXT destroy_dbg;
+    zcc_vk_dbg_state_t                  dbg;
+    VkPhysicalDevice                    phys;
+    uint32_t                            qfam;
+    VkPhysicalDeviceMemoryProperties    mem_props;
+    VkDevice                            dev;
+    VkQueue                             queue;
+    vk_dev_procs_t                      dp;
+    VkDescriptorSetLayout               dsl;
+    VkPipelineLayout                    pl;
+    VkDescriptorPool                    dpool;
+    VkDescriptorSet                     dset;
+    VkCommandPool                       cpool;
+    VkCommandBuffer                     cbuf;
+    VkFence                             fence;
+    VkShaderModule                      cached_smods[ZCC_VK_MAX_CACHED_OPS];
+    VkPipeline                          cached_pipes[ZCC_VK_MAX_CACHED_OPS];
+    char                                cached_sha[ZCC_VK_MAX_CACHED_OPS][65];
+    uint32_t                            cached_words[ZCC_VK_MAX_CACHED_OPS];
+    vk_buf_alloc_t                      bufs[4];
+    int                                 descriptors_bound;
+};
+
+static void vk_free_buf(VkDevice dev, const vk_dev_procs_t *dp, vk_buf_alloc_t *b) {
+    if (!b) return;
+    if (dev && dp) {
+        if (b->mapped && b->mem && dp->pUnmapMemory) {
+            dp->pUnmapMemory(dev, b->mem);
+        }
+        if (b->buf && dp->pDestroyBuffer) {
+            dp->pDestroyBuffer(dev, b->buf, NULL);
+        }
+        if (b->mem && dp->pFreeMemory) {
+            dp->pFreeMemory(dev, b->mem, NULL);
+        }
+    }
+    memset(b, 0, sizeof(*b));
+}
+
+void zcc_vulkan_ctx_destroy(zcc_vulkan_ctx_t *ctx) {
+    if (!ctx) return;
+    if (ctx->dev) {
+        if (ctx->dp.pDeviceWaitIdle) ctx->dp.pDeviceWaitIdle(ctx->dev);
+        if (ctx->fence && ctx->dp.pDestroyFence) ctx->dp.pDestroyFence(ctx->dev, ctx->fence, NULL);
+        if (ctx->cpool && ctx->dp.pDestroyCPool) ctx->dp.pDestroyCPool(ctx->dev, ctx->cpool, NULL);
+        if (ctx->dpool && ctx->dp.pDestroyDPool) ctx->dp.pDestroyDPool(ctx->dev, ctx->dpool, NULL);
+        for (uint32_t i = 0U; i < ZCC_VK_MAX_CACHED_OPS; i++) {
+            if (ctx->cached_pipes[i] && ctx->dp.pDestroyPipe) {
+                ctx->dp.pDestroyPipe(ctx->dev, ctx->cached_pipes[i], NULL);
+            }
+            if (ctx->cached_smods[i] && ctx->dp.pDestroyShaderModule) {
+                ctx->dp.pDestroyShaderModule(ctx->dev, ctx->cached_smods[i], NULL);
+            }
+        }
+        if (ctx->pl && ctx->dp.pDestroyPL) ctx->dp.pDestroyPL(ctx->dev, ctx->pl, NULL);
+        if (ctx->dsl && ctx->dp.pDestroyDSL) ctx->dp.pDestroyDSL(ctx->dev, ctx->dsl, NULL);
+        for (uint32_t bi = 0U; bi < 4U; bi++) {
+            vk_free_buf(ctx->dev, &ctx->dp, &ctx->bufs[bi]);
+        }
+        if (ctx->dp.pDestroyDevice) ctx->dp.pDestroyDevice(ctx->dev, NULL);
+    }
+    if (ctx->dbg_msgr && ctx->destroy_dbg) ctx->destroy_dbg(ctx->inst, ctx->dbg_msgr, NULL);
+    if (ctx->inst && ctx->vk.destroy_instance) ctx->vk.destroy_instance(ctx->inst, NULL);
+    unload_vk_lib(&ctx->vk);
+    memset(ctx, 0, sizeof(*ctx));
+    free(ctx);
+}
+
+zcc_status_t zcc_vulkan_ctx_create(
+    int enable_validation_layer,
+    uint32_t require_hardware_gpu,
+    zcc_vulkan_ctx_t **out_ctx
+) {
+    if (!out_ctx) return ZCC_STATUS_ERR_NULL_PTR;
+    *out_ctx = NULL;
+
+    zcc_vulkan_ctx_t *ctx = (zcc_vulkan_ctx_t *)calloc(1U, sizeof(*ctx));
+    if (!ctx) return ZCC_STATUS_ERR_OOM;
+    ctx->magic = ZCC_VULKAN_CTX_MAGIC;
+    ctx->abi_version = ZCC_COMPUTE_V2_ABI_VERSION;
+    ctx->require_hardware_gpu = require_hardware_gpu ? 1U : 0U;
+    ctx->caps.struct_size = (uint32_t)sizeof(ctx->caps);
+    snprintf(ctx->caps.device_type_str, sizeof(ctx->caps.device_type_str), "NONE");
+
+    if (load_vk_lib(&ctx->vk) != 0) {
+        free(ctx);
+        return ZCC_STATUS_ERR_BACKEND_UNAVAILABLE;
+    }
+
+    int val_avail = has_validation_layer(&ctx->vk);
+    int dbg_ext = has_debug_utils_ext(&ctx->vk);
+    int use_val = (enable_validation_layer && val_avail) ? 1 : 0;
+    int use_dbg = (use_val && dbg_ext) ? 1 : 0;
+    ctx->validation_enabled = use_val;
+
+    const char *inst_layers[1] = { "VK_LAYER_KHRONOS_validation" };
+    const char *inst_exts[1] = { VK_EXT_DEBUG_UTILS_EXTENSION_NAME };
+
+    VkApplicationInfo app;
+    memset(&app, 0, sizeof(app));
+    app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app.pApplicationName = "zcc_track21b";
+    app.applicationVersion = 1U;
+    app.pEngineName = "zcc_vulkan";
+    app.engineVersion = 1U;
+    app.apiVersion = VK_API_VERSION_1_0;
+
+    VkDebugUtilsMessengerCreateInfoEXT dbg_ci;
+    memset(&dbg_ci, 0, sizeof(dbg_ci));
+    dbg_ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    dbg_ci.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+                             VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+    dbg_ci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                         VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    dbg_ci.pfnUserCallback = vk_dbg_cb;
+    dbg_ci.pUserData = &ctx->dbg;
+
+    VkInstanceCreateInfo ici;
+    memset(&ici, 0, sizeof(ici));
+    ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    ici.pApplicationInfo = &app;
+    if (use_val) {
+        ici.enabledLayerCount = 1U;
+        ici.ppEnabledLayerNames = inst_layers;
+    }
+    if (use_dbg) {
+        ici.enabledExtensionCount = 1U;
+        ici.ppEnabledExtensionNames = inst_exts;
+        ici.pNext = &dbg_ci;
+    }
+
+    if (ctx->vk.create_instance(&ici, NULL, &ctx->inst) != VK_SUCCESS || !ctx->inst) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_BACKEND_UNAVAILABLE;
+    }
+    bind_instance_procs(&ctx->vk, ctx->inst);
+    if (use_dbg) {
+        PFN_vkCreateDebugUtilsMessengerEXT create_dbg =
+            (PFN_vkCreateDebugUtilsMessengerEXT)ctx->vk.gipa(ctx->inst, "vkCreateDebugUtilsMessengerEXT");
+        ctx->destroy_dbg =
+            (PFN_vkDestroyDebugUtilsMessengerEXT)ctx->vk.gipa(ctx->inst, "vkDestroyDebugUtilsMessengerEXT");
+        if (create_dbg) create_dbg(ctx->inst, &dbg_ci, NULL, &ctx->dbg_msgr);
+    }
+
+    if (pick_physical_device(&ctx->vk, ctx->inst, ctx->require_hardware_gpu, &ctx->phys, &ctx->qfam, &ctx->caps) != 0) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_UNSUPPORTED_HW;
+    }
+    ctx->caps.validation_layer_available = (uint32_t)val_avail;
+    ctx->caps.validation_layer_enabled = (uint32_t)use_val;
+    ctx->vk.get_mem_props(ctx->phys, &ctx->mem_props);
+
+    float qprio = 1.0f;
+    VkDeviceQueueCreateInfo dqci;
+    memset(&dqci, 0, sizeof(dqci));
+    dqci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    dqci.queueFamilyIndex = ctx->qfam;
+    dqci.queueCount = 1U;
+    dqci.pQueuePriorities = &qprio;
+
+    VkDeviceCreateInfo dci;
+    memset(&dci, 0, sizeof(dci));
+    dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    dci.queueCreateInfoCount = 1U;
+    dci.pQueueCreateInfos = &dqci;
+
+    if (ctx->vk.create_device(ctx->phys, &dci, NULL, &ctx->dev) != VK_SUCCESS || !ctx->dev) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+    if (bind_device_procs(&ctx->vk, ctx->dev, &ctx->dp) != 0) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+    ctx->dp.pGetDeviceQueue(ctx->dev, ctx->qfam, 0U, &ctx->queue);
+
+    VkDescriptorSetLayoutBinding bindings[4];
+    memset(bindings, 0, sizeof(bindings));
+    for (uint32_t i = 0U; i < 4U; i++) {
+        bindings[i].binding = i;
+        bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        bindings[i].descriptorCount = 1U;
+        bindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+    VkDescriptorSetLayoutCreateInfo dslci;
+    memset(&dslci, 0, sizeof(dslci));
+    dslci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    dslci.bindingCount = 4U;
+    dslci.pBindings = bindings;
+    if (ctx->dp.pCreateDSL(ctx->dev, &dslci, NULL, &ctx->dsl) != VK_SUCCESS) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+
+    VkPushConstantRange pcr;
+    memset(&pcr, 0, sizeof(pcr));
+    pcr.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    pcr.offset = 0U;
+    pcr.size = (uint32_t)sizeof(zcc_spv_push_t);
+
+    VkPipelineLayoutCreateInfo plci;
+    memset(&plci, 0, sizeof(plci));
+    plci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    plci.setLayoutCount = 1U;
+    plci.pSetLayouts = &ctx->dsl;
+    plci.pushConstantRangeCount = 1U;
+    plci.pPushConstantRanges = &pcr;
+    if (ctx->dp.pCreatePL(ctx->dev, &plci, NULL, &ctx->pl) != VK_SUCCESS) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+
+    VkDescriptorPoolSize dps = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4U };
+    VkDescriptorPoolCreateInfo dpci;
+    memset(&dpci, 0, sizeof(dpci));
+    dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    dpci.maxSets = 1U;
+    dpci.poolSizeCount = 1U;
+    dpci.pPoolSizes = &dps;
+    if (ctx->dp.pCreateDPool(ctx->dev, &dpci, NULL, &ctx->dpool) != VK_SUCCESS) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+
+    VkDescriptorSetAllocateInfo dsai;
+    memset(&dsai, 0, sizeof(dsai));
+    dsai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    dsai.descriptorPool = ctx->dpool;
+    dsai.descriptorSetCount = 1U;
+    dsai.pSetLayouts = &ctx->dsl;
+    if (ctx->dp.pAllocDSets(ctx->dev, &dsai, &ctx->dset) != VK_SUCCESS) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+
+    VkCommandPoolCreateInfo cmdpci;
+    memset(&cmdpci, 0, sizeof(cmdpci));
+    cmdpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    cmdpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    cmdpci.queueFamilyIndex = ctx->qfam;
+    if (ctx->dp.pCreateCPool(ctx->dev, &cmdpci, NULL, &ctx->cpool) != VK_SUCCESS) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+
+    VkCommandBufferAllocateInfo cbai;
+    memset(&cbai, 0, sizeof(cbai));
+    cbai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cbai.commandPool = ctx->cpool;
+    cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cbai.commandBufferCount = 1U;
+    if (ctx->dp.pAllocCBufs(ctx->dev, &cbai, &ctx->cbuf) != VK_SUCCESS) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+
+    VkFenceCreateInfo fci;
+    memset(&fci, 0, sizeof(fci));
+    fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    if (ctx->dp.pCreateFence(ctx->dev, &fci, NULL, &ctx->fence) != VK_SUCCESS) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+
+    if (ctx->dbg.error_count > 0U) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+
+    *out_ctx = ctx;
+    return ZCC_STATUS_OK;
+}
+
+zcc_status_t zcc_vulkan_ctx_get_caps(
+    const zcc_vulkan_ctx_t *ctx,
+    zcc_vulkan_caps_t *out_caps
+) {
+    if (!out_caps) return ZCC_STATUS_ERR_NULL_PTR;
+    if (!ctx || ctx->magic != ZCC_VULKAN_CTX_MAGIC) return ZCC_STATUS_ERR_INVALID_ARG;
+    *out_caps = ctx->caps;
+    return ZCC_STATUS_OK;
+}
+
+static zcc_status_t vk_compile_shader_and_pipe(
+    zcc_vulkan_ctx_t *ctx,
+    const uint32_t *spv_words,
+    size_t spv_word_count,
+    VkShaderModule *out_smod,
+    VkPipeline *out_pipe,
+    char *err_buf,
+    size_t err_cap
+) {
+    *out_smod = VK_NULL_HANDLE;
+    *out_pipe = VK_NULL_HANDLE;
+
+    VkShaderModuleCreateInfo smci;
+    memset(&smci, 0, sizeof(smci));
+    smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    smci.codeSize = spv_word_count * sizeof(uint32_t);
+    smci.pCode = spv_words;
+    if (ctx->dp.pCreateShaderModule(ctx->dev, &smci, NULL, out_smod) != VK_SUCCESS || ctx->dbg.error_count > 0U) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateShaderModule failed/validation error: %s", ctx->dbg.first_msg);
+        if (*out_smod) { ctx->dp.pDestroyShaderModule(ctx->dev, *out_smod, NULL); *out_smod = VK_NULL_HANDLE; }
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+
+    VkComputePipelineCreateInfo cpci;
+    memset(&cpci, 0, sizeof(cpci));
+    cpci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    cpci.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    cpci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    cpci.stage.module = *out_smod;
+    cpci.stage.pName = "main";
+    cpci.layout = ctx->pl;
+    if (ctx->dp.pCreateComputePipes(ctx->dev, VK_NULL_HANDLE, 1U, &cpci, NULL, out_pipe) != VK_SUCCESS || ctx->dbg.error_count > 0U) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateComputePipelines failed: %s", ctx->dbg.first_msg);
+        if (*out_pipe) { ctx->dp.pDestroyPipe(ctx->dev, *out_pipe, NULL); *out_pipe = VK_NULL_HANDLE; }
+        ctx->dp.pDestroyShaderModule(ctx->dev, *out_smod, NULL);
+        *out_smod = VK_NULL_HANDLE;
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+    return ZCC_STATUS_OK;
+}
+
+static zcc_status_t vk_ensure_staging_buf(
+    zcc_vulkan_ctx_t *ctx,
+    uint32_t bi,
+    const zcc_tensor_desc_t *td,
+    uint32_t align_rem,
+    VkDeviceSize nbytes,
+    VkDeviceSize req,
+    const zcc_vulkan_caps_t *caps,
+    int *out_rebound,
+    uint32_t *flush_cnt,
+    char *err_buf,
+    size_t err_cap
+) {
+    vk_buf_alloc_t *b = &ctx->bufs[bi];
+    VkDeviceSize atom = caps->non_coherent_atom_size ? (VkDeviceSize)caps->non_coherent_atom_size : 64ULL;
+
+    if (b->buf == VK_NULL_HANDLE || b->buf_cap < req || !b->mapped) {
+        vk_free_buf(ctx->dev, &ctx->dp, b);
+        VkDeviceSize target_cap = req;
+        if (ctx->descriptors_bound && req * 2ULL >= req && req * 2ULL <= caps->max_storage_buffer_range) {
+            target_cap = req * 2ULL;
+        }
+
+        VkBufferCreateInfo bci;
+        memset(&bci, 0, sizeof(bci));
+        bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bci.size = target_cap;
+        bci.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        if (ctx->dp.pCreateBuffer(ctx->dev, &bci, NULL, &b->buf) != VK_SUCCESS) {
+            if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateBuffer failed");
+            return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+        }
+
+        VkMemoryRequirements mr;
+        ctx->dp.pGetBufMemReq(ctx->dev, b->buf, &mr);
+        uint32_t mtype = 0U;
+        if (find_mem_type(&ctx->mem_props, mr.memoryTypeBits, &mtype, &b->is_coherent) != 0) {
+            vk_free_buf(ctx->dev, &ctx->dp, b);
+            if (err_buf && err_cap) snprintf(err_buf, err_cap, "No host-visible memory type available");
+            return ZCC_STATUS_ERR_UNSUPPORTED_HW;
+        }
+        b->alloc_size = align_up_u64(mr.size, atom);
+        b->buf_cap = target_cap;
+
+        VkMemoryAllocateInfo mai;
+        memset(&mai, 0, sizeof(mai));
+        mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        mai.allocationSize = b->alloc_size;
+        mai.memoryTypeIndex = mtype;
+        if (ctx->dp.pAllocateMemory(ctx->dev, &mai, NULL, &b->mem) != VK_SUCCESS) {
+            vk_free_buf(ctx->dev, &ctx->dp, b);
+            if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkAllocateMemory failed");
+            return ZCC_STATUS_ERR_OOM;
+        }
+        if (ctx->dp.pBindBufferMemory(ctx->dev, b->buf, b->mem, 0ULL) != VK_SUCCESS) {
+            vk_free_buf(ctx->dev, &ctx->dp, b);
+            return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+        }
+        if (ctx->dp.pMapMemory(ctx->dev, b->mem, 0ULL, b->alloc_size, 0U, &b->mapped) != VK_SUCCESS || !b->mapped) {
+            vk_free_buf(ctx->dev, &ctx->dp, b);
+            return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+        }
+        *out_rebound = 1;
+    }
+
+    b->base_off = align_rem;
+    b->data_bytes = nbytes;
+    memset(b->mapped, 0, (size_t)req);
+    if (td && td->data && td->nbytes > 0ULL) {
+        memcpy((uint8_t *)b->mapped + b->base_off, td->data, (size_t)td->nbytes);
+    }
+    if (!b->is_coherent && ctx->dp.pFlushRanges) {
+        VkMappedMemoryRange rng = { VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, NULL, b->mem, 0ULL, VK_WHOLE_SIZE };
+        ctx->dp.pFlushRanges(ctx->dev, 1U, &rng);
+        (*flush_cnt)++;
+    }
+    return ZCC_STATUS_OK;
+}
+
+static zcc_status_t vk_dispatch_on_ctx(
+    zcc_vulkan_ctx_t *ctx,
+    zcc_op_t op,
+    const zcc_tensor_desc_t *inputs,
+    uint32_t num_inputs,
+    zcc_tensor_desc_t *output,
+    const zcc_vulkan_exec_options_t *opts,
+    const zcc_vulkan_caps_t *caps,
+    const uint32_t *override_spv_words,
+    size_t override_spv_count,
+    const char *override_sha_hex,
+    const zcc_spv_push_t *in_push,
+    uint32_t gx,
+    uint32_t gy,
+    uint32_t gz,
+    char *spirv_sha_out,
+    uint32_t *out_word_count,
+    uint32_t *out_barriers,
+    uint32_t *out_flushes,
+    uint32_t *out_invalidates,
+    uint32_t *out_val_errors,
+    char *err_buf,
+    size_t err_cap
+) {
+    if (!ctx || ctx->magic != ZCC_VULKAN_CTX_MAGIC) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "Invalid persistent Vulkan context");
+        return ZCC_STATUS_ERR_INVALID_ARG;
+    }
+    if (opts && opts->require_validation_layer && (!ctx->validation_enabled || !caps->validation_layer_available)) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "VK_LAYER_KHRONOS_validation required but missing or disabled");
+        return ZCC_STATUS_ERR_BACKEND_UNAVAILABLE;
+    }
+    if (opts && opts->require_hardware_gpu &&
+        ctx->caps.physical_device_type != ZCC_VK_DEVTYPE_DISCRETE_GPU &&
+        ctx->caps.physical_device_type != ZCC_VK_DEVTYPE_INTEGRATED_GPU) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "Hardware GPU required; persistent context bound non-GPU device");
+        return ZCC_STATUS_ERR_UNSUPPORTED_HW;
+    }
+
+    ctx->dbg.error_count = 0U;
+    ctx->dbg.first_msg[0] = '\0';
+
+    /* Validate all 4 staging buffer bounds up-front before touching persistent buffers */
+    const zcc_tensor_desc_t *tds[4] = { NULL, NULL, NULL, NULL };
+    uint32_t align_rems[4] = { 0U, 0U, 0U, 0U };
+    VkDeviceSize nbytes_arr[4] = { 16ULL, 16ULL, 16ULL, 16ULL };
+    VkDeviceSize reqs[4] = { 16ULL, 16ULL, 16ULL, 16ULL };
+    for (uint32_t bi = 0U; bi < 4U; bi++) {
+        tds[bi] = (bi < num_inputs) ? &inputs[bi] : (bi == 3U ? output : NULL);
+        align_rems[bi] = (bi < 3U && tds[bi]) ? (uint32_t)(((uintptr_t)tds[bi]->data) & 3U) : 0U;
+        nbytes_arr[bi] = tds[bi] ? (VkDeviceSize)tds[bi]->nbytes : 16ULL;
+        reqs[bi] = align_up_u64((VkDeviceSize)align_rems[bi] + nbytes_arr[bi] + 4ULL, 16ULL);
+        if (reqs[bi] > caps->max_storage_buffer_range) {
+            if (err_buf && err_cap) snprintf(err_buf, err_cap, "Buffer %u exceeds maxStorageBufferRange", bi);
+            return ZCC_STATUS_ERR_UNSUPPORTED_HW;
+        }
+    }
+
+    uint32_t barrier_cnt = 0U, flush_cnt = 0U, inv_cnt = 0U;
+    int need_desc_update = ctx->descriptors_bound ? 0 : 1;
+    for (uint32_t bi = 0U; bi < 4U; bi++) {
+        zcc_status_t bst = vk_ensure_staging_buf(
+            ctx, bi, tds[bi], align_rems[bi], nbytes_arr[bi], reqs[bi],
+            caps, &need_desc_update, &flush_cnt, err_buf, err_cap
+        );
+        if (bst != ZCC_STATUS_OK) {
+            ctx->descriptors_bound = 0;
+            if (out_val_errors) *out_val_errors = ctx->dbg.error_count;
+            return bst;
+        }
+    }
+
+    if (need_desc_update) {
+        VkDescriptorBufferInfo dbi[4];
+        VkWriteDescriptorSet wds[4];
+        memset(dbi, 0, sizeof(dbi));
+        memset(wds, 0, sizeof(wds));
+        for (uint32_t i = 0U; i < 4U; i++) {
+            dbi[i].buffer = ctx->bufs[i].buf;
+            dbi[i].offset = 0ULL;
+            dbi[i].range = VK_WHOLE_SIZE;
+            wds[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            wds[i].dstSet = ctx->dset;
+            wds[i].dstBinding = i;
+            wds[i].descriptorCount = 1U;
+            wds[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            wds[i].pBufferInfo = &dbi[i];
+        }
+        ctx->dp.pUpdateDSets(ctx->dev, 4U, wds, 0U, NULL);
+        ctx->descriptors_bound = 1;
+    }
+
+    zcc_spv_push_t push = *in_push;
+    push.off_a_bytes = ctx->bufs[0].base_off;
+    push.off_b_bytes = ctx->bufs[1].base_off;
+    push.off_c_bytes = ctx->bufs[2].base_off;
+    push.off_o_bytes = ctx->bufs[3].base_off;
+
+    VkShaderModule tmp_smod = VK_NULL_HANDLE;
+    VkPipeline tmp_pipe = VK_NULL_HANDLE;
+    VkPipeline active_pipe = VK_NULL_HANDLE;
+    zcc_status_t ret = ZCC_STATUS_ERR_BACKEND_RUNTIME;
+
+    if (override_spv_words && override_spv_count > 0U) {
+        if (spirv_sha_out && override_sha_hex) snprintf(spirv_sha_out, 65U, "%s", override_sha_hex);
+        if (out_word_count) *out_word_count = (uint32_t)override_spv_count;
+        ret = vk_compile_shader_and_pipe(ctx, override_spv_words, override_spv_count, &tmp_smod, &tmp_pipe, err_buf, err_cap);
+        if (ret != ZCC_STATUS_OK) goto out;
+        active_pipe = tmp_pipe;
+    } else if ((uint32_t)op < ZCC_VK_MAX_CACHED_OPS) {
+        uint32_t opx = (uint32_t)op;
+        if (ctx->cached_pipes[opx] == VK_NULL_HANDLE) {
+            zcc_spv_module_t spv;
+            memset(&spv, 0, sizeof(spv));
+            if (zcc_spirv_emit_op_kernel(opx, &spv) != 0) {
+                if (err_buf && err_cap) snprintf(err_buf, err_cap, "Failed emitting SPIR-V kernel");
+                goto out;
+            }
+            zcc_sha256_hex(spv.words, spv.word_count * sizeof(uint32_t), ctx->cached_sha[opx]);
+            ctx->cached_words[opx] = (uint32_t)spv.word_count;
+            ret = vk_compile_shader_and_pipe(ctx, spv.words, spv.word_count, &ctx->cached_smods[opx], &ctx->cached_pipes[opx], err_buf, err_cap);
+            zcc_spirv_module_free(&spv);
+            if (ret != ZCC_STATUS_OK) goto out;
+        }
+        if (spirv_sha_out) snprintf(spirv_sha_out, 65U, "%s", ctx->cached_sha[opx]);
+        if (out_word_count) *out_word_count = ctx->cached_words[opx];
+        active_pipe = ctx->cached_pipes[opx];
+    } else {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "Unsupported opcode for Vulkan compute");
+        ret = ZCC_STATUS_ERR_INVALID_OP;
+        goto out;
+    }
+
+    ret = ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    if (ctx->dp.pResetFences(ctx->dev, 1U, &ctx->fence) != VK_SUCCESS) goto out;
+    if (ctx->dp.pResetCPool(ctx->dev, ctx->cpool, 0U) != VK_SUCCESS) goto out;
+
+    VkCommandBufferBeginInfo cbbi;
+    memset(&cbbi, 0, sizeof(cbbi));
+    cbbi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cbbi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    if (ctx->dp.pBeginCBuf(ctx->cbuf, &cbbi) != VK_SUCCESS) goto out;
+
+    /* Explicit Barrier 1: Host write -> Compute shader read/write visibility */
+    VkMemoryBarrier pre_bar;
+    memset(&pre_bar, 0, sizeof(pre_bar));
+    pre_bar.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    pre_bar.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+    pre_bar.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    ctx->dp.pCmdBarrier(ctx->cbuf, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                        0U, 1U, &pre_bar, 0U, NULL, 0U, NULL);
+    barrier_cnt++;
+
+    ctx->dp.pCmdBindPipe(ctx->cbuf, VK_PIPELINE_BIND_POINT_COMPUTE, active_pipe);
+    ctx->dp.pCmdBindDSets(ctx->cbuf, VK_PIPELINE_BIND_POINT_COMPUTE, ctx->pl, 0U, 1U, &ctx->dset, 0U, NULL);
+    ctx->dp.pCmdPush(ctx->cbuf, ctx->pl, VK_SHADER_STAGE_COMPUTE_BIT, 0U, (uint32_t)sizeof(push), &push);
+    ctx->dp.pCmdDispatch(ctx->cbuf, gx, gy, gz);
+
+    /* Explicit Barrier 2: Compute shader write -> Host read visibility */
+    VkMemoryBarrier post_bar;
+    memset(&post_bar, 0, sizeof(post_bar));
+    post_bar.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    post_bar.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    post_bar.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    ctx->dp.pCmdBarrier(ctx->cbuf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_HOST_BIT,
+                        0U, 1U, &post_bar, 0U, NULL, 0U, NULL);
+    barrier_cnt++;
+
+    if (ctx->dp.pEndCBuf(ctx->cbuf) != VK_SUCCESS) goto out;
+
+    VkSubmitInfo si;
+    memset(&si, 0, sizeof(si));
+    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    si.commandBufferCount = 1U;
+    si.pCommandBuffers = &ctx->cbuf;
+    if (ctx->dp.pQueueSubmit(ctx->queue, 1U, &si, ctx->fence) != VK_SUCCESS) goto out;
+
+    if (ctx->dp.pWaitForFences(ctx->dev, 1U, &ctx->fence, VK_TRUE, 30000000000ULL) != VK_SUCCESS) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkWaitForFences timed out or failed");
+        ctx->dp.pDeviceWaitIdle(ctx->dev);
+        goto out;
+    }
+
+    if (!ctx->bufs[3].is_coherent && ctx->dp.pInvalidateRanges) {
+        VkMappedMemoryRange rng = { VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, NULL, ctx->bufs[3].mem, 0ULL, VK_WHOLE_SIZE };
+        ctx->dp.pInvalidateRanges(ctx->dev, 1U, &rng);
+        inv_cnt++;
+    }
+    memcpy(output->data, (const uint8_t *)ctx->bufs[3].mapped + ctx->bufs[3].base_off, (size_t)output->nbytes);
+
+    if (ctx->dbg.error_count > 0U) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "Vulkan validation errors (%u): %s", ctx->dbg.error_count, ctx->dbg.first_msg);
+        goto out;
+    }
+
+    ret = ZCC_STATUS_OK;
+
+out:
+    if (tmp_pipe) ctx->dp.pDestroyPipe(ctx->dev, tmp_pipe, NULL);
+    if (tmp_smod) ctx->dp.pDestroyShaderModule(ctx->dev, tmp_smod, NULL);
+    if (out_barriers) *out_barriers = barrier_cnt;
+    if (out_flushes) *out_flushes = flush_cnt;
+    if (out_invalidates) *out_invalidates = inv_cnt;
+    if (out_val_errors) *out_val_errors = ctx->dbg.error_count;
+    return ret;
+}
+
+zcc_status_t zcc_vulkan_exec_on_ctx(
+    zcc_vulkan_ctx_t *ctx,
     zcc_op_t op,
     const zcc_tensor_desc_t *inputs,
     uint32_t num_inputs,
@@ -478,504 +1209,82 @@ zcc_status_t zcc_vulkan_exec(
         return ZCC_STATUS_ERR_MISALIGNED;
     }
 
-    zcc_spv_module_t spv;
-    memset(&spv, 0, sizeof(spv));
-    int owns_spv = 0;
-    const uint32_t *spv_words = NULL;
-    size_t spv_word_count = 0U;
+    const uint32_t *ov_words = NULL;
+    size_t ov_count = 0U;
+    char ov_sha[65];
+    ov_sha[0] = '\0';
     if (opts && opts->spirv_override_words && opts->spirv_override_word_count > 0U) {
-        spv_words = opts->spirv_override_words;
-        spv_word_count = opts->spirv_override_word_count;
-    } else {
-        if (zcc_spirv_emit_op_kernel((uint32_t)op, &spv) != 0) {
-            if (err_buf && err_cap) snprintf(err_buf, err_cap, "Failed emitting SPIR-V kernel");
-            return ZCC_STATUS_ERR_BACKEND_RUNTIME;
-        }
-        spv_words = spv.words;
-        spv_word_count = spv.word_count;
-        owns_spv = 1;
+        ov_words = opts->spirv_override_words;
+        ov_count = opts->spirv_override_word_count;
+        zcc_sha256_hex(ov_words, ov_count * sizeof(uint32_t), ov_sha);
+        if (spirv_sha_out) snprintf(spirv_sha_out, 65U, "%s", ov_sha);
+        if (out_word_count) *out_word_count = (uint32_t)ov_count;
     }
-
-    if (spirv_sha_out) {
-        zcc_sha256_hex(spv_words, spv_word_count * sizeof(uint32_t), spirv_sha_out);
-    }
-    if (out_word_count) *out_word_count = (uint32_t)spv_word_count;
 
     uint32_t gx = 1U, gy = 1U, gz = 1U;
     zcc_spirv_dispatch_grid((uint32_t)op, push.dim_m, push.dim_n, push.dim_k, &gx, &gy, &gz);
     if (gx > caps->max_workgroup_count[0] || gy > caps->max_workgroup_count[1] || gz > caps->max_workgroup_count[2]) {
-        if (owns_spv) zcc_spirv_module_free(&spv);
         if (err_buf && err_cap) snprintf(err_buf, err_cap, "Dispatch grid exceeds maxComputeWorkGroupCount");
         return ZCC_STATUS_ERR_UNSUPPORTED_HW;
     }
 
-    vk_lib_t vk;
-    if (load_vk_lib(&vk) != 0) {
-        if (owns_spv) zcc_spirv_module_free(&spv);
-        if (err_buf && err_cap) snprintf(err_buf, err_cap, "Unable to open libvulkan.so.1");
-        return ZCC_STATUS_ERR_BACKEND_UNAVAILABLE;
-    }
-
-    zcc_status_t ret = ZCC_STATUS_ERR_BACKEND_RUNTIME;
-    zcc_vk_dbg_state_t dbg;
-    memset(&dbg, 0, sizeof(dbg));
-
-    int val_avail = has_validation_layer(&vk);
-    int dbg_ext = has_debug_utils_ext(&vk);
-    if (opts && opts->require_validation_layer && (!val_avail || !caps->validation_layer_available)) {
-        unload_vk_lib(&vk);
-        if (owns_spv) zcc_spirv_module_free(&spv);
+    if (opts && opts->require_validation_layer && !caps->validation_layer_available) {
         if (err_buf && err_cap) snprintf(err_buf, err_cap, "VK_LAYER_KHRONOS_validation required but missing or restricted");
         return ZCC_STATUS_ERR_BACKEND_UNAVAILABLE;
     }
 
-    const char *inst_layers[1] = { "VK_LAYER_KHRONOS_validation" };
-    const char *inst_exts[1] = { VK_EXT_DEBUG_UTILS_EXTENSION_NAME };
-
-    VkApplicationInfo app;
-    memset(&app, 0, sizeof(app));
-    app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app.pApplicationName = "zcc_track21b";
-    app.applicationVersion = 1;
-    app.pEngineName = "zcc_vulkan";
-    app.engineVersion = 1;
-    app.apiVersion = VK_API_VERSION_1_0;
-
-    VkDebugUtilsMessengerCreateInfoEXT dbg_ci;
-    memset(&dbg_ci, 0, sizeof(dbg_ci));
-    dbg_ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    dbg_ci.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
-                             VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-    dbg_ci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                         VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    dbg_ci.pfnUserCallback = vk_dbg_cb;
-    dbg_ci.pUserData = &dbg;
-
-    int use_val = val_avail ? 1 : 0;
-    int use_dbg = (use_val && dbg_ext) ? 1 : 0;
-
-    VkInstanceCreateInfo ici;
-    memset(&ici, 0, sizeof(ici));
-    ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    ici.pApplicationInfo = &app;
-    if (use_val) {
-        ici.enabledLayerCount = 1U;
-        ici.ppEnabledLayerNames = inst_layers;
-    }
-    if (use_dbg) {
-        ici.enabledExtensionCount = 1U;
-        ici.ppEnabledExtensionNames = inst_exts;
-        ici.pNext = &dbg_ci;
+    if (ctx) {
+        return vk_dispatch_on_ctx(
+            ctx, op, inputs, num_inputs, output, opts, caps,
+            ov_words, ov_count, ov_sha, &push, gx, gy, gz,
+            spirv_sha_out, out_word_count,
+            out_barriers, out_flushes, out_invalidates, out_val_errors,
+            err_buf, err_cap
+        );
     }
 
-    VkInstance inst = VK_NULL_HANDLE;
-    VkDebugUtilsMessengerEXT dbg_msgr = VK_NULL_HANDLE;
-    PFN_vkCreateDebugUtilsMessengerEXT create_dbg = NULL;
-    PFN_vkDestroyDebugUtilsMessengerEXT destroy_dbg = NULL;
-
-    VkDevice dev = VK_NULL_HANDLE;
-    VkQueue queue = VK_NULL_HANDLE;
-    VkShaderModule smod = VK_NULL_HANDLE;
-    VkDescriptorSetLayout dsl = VK_NULL_HANDLE;
-    VkPipelineLayout pl = VK_NULL_HANDLE;
-    VkPipeline pipe = VK_NULL_HANDLE;
-    VkDescriptorPool dpool = VK_NULL_HANDLE;
-    VkDescriptorSet dset = VK_NULL_HANDLE;
-    VkCommandPool cpool = VK_NULL_HANDLE;
-    VkCommandBuffer cbuf = VK_NULL_HANDLE;
-    VkFence fence = VK_NULL_HANDLE;
-    vk_buf_alloc_t bufs[4];
-    memset(bufs, 0, sizeof(bufs));
-
-    /* Device function pointers resolved cleanly through vkGetDeviceProcAddr */
-    PFN_vkDestroyDevice pDestroyDevice = NULL;
-    PFN_vkGetDeviceQueue pGetDeviceQueue = NULL;
-    PFN_vkCreateBuffer pCreateBuffer = NULL;
-    PFN_vkDestroyBuffer pDestroyBuffer = NULL;
-    PFN_vkGetBufferMemoryRequirements pGetBufMemReq = NULL;
-    PFN_vkAllocateMemory pAllocateMemory = NULL;
-    PFN_vkFreeMemory pFreeMemory = NULL;
-    PFN_vkBindBufferMemory pBindBufferMemory = NULL;
-    PFN_vkMapMemory pMapMemory = NULL;
-    PFN_vkUnmapMemory pUnmapMemory = NULL;
-    PFN_vkFlushMappedMemoryRanges pFlushRanges = NULL;
-    PFN_vkInvalidateMappedMemoryRanges pInvalidateRanges = NULL;
-    PFN_vkCreateShaderModule pCreateShaderModule = NULL;
-    PFN_vkDestroyShaderModule pDestroyShaderModule = NULL;
-    PFN_vkCreateDescriptorSetLayout pCreateDSL = NULL;
-    PFN_vkDestroyDescriptorSetLayout pDestroyDSL = NULL;
-    PFN_vkCreatePipelineLayout pCreatePL = NULL;
-    PFN_vkDestroyPipelineLayout pDestroyPL = NULL;
-    PFN_vkCreateComputePipelines pCreateComputePipes = NULL;
-    PFN_vkDestroyPipeline pDestroyPipe = NULL;
-    PFN_vkCreateDescriptorPool pCreateDPool = NULL;
-    PFN_vkDestroyDescriptorPool pDestroyDPool = NULL;
-    PFN_vkAllocateDescriptorSets pAllocDSets = NULL;
-    PFN_vkUpdateDescriptorSets pUpdateDSets = NULL;
-    PFN_vkCreateCommandPool pCreateCPool = NULL;
-    PFN_vkDestroyCommandPool pDestroyCPool = NULL;
-    PFN_vkAllocateCommandBuffers pAllocCBufs = NULL;
-    PFN_vkBeginCommandBuffer pBeginCBuf = NULL;
-    PFN_vkEndCommandBuffer pEndCBuf = NULL;
-    PFN_vkCmdBindPipeline pCmdBindPipe = NULL;
-    PFN_vkCmdBindDescriptorSets pCmdBindDSets = NULL;
-    PFN_vkCmdPushConstants pCmdPush = NULL;
-    PFN_vkCmdDispatch pCmdDispatch = NULL;
-    PFN_vkCmdPipelineBarrier pCmdBarrier = NULL;
-    PFN_vkCreateFence pCreateFence = NULL;
-    PFN_vkDestroyFence pDestroyFence = NULL;
-    PFN_vkQueueSubmit pQueueSubmit = NULL;
-    PFN_vkWaitForFences pWaitForFences = NULL;
-    PFN_vkDeviceWaitIdle pDeviceWaitIdle = NULL;
-
-    uint32_t barrier_cnt = 0U, flush_cnt = 0U, inv_cnt = 0U;
-
-    if (vk.create_instance(&ici, NULL, &inst) != VK_SUCCESS || !inst) {
-        if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateInstance failed");
-        goto cleanup;
-    }
-    bind_instance_procs(&vk, inst);
-    if (use_dbg) {
-        create_dbg  = (PFN_vkCreateDebugUtilsMessengerEXT)vk.gipa(inst, "vkCreateDebugUtilsMessengerEXT");
-        destroy_dbg = (PFN_vkDestroyDebugUtilsMessengerEXT)vk.gipa(inst, "vkDestroyDebugUtilsMessengerEXT");
-        if (create_dbg) create_dbg(inst, &dbg_ci, NULL, &dbg_msgr);
-    }
-
-    VkPhysicalDevice phys = VK_NULL_HANDLE;
-    uint32_t qfam = 0U;
+    zcc_vulkan_ctx_t *tmp_ctx = NULL;
     uint32_t req_gpu = (opts && opts->require_hardware_gpu) ? 1U : 0U;
-    if (pick_physical_device(&vk, inst, req_gpu, &phys, &qfam, NULL) != 0) {
-        ret = ZCC_STATUS_ERR_UNSUPPORTED_HW;
-        if (err_buf && err_cap) snprintf(err_buf, err_cap, "No qualifying Vulkan physical device");
-        goto cleanup;
+    zcc_status_t cst = zcc_vulkan_ctx_create(1, req_gpu, &tmp_ctx);
+    if (cst != ZCC_STATUS_OK || !tmp_ctx) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, cst == ZCC_STATUS_ERR_UNSUPPORTED_HW ? "No qualifying Vulkan physical device" : "Unable to initialize Vulkan context");
+        return cst == ZCC_STATUS_OK ? ZCC_STATUS_ERR_BACKEND_UNAVAILABLE : cst;
     }
 
-    float qprio = 1.0f;
-    VkDeviceQueueCreateInfo dqci;
-    memset(&dqci, 0, sizeof(dqci));
-    dqci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    dqci.queueFamilyIndex = qfam;
-    dqci.queueCount = 1U;
-    dqci.pQueuePriorities = &qprio;
+    zcc_status_t dst = vk_dispatch_on_ctx(
+        tmp_ctx, op, inputs, num_inputs, output, opts, caps,
+        ov_words, ov_count, ov_sha, &push, gx, gy, gz,
+        spirv_sha_out, out_word_count,
+        out_barriers, out_flushes, out_invalidates, out_val_errors,
+        err_buf, err_cap
+    );
+    zcc_vulkan_ctx_destroy(tmp_ctx);
+    return dst;
+}
 
-    VkDeviceCreateInfo dci;
-    memset(&dci, 0, sizeof(dci));
-    dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    dci.queueCreateInfoCount = 1U;
-    dci.pQueueCreateInfos = &dqci;
+zcc_status_t zcc_vulkan_exec(
+    zcc_op_t op,
+    const zcc_tensor_desc_t *inputs,
+    uint32_t num_inputs,
+    zcc_tensor_desc_t *output,
+    const zcc_vulkan_exec_options_t *opts,
+    const zcc_vulkan_caps_t *caps,
+    char *spirv_sha_out,
+    uint32_t *out_word_count,
+    uint32_t *out_barriers,
+    uint32_t *out_flushes,
+    uint32_t *out_invalidates,
+    uint32_t *out_val_errors,
+    char *err_buf,
+    size_t err_cap
+) {
+    return zcc_vulkan_exec_on_ctx(
+        NULL, op, inputs, num_inputs, output, opts, caps,
+        spirv_sha_out, out_word_count,
+        out_barriers, out_flushes, out_invalidates, out_val_errors,
+        err_buf, err_cap
+    );
 
-    if (vk.create_device(phys, &dci, NULL, &dev) != VK_SUCCESS || !dev) {
-        if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateDevice failed");
-        goto cleanup;
-    }
 
-    pDestroyDevice       = (PFN_vkDestroyDevice)vk.gdpa(dev, "vkDestroyDevice");
-    pGetDeviceQueue      = (PFN_vkGetDeviceQueue)vk.gdpa(dev, "vkGetDeviceQueue");
-    pCreateBuffer        = (PFN_vkCreateBuffer)vk.gdpa(dev, "vkCreateBuffer");
-    pDestroyBuffer       = (PFN_vkDestroyBuffer)vk.gdpa(dev, "vkDestroyBuffer");
-    pGetBufMemReq        = (PFN_vkGetBufferMemoryRequirements)vk.gdpa(dev, "vkGetBufferMemoryRequirements");
-    pAllocateMemory      = (PFN_vkAllocateMemory)vk.gdpa(dev, "vkAllocateMemory");
-    pFreeMemory          = (PFN_vkFreeMemory)vk.gdpa(dev, "vkFreeMemory");
-    pBindBufferMemory    = (PFN_vkBindBufferMemory)vk.gdpa(dev, "vkBindBufferMemory");
-    pMapMemory           = (PFN_vkMapMemory)vk.gdpa(dev, "vkMapMemory");
-    pUnmapMemory         = (PFN_vkUnmapMemory)vk.gdpa(dev, "vkUnmapMemory");
-    pFlushRanges         = (PFN_vkFlushMappedMemoryRanges)vk.gdpa(dev, "vkFlushMappedMemoryRanges");
-    pInvalidateRanges    = (PFN_vkInvalidateMappedMemoryRanges)vk.gdpa(dev, "vkInvalidateMappedMemoryRanges");
-    pCreateShaderModule  = (PFN_vkCreateShaderModule)vk.gdpa(dev, "vkCreateShaderModule");
-    pDestroyShaderModule = (PFN_vkDestroyShaderModule)vk.gdpa(dev, "vkDestroyShaderModule");
-    pCreateDSL           = (PFN_vkCreateDescriptorSetLayout)vk.gdpa(dev, "vkCreateDescriptorSetLayout");
-    pDestroyDSL          = (PFN_vkDestroyDescriptorSetLayout)vk.gdpa(dev, "vkDestroyDescriptorSetLayout");
-    pCreatePL            = (PFN_vkCreatePipelineLayout)vk.gdpa(dev, "vkCreatePipelineLayout");
-    pDestroyPL           = (PFN_vkDestroyPipelineLayout)vk.gdpa(dev, "vkDestroyPipelineLayout");
-    pCreateComputePipes  = (PFN_vkCreateComputePipelines)vk.gdpa(dev, "vkCreateComputePipelines");
-    pDestroyPipe         = (PFN_vkDestroyPipeline)vk.gdpa(dev, "vkDestroyPipeline");
-    pCreateDPool         = (PFN_vkCreateDescriptorPool)vk.gdpa(dev, "vkCreateDescriptorPool");
-    pDestroyDPool        = (PFN_vkDestroyDescriptorPool)vk.gdpa(dev, "vkDestroyDescriptorPool");
-    pAllocDSets          = (PFN_vkAllocateDescriptorSets)vk.gdpa(dev, "vkAllocateDescriptorSets");
-    pUpdateDSets         = (PFN_vkUpdateDescriptorSets)vk.gdpa(dev, "vkUpdateDescriptorSets");
-    pCreateCPool         = (PFN_vkCreateCommandPool)vk.gdpa(dev, "vkCreateCommandPool");
-    pDestroyCPool        = (PFN_vkDestroyCommandPool)vk.gdpa(dev, "vkDestroyCommandPool");
-    pAllocCBufs          = (PFN_vkAllocateCommandBuffers)vk.gdpa(dev, "vkAllocateCommandBuffers");
-    pBeginCBuf           = (PFN_vkBeginCommandBuffer)vk.gdpa(dev, "vkBeginCommandBuffer");
-    pEndCBuf             = (PFN_vkEndCommandBuffer)vk.gdpa(dev, "vkEndCommandBuffer");
-    pCmdBindPipe         = (PFN_vkCmdBindPipeline)vk.gdpa(dev, "vkCmdBindPipeline");
-    pCmdBindDSets        = (PFN_vkCmdBindDescriptorSets)vk.gdpa(dev, "vkCmdBindDescriptorSets");
-    pCmdPush             = (PFN_vkCmdPushConstants)vk.gdpa(dev, "vkCmdPushConstants");
-    pCmdDispatch         = (PFN_vkCmdDispatch)vk.gdpa(dev, "vkCmdDispatch");
-    pCmdBarrier          = (PFN_vkCmdPipelineBarrier)vk.gdpa(dev, "vkCmdPipelineBarrier");
-    pCreateFence         = (PFN_vkCreateFence)vk.gdpa(dev, "vkCreateFence");
-    pDestroyFence        = (PFN_vkDestroyFence)vk.gdpa(dev, "vkDestroyFence");
-    pQueueSubmit         = (PFN_vkQueueSubmit)vk.gdpa(dev, "vkQueueSubmit");
-    pWaitForFences       = (PFN_vkWaitForFences)vk.gdpa(dev, "vkWaitForFences");
-    pDeviceWaitIdle      = (PFN_vkDeviceWaitIdle)vk.gdpa(dev, "vkDeviceWaitIdle");
 
-    pGetDeviceQueue(dev, qfam, 0U, &queue);
-
-    VkPhysicalDeviceMemoryProperties mp;
-    vk.get_mem_props(phys, &mp);
-    VkDeviceSize atom = caps->non_coherent_atom_size ? (VkDeviceSize)caps->non_coherent_atom_size : 64ULL;
-
-    /* Create and populate 4 storage buffers (binding 0..2 inputs/dummies, binding 3 output) */
-    for (uint32_t bi = 0U; bi < 4U; bi++) {
-        const zcc_tensor_desc_t *td = (bi < num_inputs) ? &inputs[bi] : (bi == 3U ? output : NULL);
-        uint32_t align_rem = td ? (uint32_t)(((uintptr_t)td->data) & 3U) : 0U;
-        if (bi == 3U) align_rem = 0U; /* keep output staging base 4-byte aligned on device */
-        VkDeviceSize nbytes = td ? (VkDeviceSize)td->nbytes : 16ULL;
-        VkDeviceSize req = align_up_u64((VkDeviceSize)align_rem + nbytes + 4ULL, 16ULL);
-        if (req > caps->max_storage_buffer_range) {
-            ret = ZCC_STATUS_ERR_UNSUPPORTED_HW;
-            if (err_buf && err_cap) snprintf(err_buf, err_cap, "Buffer %u exceeds maxStorageBufferRange", bi);
-            goto cleanup;
-        }
-        bufs[bi].base_off = align_rem;
-        bufs[bi].data_bytes = nbytes;
-
-        VkBufferCreateInfo bci;
-        memset(&bci, 0, sizeof(bci));
-        bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bci.size = req;
-        bci.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        if (pCreateBuffer(dev, &bci, NULL, &bufs[bi].buf) != VK_SUCCESS) {
-            if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateBuffer failed");
-            goto cleanup;
-        }
-
-        VkMemoryRequirements mr;
-        pGetBufMemReq(dev, bufs[bi].buf, &mr);
-        uint32_t mtype = 0U;
-        if (find_mem_type(&mp, mr.memoryTypeBits, &mtype, &bufs[bi].is_coherent) != 0) {
-            ret = ZCC_STATUS_ERR_UNSUPPORTED_HW;
-            if (err_buf && err_cap) snprintf(err_buf, err_cap, "No host-visible memory type available");
-            goto cleanup;
-        }
-        bufs[bi].alloc_size = align_up_u64(mr.size, atom);
-
-        VkMemoryAllocateInfo mai;
-        memset(&mai, 0, sizeof(mai));
-        mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        mai.allocationSize = bufs[bi].alloc_size;
-        mai.memoryTypeIndex = mtype;
-        if (pAllocateMemory(dev, &mai, NULL, &bufs[bi].mem) != VK_SUCCESS) {
-            ret = ZCC_STATUS_ERR_OOM;
-            if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkAllocateMemory failed");
-            goto cleanup;
-        }
-        if (pBindBufferMemory(dev, bufs[bi].buf, bufs[bi].mem, 0ULL) != VK_SUCCESS) goto cleanup;
-
-        void *mapped = NULL;
-        if (pMapMemory(dev, bufs[bi].mem, 0ULL, bufs[bi].alloc_size, 0U, &mapped) != VK_SUCCESS || !mapped) goto cleanup;
-        memset(mapped, 0, (size_t)req);
-        if (td && td->data && td->nbytes > 0ULL) {
-            memcpy((uint8_t *)mapped + bufs[bi].base_off, td->data, (size_t)td->nbytes);
-        }
-        if (!bufs[bi].is_coherent && pFlushRanges) {
-            VkMappedMemoryRange rng = { VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, NULL, bufs[bi].mem, 0ULL, VK_WHOLE_SIZE };
-            pFlushRanges(dev, 1U, &rng);
-            flush_cnt++;
-        }
-        pUnmapMemory(dev, bufs[bi].mem);
-    }
-
-    push.off_a_bytes = bufs[0].base_off;
-    push.off_b_bytes = bufs[1].base_off;
-    push.off_c_bytes = bufs[2].base_off;
-    push.off_o_bytes = bufs[3].base_off;
-
-    VkShaderModuleCreateInfo smci;
-    memset(&smci, 0, sizeof(smci));
-    smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    smci.codeSize = spv_word_count * sizeof(uint32_t);
-    smci.pCode = spv_words;
-    if (pCreateShaderModule(dev, &smci, NULL, &smod) != VK_SUCCESS || dbg.error_count > 0U) {
-        if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateShaderModule failed/validation error: %s", dbg.first_msg);
-        goto cleanup;
-    }
-
-    VkDescriptorSetLayoutBinding bindings[4];
-    memset(bindings, 0, sizeof(bindings));
-    for (uint32_t i = 0U; i < 4U; i++) {
-        bindings[i].binding = i;
-        bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        bindings[i].descriptorCount = 1U;
-        bindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-    }
-    VkDescriptorSetLayoutCreateInfo dslci;
-    memset(&dslci, 0, sizeof(dslci));
-    dslci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    dslci.bindingCount = 4U;
-    dslci.pBindings = bindings;
-    if (pCreateDSL(dev, &dslci, NULL, &dsl) != VK_SUCCESS) goto cleanup;
-
-    VkPushConstantRange pcr;
-    memset(&pcr, 0, sizeof(pcr));
-    pcr.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-    pcr.offset = 0U;
-    pcr.size = (uint32_t)sizeof(zcc_spv_push_t);
-
-    VkPipelineLayoutCreateInfo plci;
-    memset(&plci, 0, sizeof(plci));
-    plci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    plci.setLayoutCount = 1U;
-    plci.pSetLayouts = &dsl;
-    plci.pushConstantRangeCount = 1U;
-    plci.pPushConstantRanges = &pcr;
-    if (pCreatePL(dev, &plci, NULL, &pl) != VK_SUCCESS) goto cleanup;
-
-    VkComputePipelineCreateInfo cpci;
-    memset(&cpci, 0, sizeof(cpci));
-    cpci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    cpci.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    cpci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-    cpci.stage.module = smod;
-    cpci.stage.pName = "main";
-    cpci.layout = pl;
-    if (pCreateComputePipes(dev, VK_NULL_HANDLE, 1U, &cpci, NULL, &pipe) != VK_SUCCESS || dbg.error_count > 0U) {
-        if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateComputePipelines failed: %s", dbg.first_msg);
-        goto cleanup;
-    }
-
-    VkDescriptorPoolSize dps = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4U };
-    VkDescriptorPoolCreateInfo dpci;
-    memset(&dpci, 0, sizeof(dpci));
-    dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    dpci.maxSets = 1U;
-    dpci.poolSizeCount = 1U;
-    dpci.pPoolSizes = &dps;
-    if (pCreateDPool(dev, &dpci, NULL, &dpool) != VK_SUCCESS) goto cleanup;
-
-    VkDescriptorSetAllocateInfo dsai;
-    memset(&dsai, 0, sizeof(dsai));
-    dsai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    dsai.descriptorPool = dpool;
-    dsai.descriptorSetCount = 1U;
-    dsai.pSetLayouts = &dsl;
-    if (pAllocDSets(dev, &dsai, &dset) != VK_SUCCESS) goto cleanup;
-
-    VkDescriptorBufferInfo dbi[4];
-    VkWriteDescriptorSet wds[4];
-    memset(dbi, 0, sizeof(dbi));
-    memset(wds, 0, sizeof(wds));
-    for (uint32_t i = 0U; i < 4U; i++) {
-        dbi[i].buffer = bufs[i].buf;
-        dbi[i].offset = 0ULL;
-        dbi[i].range = VK_WHOLE_SIZE;
-        wds[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        wds[i].dstSet = dset;
-        wds[i].dstBinding = i;
-        wds[i].descriptorCount = 1U;
-        wds[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        wds[i].pBufferInfo = &dbi[i];
-    }
-    pUpdateDSets(dev, 4U, wds, 0U, NULL);
-
-    VkCommandPoolCreateInfo cmdpci;
-    memset(&cmdpci, 0, sizeof(cmdpci));
-    cmdpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    cmdpci.queueFamilyIndex = qfam;
-    if (pCreateCPool(dev, &cmdpci, NULL, &cpool) != VK_SUCCESS) goto cleanup;
-
-    VkCommandBufferAllocateInfo cbai;
-    memset(&cbai, 0, sizeof(cbai));
-    cbai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cbai.commandPool = cpool;
-    cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cbai.commandBufferCount = 1U;
-    if (pAllocCBufs(dev, &cbai, &cbuf) != VK_SUCCESS) goto cleanup;
-
-    VkCommandBufferBeginInfo cbbi;
-    memset(&cbbi, 0, sizeof(cbbi));
-    cbbi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    cbbi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    if (pBeginCBuf(cbuf, &cbbi) != VK_SUCCESS) goto cleanup;
-
-    /* Explicit Barrier 1: Host write -> Compute shader read/write visibility */
-    VkMemoryBarrier pre_bar;
-    memset(&pre_bar, 0, sizeof(pre_bar));
-    pre_bar.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-    pre_bar.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-    pre_bar.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-    pCmdBarrier(cbuf, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                0U, 1U, &pre_bar, 0U, NULL, 0U, NULL);
-    barrier_cnt++;
-
-    pCmdBindPipe(cbuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipe);
-    pCmdBindDSets(cbuf, VK_PIPELINE_BIND_POINT_COMPUTE, pl, 0U, 1U, &dset, 0U, NULL);
-    pCmdPush(cbuf, pl, VK_SHADER_STAGE_COMPUTE_BIT, 0U, (uint32_t)sizeof(push), &push);
-    pCmdDispatch(cbuf, gx, gy, gz);
-
-    /* Explicit Barrier 2: Compute shader write -> Host read visibility */
-    VkMemoryBarrier post_bar;
-    memset(&post_bar, 0, sizeof(post_bar));
-    post_bar.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-    post_bar.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    post_bar.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
-    pCmdBarrier(cbuf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_HOST_BIT,
-                0U, 1U, &post_bar, 0U, NULL, 0U, NULL);
-    barrier_cnt++;
-
-    if (pEndCBuf(cbuf) != VK_SUCCESS) goto cleanup;
-
-    VkFenceCreateInfo fci;
-    memset(&fci, 0, sizeof(fci));
-    fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    if (pCreateFence(dev, &fci, NULL, &fence) != VK_SUCCESS) goto cleanup;
-
-    VkSubmitInfo si;
-    memset(&si, 0, sizeof(si));
-    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    si.commandBufferCount = 1U;
-    si.pCommandBuffers = &cbuf;
-    if (pQueueSubmit(queue, 1U, &si, fence) != VK_SUCCESS) goto cleanup;
-
-    if (pWaitForFences(dev, 1U, &fence, VK_TRUE, 30000000000ULL) != VK_SUCCESS) {
-        if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkWaitForFences timed out or failed");
-        goto cleanup;
-    }
-
-    void *out_mapped = NULL;
-    if (pMapMemory(dev, bufs[3].mem, 0ULL, bufs[3].alloc_size, 0U, &out_mapped) != VK_SUCCESS || !out_mapped) goto cleanup;
-    if (!bufs[3].is_coherent && pInvalidateRanges) {
-        VkMappedMemoryRange rng = { VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, NULL, bufs[3].mem, 0ULL, VK_WHOLE_SIZE };
-        pInvalidateRanges(dev, 1U, &rng);
-        inv_cnt++;
-    }
-    memcpy(output->data, (const uint8_t *)out_mapped + bufs[3].base_off, (size_t)output->nbytes);
-    pUnmapMemory(dev, bufs[3].mem);
-
-    pDeviceWaitIdle(dev);
-    if (dbg.error_count > 0U) {
-        if (err_buf && err_cap) snprintf(err_buf, err_cap, "Vulkan validation errors (%u): %s", dbg.error_count, dbg.first_msg);
-        goto cleanup;
-    }
-
-    ret = ZCC_STATUS_OK;
-
-cleanup:
-    if (dev) {
-        if (pDeviceWaitIdle) pDeviceWaitIdle(dev);
-        if (fence && pDestroyFence) pDestroyFence(dev, fence, NULL);
-        if (cpool && pDestroyCPool) pDestroyCPool(dev, cpool, NULL);
-        if (dpool && pDestroyDPool) pDestroyDPool(dev, dpool, NULL);
-        if (pipe && pDestroyPipe) pDestroyPipe(dev, pipe, NULL);
-        if (pl && pDestroyPL) pDestroyPL(dev, pl, NULL);
-        if (dsl && pDestroyDSL) pDestroyDSL(dev, dsl, NULL);
-        if (smod && pDestroyShaderModule) pDestroyShaderModule(dev, smod, NULL);
-        for (uint32_t bi = 0U; bi < 4U; bi++) {
-            if (bufs[bi].buf && pDestroyBuffer) pDestroyBuffer(dev, bufs[bi].buf, NULL);
-            if (bufs[bi].mem && pFreeMemory) pFreeMemory(dev, bufs[bi].mem, NULL);
-        }
-        if (pDestroyDevice) pDestroyDevice(dev, NULL);
-    }
-    if (dbg_msgr && destroy_dbg) destroy_dbg(inst, dbg_msgr, NULL);
-    if (inst && vk.destroy_instance) vk.destroy_instance(inst, NULL);
-    unload_vk_lib(&vk);
-    if (owns_spv) zcc_spirv_module_free(&spv);
-
-    if (out_barriers) *out_barriers = barrier_cnt;
-    if (out_flushes) *out_flushes = flush_cnt;
-    if (out_invalidates) *out_invalidates = inv_cnt;
-    if (out_val_errors) *out_val_errors = dbg.error_count;
-    return ret;
 }

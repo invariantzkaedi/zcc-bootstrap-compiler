@@ -148,14 +148,19 @@ def compare_snapshots(before: Dict[str, str], after: Dict[str, str]) -> List[str
     return [k for k in sorted(set(before.keys()) | set(after.keys())) if before.get(k) != after.get(k)]
 
 
-def vk_identity_consistent(vk_dict: Dict[str, Any]) -> Tuple[bool, str]:
-    """Fail closed if a software CPU Vulkan ICD (llvmpipe/lavapipe/swiftshader) claims GPU identity."""
+def vk_identity_consistent(vk_dict: Dict[str, Any], backend_executed: str = "") -> Tuple[bool, str]:
+    """Fail closed if a software CPU Vulkan ICD claims GPU identity or Vulkan reports NONE when active."""
     dev_name = str(vk_dict.get("device_name", "")).lower()
     dev_type = str(vk_dict.get("device_type", "")).upper()
     vendor = str(vk_dict.get("vendor_id", "")).lower()
+    vk_avail = int(vk_dict.get("vulkan_available", 0) or 0)
     is_sw_name = any(tok in dev_name for tok in ("llvmpipe", "lavapipe", "swiftshader", "softpipe"))
     if (is_sw_name or vendor == "0x10005") and dev_type != "CPU":
         return False, f"fabricated_gpu_identity_for_sw_icd:{dev_type}:{vk_dict.get('device_name')}"
+    if dev_type == "NONE":
+        if backend_executed in ("VULKAN_SPV", "VULKAN_GPU") or vk_avail != 0 or is_sw_name or vendor not in ("", "0x0000", "0x0", "0"):
+            return False, f"invalid_none_vk_device_type:{backend_executed}:avail={vk_avail}"
+        return True, "ok"
     if dev_type not in ("CPU", "DISCRETE_GPU", "INTEGRATED_GPU", "VIRTUAL_GPU", "OTHER"):
         return False, f"invalid_vk_device_type:{dev_type}"
     return True, "ok"
@@ -225,7 +230,7 @@ def independent_verify_v2_json_receipt(r: Dict[str, Any], hmac_key: bytes | None
         if base_sha != base.get("receipt_canonical_sha256"):
             return False, "base_canonical_sha256_mismatch"
 
-        id_ok, id_msg = vk_identity_consistent(r.get("vulkan_caps", {}))
+        id_ok, id_msg = vk_identity_consistent(r.get("vulkan_caps", {}), str(r.get("backend_executed", "")))
         if not id_ok:
             return False, id_msg
 
@@ -447,10 +452,16 @@ def run_verifier_self_test() -> int:
         print("SELF_TEST_FAIL: accepted self-certified v2 receipt", file=sys.stderr)
         return 1
 
-    # Negative Control B: spoofed DISCRETE_GPU on llvmpipe rejected even in identity helper
+    # Negative Control B: spoofed DISCRETE_GPU on llvmpipe or invalid NONE rejected in identity helper
     bad_id, _ = vk_identity_consistent({"device_name": "llvmpipe (LLVM 21.1.8, 256 bits)", "device_type": "DISCRETE_GPU", "vendor_id": "0x10005"})
     if bad_id:
         print("SELF_TEST_FAIL: accepted fabricated DISCRETE_GPU for llvmpipe", file=sys.stderr)
+        return 1
+    bad_none1, _ = vk_identity_consistent({"device_name": "", "device_type": "NONE", "vendor_id": "0x0000", "vulkan_available": 1}, "VULKAN_SPV")
+    bad_none2, _ = vk_identity_consistent({"device_name": "", "device_type": "NONE", "vendor_id": "0x0000", "vulkan_available": 0}, "VULKAN_SPV")
+    good_none, _ = vk_identity_consistent({"device_name": "", "device_type": "NONE", "vendor_id": "0x0000", "vulkan_available": 0}, "SCALAR_C99")
+    if bad_none1 or bad_none2 or not good_none:
+        print("SELF_TEST_FAIL: invalid NONE vk identity handling", file=sys.stderr)
         return 1
 
     # Negative Control C: missing spirv-val on PATH MUST return BLOCKED (rc=3), NEVER PASS (rc=0)

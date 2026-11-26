@@ -1,8 +1,8 @@
 {
   "schema_version": "track21b.mutation_report.v1",
-  "generated_at_utc": "2026-11-26T19:38:00Z",
-  "total_mutants": 12,
-  "killed": 12,
+  "generated_at_utc": "2026-11-26T19:54:35Z",
+  "total_mutants": 13,
+  "killed": 13,
   "survived": 0,
   "detection_rate": 1.0,
   "false_positives_on_clean_control": 0,
@@ -15,7 +15,7 @@
     "classified_signature": "UNKNOWN",
     "preserved_as_unknown": true
   },
-  "scope_limitation": "100% kill rate over these 12 controlled Track 21B mutants proves detection sensitivity across the tested malformed SPIR-V, shader math/quant, fabricated identity, capability, barrier sync, missing oracle, baseline tamper, and verifier bypass fault classes only; it is NOT exhaustive proof against all faults.",
+  "scope_limitation": "100% kill rate over these 13 controlled Track 21B mutants proves detection sensitivity across the tested malformed SPIR-V, shader math/quant, fabricated identity, capability, persistent-ctx HW guard, barrier sync, missing oracle, baseline tamper, and verifier bypass fault classes only; it is NOT exhaustive proof against all faults.",
   "verdict": "PASS",
   "mutants": [
     {
@@ -107,6 +107,16 @@
       "failure_signature": "SIG_EF0_RUNTIME_SELF_CERTIFICATION",
       "trap_detail": "runtime emitted PASS",
       "minimal_reproducing_input": "inspect v2_verification_status after VEC_ADD_F32"
+    },
+    {
+      "mutant_id": "M21B_CTX_01_ALLOW_HW_GPU_CTX_ON_CPU",
+      "domain": "unsupported_capabilities",
+      "target": "runtime/compute_vulkan.c:zcc_vulkan_ctx_create",
+      "mutation": "Ignore require_hardware_gpu when initializing persistent zcc_vulkan_ctx_t on llvmpipe",
+      "status": "KILLED",
+      "failure_signature": "SIG_UNSUPPORTED_CAPABILITY_ACCEPTED",
+      "trap_detail": "zcc_vulkan_ctx_create(require_hardware_gpu=1) succeeded on CPU llvmpipe",
+      "minimal_reproducing_input": "zcc_vulkan_ctx_create(1, 1, &ctx) on CPU llvmpipe ICD"
     },
     {
       "mutant_id": "M21B_ORACLE_01_MISSING_SPIRV_VAL",

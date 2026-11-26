@@ -165,10 +165,50 @@ class ZccVulkanComputeRuntime(ZccComputeRuntime):
         ]
         self.lib.zcc_receipt_v2_verify_canonical.restype = ctypes.c_int32
 
+        self.lib.zcc_vulkan_ctx_create.argtypes = [
+            ctypes.c_int,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        self.lib.zcc_vulkan_ctx_create.restype = ctypes.c_int32
+
+        self.lib.zcc_vulkan_ctx_destroy.argtypes = [ctypes.c_void_p]
+        self.lib.zcc_vulkan_ctx_destroy.restype = None
+
+        self.lib.zcc_vulkan_ctx_get_caps.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ZccVulkanCaps),
+        ]
+        self.lib.zcc_vulkan_ctx_get_caps.restype = ctypes.c_int32
+
+        self.lib.zcc_compute_exec_v2_with_ctx.argtypes = [
+            ctypes.c_uint32,
+            ctypes.POINTER(ZccTensorDesc),
+            ctypes.c_uint32,
+            ctypes.POINTER(ZccTensorDesc),
+            ctypes.POINTER(ZccVulkanExecOptions),
+            ctypes.POINTER(ZccCpuCaps),
+            ctypes.POINTER(ZccVulkanCaps),
+            ctypes.c_void_p,
+            ctypes.POINTER(ZccComputeV2Receipt),
+        ]
+        self.lib.zcc_compute_exec_v2_with_ctx.restype = ctypes.c_int32
+
     def probe_vulkan(self, enable_validation_layer: bool = True) -> ZccVulkanCaps:
         caps = ZccVulkanCaps()
         self.lib.zcc_probe_vulkan_caps(ctypes.byref(caps), 1 if enable_validation_layer else 0)
         return caps
+
+    def create_context(
+        self,
+        enable_validation_layer: bool = True,
+        require_hardware_gpu: bool = False,
+    ) -> "ZccVulkanContext":
+        return ZccVulkanContext(
+            self,
+            enable_validation_layer=enable_validation_layer,
+            require_hardware_gpu=require_hardware_gpu,
+        )
 
     def exec_v2(
         self,
@@ -182,6 +222,7 @@ class ZccVulkanComputeRuntime(ZccComputeRuntime):
         require_hardware_gpu: bool = False,
         hmac_key: Optional[bytes] = None,
         restricted_vk_caps: Optional[ZccVulkanCaps] = None,
+        ctx: Optional["ZccVulkanContext"] = None,
     ) -> tuple[int, Dict[str, Any], ZccComputeV2Receipt]:
         opts = ZccVulkanExecOptions()
         self.lib.zcc_vulkan_exec_options_init(ctypes.byref(opts))
@@ -198,7 +239,8 @@ class ZccVulkanComputeRuntime(ZccComputeRuntime):
 
         in_arr = (ZccTensorDesc * len(inputs))(*inputs)
         rec = ZccComputeV2Receipt()
-        rc = self.lib.zcc_compute_exec_v2_with_caps(
+        ctx_ptr = ctx._require_handle() if ctx is not None else None
+        rc = self.lib.zcc_compute_exec_v2_with_ctx(
             op_id,
             in_arr,
             len(inputs),
@@ -206,6 +248,7 @@ class ZccVulkanComputeRuntime(ZccComputeRuntime):
             ctypes.byref(opts),
             None,
             ctypes.byref(restricted_vk_caps) if restricted_vk_caps is not None else None,
+            ctx_ptr,
             ctypes.byref(rec),
         )
         return rc, self.receipt_v2_dict(rec), rec
@@ -217,3 +260,82 @@ class ZccVulkanComputeRuntime(ZccComputeRuntime):
         if n <= 0:
             raise RuntimeError("zcc_receipt_v2_to_json failed")
         return json.loads(buf.value.decode("utf-8"))
+
+
+class ZccVulkanContext:
+    """RAII wrapper around persistent zcc_vulkan_ctx_t (cached instance/device/pipelines/staging)."""
+
+    def __init__(
+        self,
+        runtime: ZccVulkanComputeRuntime,
+        enable_validation_layer: bool = True,
+        require_hardware_gpu: bool = False,
+    ) -> None:
+        self._rt = runtime
+        self._handle = ctypes.c_void_p()
+        rc = self._rt.lib.zcc_vulkan_ctx_create(
+            1 if enable_validation_layer else 0,
+            1 if require_hardware_gpu else 0,
+            ctypes.byref(self._handle),
+        )
+        if rc != 0 or not self._handle.value:
+            self._handle = ctypes.c_void_p()
+            raise RuntimeError(f"zcc_vulkan_ctx_create failed rc={rc}")
+
+    def _require_handle(self) -> ctypes.c_void_p:
+        if not self._handle or not self._handle.value:
+            raise RuntimeError("ZccVulkanContext is closed")
+        return self._handle
+
+    def caps(self) -> ZccVulkanCaps:
+        out = ZccVulkanCaps()
+        rc = self._rt.lib.zcc_vulkan_ctx_get_caps(self._require_handle(), ctypes.byref(out))
+        if rc != 0:
+            raise RuntimeError(f"zcc_vulkan_ctx_get_caps failed rc={rc}")
+        return out
+
+    def exec_v2(
+        self,
+        op_id: int,
+        inputs: list[ZccTensorDesc],
+        output: ZccTensorDesc,
+        backend: int = BACKEND_VULKAN_SPV,
+        policy: int = POLICY_EXACT_REQUIRED,
+        accum: int = ACCUM_FP32_FMA,
+        require_validation_layer: bool = True,
+        require_hardware_gpu: bool = False,
+        hmac_key: Optional[bytes] = None,
+        restricted_vk_caps: Optional[ZccVulkanCaps] = None,
+    ) -> tuple[int, Dict[str, Any], ZccComputeV2Receipt]:
+        return self._rt.exec_v2(
+            op_id,
+            inputs,
+            output,
+            backend=backend,
+            policy=policy,
+            accum=accum,
+            require_validation_layer=require_validation_layer,
+            require_hardware_gpu=require_hardware_gpu,
+            hmac_key=hmac_key,
+            restricted_vk_caps=restricted_vk_caps,
+            ctx=self,
+        )
+
+    def close(self) -> None:
+        h = getattr(self, "_handle", None)
+        if h and h.value:
+            self._rt.lib.zcc_vulkan_ctx_destroy(h)
+            self._handle = ctypes.c_void_p()
+
+    def __enter__(self) -> "ZccVulkanContext":
+        self._require_handle()
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass

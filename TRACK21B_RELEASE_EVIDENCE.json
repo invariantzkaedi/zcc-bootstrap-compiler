@@ -1,11 +1,11 @@
 {
   "schema_version": "track21b.release_evidence.v1",
-  "generated_at_utc": "2026-11-26T19:38:01Z",
+  "generated_at_utc": "2026-11-26T19:54:36Z",
   "governing_rule_version": "ZCC-EF-7 v1.0.0 + ZCC-EF-0",
   "evidence_tier": "E3",
-  "git_head_sha": "2e0dda9d3716b080c3c2c8e291467cc7710b48eb",
+  "git_head_sha": "0b0a16b6f1d578da1877c00e84aee28ff9a2badc",
   "manifest_file_count": 25,
-  "canonical_manifest_sha256": "736acfb894c480220ce605abab6a4a991340f3772e9f7191b6a0bda423e32d64",
+  "canonical_manifest_sha256": "5e61d91a96ff4243fadc9f1222e374d97e39875c552f7d19bc9f5b51f7848d6a",
   "vulkan_execution_oracle": {
     "vulkan_available": 1,
     "validation_layer_enabled": 1,
@@ -33,29 +33,29 @@
     ".gitignore": "2963f5739aca855409cd0a4099f59754f933d58bf75941f079fd87724c004a8a",
     "Makefile": "963e1b85ff10abadfcf15b70fb5baa14addd97ee10d6baefb38b5696a4e82b26",
     "TRACK21B_COMPUTE_CONTRACT.md": "cb8e159033151056b16ce4d34397f8262d4a0520886980a6c617d581ea284e8e",
-    "TRACK21B_DIFFERENTIAL_REPORT.json": "bf7a6bf7d14d0dbdb6014ef8a516c62090e66e3f2f87abf53e9b0f071d82c6f5",
+    "TRACK21B_DIFFERENTIAL_REPORT.json": "58b0097676ad54d8c96b94a6247639758b867ef10d246ee9af8aab79c8f63f1e",
     "TRACK21B_IMPLEMENTATION_PLAN.md": "06972818ce367c40dd83ca14008549497d5011c040394274fceb73d70f2de3d8",
     "TRACK21B_INVARIANT_REGISTRY.json": "38253231408a2f3517bb9a9d23febf36da1d6d520da251d70a530c13a4cd0334",
-    "TRACK21B_MUTATION_REPORT.json": "65e560dd5b30d999b7bee4acc2f020aaa8d954c192a99c45f77bef166ab5ac4a",
-    "TRACK21B_PERFORMANCE_REPORT.json": "ed1c4b2716b4f75eefd5936ab7dec6026098b1cf18ca65f177f4da705906eae1",
+    "TRACK21B_MUTATION_REPORT.json": "bcbe6a7b16ef3e46cd897b5e685a697458239970dc31407b7629fc04391ef498",
+    "TRACK21B_PERFORMANCE_REPORT.json": "7aa9178c54e1dc68a0ae0d99d04cf234f9d4379904bc65d7c26b9e3db8718bc4",
     "TRACK21B_REPO_AUDIT.json": "0353b73df4953b261abe2a4be30aa17dedf878a5b546be7aff7449262801a34f",
-    "docs/TRACK21B_REPRODUCTION_AND_MIGRATION.md": "ef66bbf3463abd72b175c6ec2cb5d0a0098f40f64fcecb063f2eb9ec18fcd493",
+    "docs/TRACK21B_REPRODUCTION_AND_MIGRATION.md": "46a5480394e17b8bbb6fc729bfa43467826340c53530ebf1662f84b91f49f261",
     "include/zcc_spirv.h": "bbb2ef658eb561d3fa51a8b21a7226db372491516e09cb74af0cfc36e2a9587f",
-    "include/zcc_vulkan_compute.h": "87dd4cea995ef907c1526f0d67f7ef9d97f5ad02ae72f42eaca27d278e522d10",
-    "runtime/compute_dispatch_v2.c": "2dfbc2c57d290ce289d08eb1d6a829b52235551082699a70bfbf678e158f9425",
-    "runtime/compute_vulkan.c": "d880438427b56a772436690ac6d482ddf1b55d2f1bc1368e868b1e18d76bc4d1",
+    "include/zcc_vulkan_compute.h": "f0a4d70cc295580aa4a3779c5cd3230eaeed14a9a12e6b45feff7e2c47bc0c60",
+    "runtime/compute_dispatch_v2.c": "344a6c3fd4f19434e78ce756ccaf958afdfd80d5f9b47f1952cf710fd174786a",
+    "runtime/compute_vulkan.c": "b0ad7db07bb1c013d10c583f23d50cb0bcc1dd743eaafc29f1e737ca4d779881",
     "sdk/zcc_vulkan_compute.mjs": "a50e2753222297c1ea1733c030947e6eb276304be8ceded576585a87d5cde740",
-    "sdk/zcc_vulkan_compute.py": "6d2ff11549f45867189cbab570312d15e7d8485b32f1ff7d33df8ef6c199a75b",
+    "sdk/zcc_vulkan_compute.py": "d18b3f0ed11be008cd0ce979c73a67c2dd415b52823e1528b4c20028809286b4",
     "src/part6_spirv.c": "8d655481c307fac645e1749e7a9dbb4fbbbe5dfdb6b8b7949baba66800bb5075",
     "tests/track21b/build_runtime.sh": "343e4c08892501201d42e1052a4bd2463f0dce1eccb687b71ff8bef7deca6aa9",
-    "tests/track21b/differential_oracle_21b.py": "8cc24c33655f2ce4c0151bee2b5aa29361fa1b8e625a0b1baf647bdf8b7b7427",
-    "tests/track21b/mutation_observatory_21b.py": "89863f143ed29c5131d275977a0c96c6338d9515fd83909b8faacd703e279742",
+    "tests/track21b/differential_oracle_21b.py": "aed0958876149c23ac44d4a55e26fbe5862b7d5aa0e4cf6911391b0a33da08ad",
+    "tests/track21b/mutation_observatory_21b.py": "4d67ef8942c8fc77e36da8edbcb8def31400ccd2bd9b4f9fee563590f0964350",
     "tests/track21b/run_vulkan_suite.sh": "22631d54e693e0a20acdbb753877c8a078b379b7e9bf4b745be63cf4e88c30ad",
     "tests/track21b/test_sdk_v2_mjs.mjs": "97c355420d710263869d75c654fbc0456eaf6ffbd7fcda7aaf4ef8c657a3ee86",
-    "tests/track21b/test_track21b_vulkan.c": "0c09a0dd4562adb3686ab5285b4cb476f998706338f24b999bdfe17ee3c77c42",
-    "tools/verify_track21b_release.py": "1145c7035e87eac6a3b7de415e077be102e799f5bfe4ad27293dea80df4a43e2",
+    "tests/track21b/test_track21b_vulkan.c": "3a2a8e51691ce02336f48e0738703039eca99a915f8c9bc03691b87e17a8f007",
+    "tools/verify_track21b_release.py": "ccc65375d0ff83fb14aa6a3c14c9552ea3a0282827232f7c02e178d2b282f766",
     "tools/zcc_spirv_cli.c": "29af8fc3880f89134aea2aa021a5eda4f5d6b4bdf278740e41e5eb93a0071a26",
-    "/tmp/libzcc_compute_v2.so": "0213b2aa0fe03ffe791e187208353e613fc40fd350b1a58ff0aee951fb73ab6d",
+    "/tmp/libzcc_compute_v2.so": "3284543b54c1fcfc178b713bb24c4eee2b9934f39aede1a506bacebff86c0130",
     "/tmp/zcc-spirv": "948cbcde812f281cad7bb5164424cd8479bffe4787a5635093052c2980b80cb1"
   },
   "gates": {
@@ -126,7 +126,7 @@
     },
     "T21B-G05": {
       "status": "PASS",
-      "evidence": "205/205 PASS across Scalar/AVX2/PTX/Vulkan SPIR-V"
+      "evidence": "207/207 PASS across Scalar/AVX2/PTX/Vulkan SPIR-V"
     },
     "T21B-G06": {
       "status": "PASS",
@@ -134,7 +134,7 @@
     },
     "T21B-G07": {
       "status": "PASS",
-      "evidence": "12/12 controlled mutants killed; false_pos=0; unknown preserved"
+      "evidence": "13/13 controlled mutants killed; false_pos=0; unknown preserved"
     },
     "T21B-G08": {
       "status": "PASS",

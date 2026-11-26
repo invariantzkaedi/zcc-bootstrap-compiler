@@ -374,6 +374,123 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     }
 }
 
+static void test_persistent_vulkan_context(void) {
+    zcc_vulkan_ctx_t *bad_ctx = NULL;
+    T_CHECK(zcc_vulkan_ctx_create(1, 0U, NULL) == ZCC_STATUS_ERR_NULL_PTR, "ctx null out rejected");
+    T_CHECK(zcc_vulkan_ctx_create(1, 1U, &bad_ctx) == ZCC_STATUS_ERR_UNSUPPORTED_HW && bad_ctx == NULL,
+            "ctx require_hardware_gpu rejected on CPU ICD");
+
+    zcc_vulkan_caps_t ccaps;
+    T_CHECK(zcc_vulkan_ctx_get_caps(NULL, &ccaps) == ZCC_STATUS_ERR_INVALID_ARG, "ctx get_caps NULL rejected");
+
+    zcc_vulkan_ctx_t *ctx = NULL;
+    T_CHECK(zcc_vulkan_ctx_create(1, 0U, &ctx) == ZCC_STATUS_OK && ctx != NULL, "ctx create validated PASS");
+    T_CHECK(zcc_vulkan_ctx_get_caps(ctx, &ccaps) == ZCC_STATUS_OK &&
+            ccaps.physical_device_type == ZCC_VK_DEVTYPE_CPU &&
+            ccaps.validation_layer_enabled == 1U,
+            "ctx caps expose CPU + validation");
+
+    const uint8_t hkey[8] = {0x4B, 0x45, 0x59, 0x21, 0x32, 0x31, 0x42, 0x02};
+    zcc_vulkan_exec_options_t opt;
+    zcc_vulkan_exec_options_init(&opt);
+    opt.base.requested_backend = ZCC_BACKEND_VULKAN_SPV;
+    opt.base.selection_policy = ZCC_POLICY_EXACT_REQUIRED;
+    opt.require_validation_layer = 1U;
+    opt.base.hmac_key = hkey;
+    opt.base.hmac_key_len = sizeof(hkey);
+
+    /* Non-Vulkan SCALAR_C99 skips expensive Vulkan ICD/layer init when ctx == NULL */
+    float a4[4] = {1.5f, -2.0f, 3.25f, 4.0f};
+    float b4[4] = {0.5f,  4.0f, -1.25f, 2.0f};
+    float o_sc[4] = {0}, o_c1[4] = {0}, o_c2[4] = {0};
+    zcc_tensor_desc_t da4, db4, dos, do1, do2;
+    zcc_tensor_desc_init_1d(&da4, ZCC_DTYPE_F32, 4, a4, sizeof(a4), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&db4, ZCC_DTYPE_F32, 4, b4, sizeof(b4), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&dos, ZCC_DTYPE_F32, 4, o_sc, sizeof(o_sc), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&do1, ZCC_DTYPE_F32, 4, o_c1, sizeof(o_c1), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&do2, ZCC_DTYPE_F32, 4, o_c2, sizeof(o_c2), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_t ins4[2] = {da4, db4};
+
+    zcc_vulkan_exec_options_t opt_sc = opt;
+    opt_sc.base.requested_backend = ZCC_BACKEND_SCALAR_C99;
+    zcc_compute_v2_receipt_t r_sc, r1, r2;
+    T_CHECK(zcc_compute_exec_v2(ZCC_OP_VEC_ADD_F32, ins4, 2U, &dos, &opt_sc, &r_sc) == ZCC_STATUS_OK, "scalar v2 ok");
+    T_CHECK(strcmp(r_sc.vulkan_caps.device_type_str, "NONE") == 0 && r_sc.vulkan_caps.vulkan_available == 0U,
+            "scalar v2 skips redundant Vulkan probe");
+
+    /* Small 4-elem dispatch on ctx -> grow to 256 -> shrink back to 5 elems cleanly */
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins4, 2U, &do1, &opt, &r1) == ZCC_STATUS_OK, "ctx vec_add #1");
+    T_CHECK(compare_arr_f32(o_c1, o_sc, 4U, 1e-6f, 1e-6f), "ctx vec_add matches scalar");
+    T_CHECK(r1.sync_barrier_count == 2U && r1.validation_error_count == 0U, "ctx barriers=2 valerr=0");
+    T_CHECK(zcc_receipt_v2_verify_canonical(&r1, hkey, sizeof(hkey)) == ZCC_STATUS_OK, "ctx v2 receipt valid");
+
+    float *big_a = (float *)calloc(256U, sizeof(float));
+    float *big_b = (float *)calloc(256U, sizeof(float));
+    float *big_s = (float *)calloc(256U, sizeof(float));
+    float *big_v = (float *)calloc(256U, sizeof(float));
+    for (int i = 0; i < 256; i++) {
+        big_a[i] = (float)(i - 100) * 0.25f;
+        big_b[i] = (float)(i % 11) * 0.5f;
+    }
+    zcc_tensor_desc_t dba, dbb, dbs, dbv;
+    zcc_tensor_desc_init_1d(&dba, ZCC_DTYPE_F32, 256, big_a, 256U * 4ULL, 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&dbb, ZCC_DTYPE_F32, 256, big_b, 256U * 4ULL, 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&dbs, ZCC_DTYPE_F32, 256, big_s, 256U * 4ULL, 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&dbv, ZCC_DTYPE_F32, 256, big_v, 256U * 4ULL, 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_t ins_big[2] = {dba, dbb};
+    T_CHECK(zcc_compute_exec_v2(ZCC_OP_VEC_MUL_F32, ins_big, 2U, &dbs, &opt_sc, &r_sc) == ZCC_STATUS_OK, "scalar big mul");
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_MUL_F32, ins_big, 2U, &dbv, &opt, &r2) == ZCC_STATUS_OK, "ctx grow big mul");
+    T_CHECK(compare_arr_f32(big_v, big_s, 256U, 1e-6f, 1e-6f), "ctx grow matches scalar");
+
+    /* Shrink back + unaligned input staging after buffer reuse */
+    uint8_t u_buf_raw[64] = {0};
+    float *u_a = (float *)(u_buf_raw + 1);
+    float u_vals[5] = {1.0f, 2.0f, 3.0f, -4.0f, 5.5f};
+    memcpy(u_a, u_vals, sizeof(u_vals));
+    float o_dot_s[1] = {0}, o_dot_c[1] = {0};
+    zcc_tensor_desc_t dua, dub, ddos, ddoc;
+    zcc_tensor_desc_init_1d(&dua, ZCC_DTYPE_F32, 5, u_a, sizeof(u_vals), 0, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&dub, ZCC_DTYPE_F32, 5, u_vals, sizeof(u_vals), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&ddos, ZCC_DTYPE_F32, 1, o_dot_s, sizeof(o_dot_s), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&ddoc, ZCC_DTYPE_F32, 1, o_dot_c, sizeof(o_dot_c), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_t ins_dot[2] = {dua, dub};
+    T_CHECK(zcc_compute_exec_v2(ZCC_OP_DOT_F32, ins_dot, 2U, &ddos, &opt_sc, &r_sc) == ZCC_STATUS_OK, "scalar dot");
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_DOT_F32, ins_dot, 2U, &ddoc, &opt, &r2) == ZCC_STATUS_OK, "ctx shrink dot");
+    T_CHECK(compare_arr_f32(o_dot_c, o_dot_s, 1U, 1e-5f, 1e-5f), "ctx shrink unaligned dot matches scalar");
+
+    /* Deterministic cached pipeline replay */
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins4, 2U, &do2, &opt, &r2) == ZCC_STATUS_OK, "ctx vec_add #2");
+    T_CHECK(strcmp(r1.base.output_buffer_sha256, r2.base.output_buffer_sha256) == 0 &&
+            strcmp(r1.spirv_module_sha256_hex, r2.spirv_module_sha256_hex) == 0,
+            "ctx cached pipeline deterministic replay");
+
+    /* Restricted caps fail cleanly on ctx and leave ctx healthy for subsequent dispatch */
+    zcc_vulkan_caps_t small_ssbo = ccaps;
+    small_ssbo.max_storage_buffer_range = 8U;
+    T_CHECK(zcc_compute_exec_v2_with_ctx(ZCC_OP_VEC_ADD_F32, ins4, 2U, &do2, &opt, NULL, &small_ssbo, ctx, &r2) ==
+            ZCC_STATUS_ERR_UNSUPPORTED_HW,
+            "ctx restricted small ssbo rejected cleanly");
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins4, 2U, &do2, &opt, &r2) == ZCC_STATUS_OK &&
+            strcmp(r1.base.output_buffer_sha256, r2.base.output_buffer_sha256) == 0,
+            "ctx remains healthy after restricted failure");
+
+    /* Fast context (validation disabled) rejects require_validation_layer=1, succeeds when 0 */
+    zcc_vulkan_ctx_t *ctx_noval = NULL;
+    T_CHECK(zcc_vulkan_ctx_create(0, 0U, &ctx_noval) == ZCC_STATUS_OK && ctx_noval != NULL, "fast ctx create ok");
+    T_CHECK(zcc_vulkan_ctx_exec(ctx_noval, ZCC_OP_VEC_ADD_F32, ins4, 2U, &do2, &opt, &r2) == ZCC_STATUS_ERR_UNSUPPORTED_HW,
+            "fast ctx rejects require_validation_layer=1");
+    zcc_vulkan_exec_options_t opt_fast = opt;
+    opt_fast.require_validation_layer = 0U;
+    T_CHECK(zcc_vulkan_ctx_exec(ctx_noval, ZCC_OP_VEC_ADD_F32, ins4, 2U, &do2, &opt_fast, &r2) == ZCC_STATUS_OK &&
+            strcmp(r1.base.output_buffer_sha256, r2.base.output_buffer_sha256) == 0,
+            "fast ctx executes deterministically when validation optional");
+
+    zcc_vulkan_ctx_destroy(ctx_noval);
+    zcc_vulkan_ctx_destroy(ctx);
+    zcc_vulkan_ctx_destroy(NULL);
+    free(big_a); free(big_b); free(big_s); free(big_v);
+}
+
 static int run_benchmarks(const char *out_path) {
     const int M = 128, K = 512, N = 128;
     float *A = (float *)calloc((size_t)M * K, sizeof(float));
@@ -414,18 +531,27 @@ static int run_benchmarks(const char *out_path) {
     uint32_t backends[4] = {ZCC_BACKEND_SCALAR_C99, ZCC_BACKEND_AVX2_FMA, ZCC_BACKEND_PTX_SM120, ZCC_BACKEND_VULKAN_SPV};
     FILE *fp = out_path ? fopen(out_path, "w") : NULL;
     zcc_vulkan_caps_t vkc; zcc_probe_vulkan_caps(&vkc, 0);
+    zcc_vulkan_ctx_t *bench_ctx = NULL;
+    if (zcc_vulkan_ctx_create(0, 0U, &bench_ctx) != ZCC_STATUS_OK || !bench_ctx) {
+        if (fp) fclose(fp);
+        free(dYrm.data); free(A); free(B); free(C); free(W); free(X); free(Y); free(Q);
+        return 4;
+    }
     if (fp) {
         fprintf(fp, "{\n  \"schema_version\": \"track21b.performance.v1\",\n"
                     "  \"hardware\": {\"vulkan_device\": \"%s\", \"vulkan_device_type\": \"%s\", \"vendor_id\": \"0x%04x\"},\n"
-                    "  \"notes\": \"Full dispatch + buffer SHA-256 + HtoD/DtoH (PTX) + Vulkan staging/pipeline/sync (llvmpipe CPU ICD).\",\n"
+                    "  \"notes\": \"Full dispatch + buffer SHA-256 + HtoD/DtoH (PTX) + stateless Vulkan vs persistent zcc_vulkan_ctx_t (llvmpipe CPU ICD).\",\n"
                     "  \"results\": [\n", vkc.device_name, vkc.device_type_str, vkc.vendor_id);
     }
 
     int first = 1;
-    for (int bi = 0; bi < 4; bi++) {
+    for (int bi = 0; bi < 5; bi++) {
+        int use_ctx = (bi == 4);
+        uint32_t b_id = use_ctx ? ZCC_BACKEND_VULKAN_SPV : backends[bi];
+        const char *b_label = use_ctx ? "VULKAN_SPV_CTX" : zcc_backend_v2_str(b_id);
         zcc_vulkan_exec_options_t opts;
         zcc_vulkan_exec_options_init(&opts);
-        opts.base.requested_backend = backends[bi];
+        opts.base.requested_backend = b_id;
         opts.base.selection_policy = ZCC_POLICY_EXACT_REQUIRED;
         opts.require_validation_layer = 0U; /* Benchmark production release without debug validation overhead */
 
@@ -442,28 +568,41 @@ static int run_benchmarks(const char *out_path) {
             else { op = ZCC_OP_MATVEC_Q4_K; ins[0] = dQ; ins[1] = dXv; outp = &dYv; }
 
             /* Warmup */
-            if (zcc_compute_exec_v2(op, ins, nin, outp, &opts, &r) != ZCC_STATUS_OK) {
+            zcc_status_t wst = use_ctx
+                ? zcc_vulkan_ctx_exec(bench_ctx, op, ins, nin, outp, &opts, &r)
+                : zcc_compute_exec_v2(op, ins, nin, outp, &opts, &r);
+            if (wst != ZCC_STATUS_OK) {
+                zcc_vulkan_ctx_destroy(bench_ctx);
                 if (fp) fclose(fp);
                 free(dYrm.data); free(A); free(B); free(C); free(W); free(X); free(Y); free(Q);
                 return 2;
             }
             double t0 = now_us();
             for (int it = 0; it < iters[wi]; it++) {
-                if (zcc_compute_exec_v2(op, ins, nin, outp, &opts, &r) != ZCC_STATUS_OK) return 3;
+                zcc_status_t ist = use_ctx
+                    ? zcc_vulkan_ctx_exec(bench_ctx, op, ins, nin, outp, &opts, &r)
+                    : zcc_compute_exec_v2(op, ins, nin, outp, &opts, &r);
+                if (ist != ZCC_STATUS_OK) {
+                    zcc_vulkan_ctx_destroy(bench_ctx);
+                    if (fp) fclose(fp);
+                    free(dYrm.data); free(A); free(B); free(C); free(W); free(X); free(Y); free(Q);
+                    return 3;
+                }
             }
             double avg = (now_us() - t0) / (double)iters[wi];
-            printf("BENCH backend=%-10s op=%-22s avg_us=%9.2f out_sha=%.16s\n",
-                   zcc_backend_v2_str(backends[bi]), wl[wi], avg, r.base.output_buffer_sha256);
+            printf("BENCH backend=%-14s op=%-22s avg_us=%9.2f out_sha=%.16s\n",
+                   b_label, wl[wi], avg, r.base.output_buffer_sha256);
             if (fp) {
                 fprintf(fp, "%s    {\"backend\": \"%s\", \"device_type\": \"%s\", \"workload\": \"%s\", \"iters\": %d, \"avg_us\": %.2f, \"last_output_sha256\": \"%s\"}\n",
-                        first ? "" : ",", zcc_backend_v2_str(backends[bi]),
-                        (backends[bi] == ZCC_BACKEND_VULKAN_SPV) ? vkc.device_type_str : "N/A",
+                        first ? "" : ",", b_label,
+                        (b_id == ZCC_BACKEND_VULKAN_SPV) ? vkc.device_type_str : "N/A",
                         wl[wi], iters[wi], avg, r.base.output_buffer_sha256);
                 first = 0;
             }
         }
     }
 
+    zcc_vulkan_ctx_destroy(bench_ctx);
     if (fp) {
         fprintf(fp, "  ]\n}\n");
         fclose(fp);
@@ -483,6 +622,7 @@ int main(int argc, char **argv) {
 
     test_device_caps_and_negotiation();
     test_all_13_ops_and_replay(run_ptx);
+    test_persistent_vulkan_context();
     printf("TRACK21B_C_TESTS pass=%d fail=%d\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;
 }

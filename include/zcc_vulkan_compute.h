@@ -146,6 +146,62 @@ zcc_status_t zcc_receipt_v2_seal(zcc_compute_v2_receipt_t *receipt, const uint8_
 int          zcc_receipt_v2_to_json(const zcc_compute_v2_receipt_t *receipt, char *buf, size_t cap);
 zcc_status_t zcc_receipt_v2_verify_canonical(const zcc_compute_v2_receipt_t *receipt, const uint8_t *hmac_key, size_t hmac_key_len);
 
+/* Persistent Vulkan compute context (additive v2 API; preserves stateless ABI) */
+typedef struct zcc_vulkan_ctx_s zcc_vulkan_ctx_t;
+
+zcc_status_t zcc_vulkan_ctx_create(
+    int enable_validation_layer,
+    uint32_t require_hardware_gpu,
+    zcc_vulkan_ctx_t **out_ctx
+);
+
+void zcc_vulkan_ctx_destroy(zcc_vulkan_ctx_t *ctx);
+
+zcc_status_t zcc_vulkan_ctx_get_caps(
+    const zcc_vulkan_ctx_t *ctx,
+    zcc_vulkan_caps_t *out_caps
+);
+
+zcc_status_t zcc_vulkan_exec_on_ctx(
+    zcc_vulkan_ctx_t *ctx,
+    zcc_op_t op,
+    const zcc_tensor_desc_t *inputs,
+    uint32_t num_inputs,
+    zcc_tensor_desc_t *output,
+    const zcc_vulkan_exec_options_t *opts,
+    const zcc_vulkan_caps_t *caps,
+    char *out_spv_sha256_hex,
+    uint32_t *out_spv_word_count,
+    uint32_t *out_sync_barrier_count,
+    uint32_t *out_mem_flush_count,
+    uint32_t *out_mem_invalidate_count,
+    uint32_t *out_validation_error_count,
+    char *out_err_msg,
+    size_t err_msg_cap
+);
+
+zcc_status_t zcc_compute_exec_v2_with_ctx(
+    zcc_op_t op,
+    const zcc_tensor_desc_t *inputs,
+    uint32_t num_inputs,
+    zcc_tensor_desc_t *output,
+    const zcc_vulkan_exec_options_t *opts,
+    const zcc_cpu_caps_t *restricted_cpu_caps,
+    const zcc_vulkan_caps_t *restricted_vk_caps,
+    zcc_vulkan_ctx_t *ctx,
+    zcc_compute_v2_receipt_t *out_receipt
+);
+
+zcc_status_t zcc_vulkan_ctx_exec(
+    zcc_vulkan_ctx_t *ctx,
+    zcc_op_t op,
+    const zcc_tensor_desc_t *inputs,
+    uint32_t num_inputs,
+    zcc_tensor_desc_t *output,
+    const zcc_vulkan_exec_options_t *opts,
+    zcc_compute_v2_receipt_t *out_receipt
+);
+
 #ifdef __cplusplus
 }
 #endif

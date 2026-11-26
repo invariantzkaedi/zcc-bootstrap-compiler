@@ -211,6 +211,27 @@ def run_probe_v2(so_path: Path, cli_path: Path, sandbox: Path) -> Optional[Dict[
         if rc_fp64 == 0:
             return {"trap_kind": "UNSUPPORTED_HW_ACCEPTED", "detail": "ACCUM_FP64_REF accepted on VULKAN_SPV without Float64"}
 
+        # 5. Persistent zcc_vulkan_ctx_t hardware-GPU rejection, sync, and parity check
+        try:
+            bad_gpu_ctx = rt.create_context(enable_validation_layer=True, require_hardware_gpu=True)
+            bad_gpu_ctx.close()
+            return {"trap_kind": "UNSUPPORTED_HW_ACCEPTED", "detail": "zcc_vulkan_ctx_create(require_hardware_gpu=1) succeeded on CPU llvmpipe"}
+        except RuntimeError:
+            pass
+
+        with rt.create_context(enable_validation_layer=True, require_hardware_gpu=False) as pctx:
+            do_c, bo_c = make_f32_desc([0.0] * 8, (8,))
+            rc_c, rj_c, rec_c = pctx.exec_v2(OP_VEC_ADD_F32, [da, db], do_c, backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED)
+            if rc_c != 0:
+                return {"trap_kind": "UNSUPPORTED_HW_ACCEPTED", "detail": f"persistent ctx unexpected failure rc={rc_c}"}
+            if rec_c.sync_barrier_count < 2 or rec_c.validation_error_count != 0:
+                return {"trap_kind": "VULKAN_SYNC_VIOLATION", "detail": f"persistent ctx bar={rec_c.sync_barrier_count} val={rec_c.validation_error_count}"}
+            if rj_c.get("v2_verification_status") != "UNVERIFIED_RUNTIME_ONLY":
+                return {"trap_kind": "RECEIPT_SELF_CERTIFICATION", "detail": f"persistent ctx emitted {rj_c.get('v2_verification_status')}"}
+            ok_c, aec, _, _, msg_c = compare_vectors(read_f32_desc(do_c, bo_c), ref_add, 1e-6, 1e-6)
+            if not ok_c:
+                return {"trap_kind": "DIFF_TOLERANCE_EXCEEDED", "detail": f"persistent ctx abs={aec:.3e} {msg_c}"}
+
         return None
     finally:
         rt.shutdown()
@@ -365,6 +386,21 @@ def main() -> int:
                 )
             },
         },
+        {
+            "id": "M21B_CTX_01_ALLOW_HW_GPU_CTX_ON_CPU",
+            "domain": "unsupported_capabilities",
+            "target": "runtime/compute_vulkan.c:zcc_vulkan_ctx_create",
+            "mutation": "Ignore require_hardware_gpu when initializing persistent zcc_vulkan_ctx_t on llvmpipe",
+            "minimal_repro": "zcc_vulkan_ctx_create(1, 1, &ctx) on CPU llvmpipe ICD",
+            "spv": lambda: None,
+            "rt": lambda: {
+                "compute_vulkan.c": replace_once(
+                    src_vk,
+                    "    if (pick_physical_device(&ctx->vk, ctx->inst, ctx->require_hardware_gpu, &ctx->phys, &ctx->qfam, &ctx->caps) != 0) {",
+                    "    if (pick_physical_device(&ctx->vk, ctx->inst, 0U, &ctx->phys, &ctx->qfam, &ctx->caps) != 0) {",
+                )
+            },
+        },
     ]
 
     results: List[Dict[str, Any]] = []
@@ -486,9 +522,9 @@ def main() -> int:
             "preserved_as_unknown": unknown_preserved,
         },
         "scope_limitation": (
-            "100% kill rate over these 12 controlled Track 21B mutants proves detection sensitivity across the "
-            "tested malformed SPIR-V, shader math/quant, fabricated identity, capability, barrier sync, missing oracle, "
-            "baseline tamper, and verifier bypass fault classes only; it is NOT exhaustive proof against all faults."
+            "100% kill rate over these 13 controlled Track 21B mutants proves detection sensitivity across the "
+            "tested malformed SPIR-V, shader math/quant, fabricated identity, capability, persistent-ctx HW guard, barrier sync, "
+            "missing oracle, baseline tamper, and verifier bypass fault classes only; it is NOT exhaustive proof against all faults."
         ),
         "verdict": "PASS" if (survived_count == 0 and false_positives == 0 and unknown_preserved) else "FAIL",
         "mutants": results,

@@ -215,43 +215,57 @@ def collect_performance_report(
         ("SOFTMAX_F32_128x512", OP_SOFTMAX_F32, [dx_n], (rows_n, dim_n)),
         ("MATVEC_Q4_K_128x512", OP_MATVEC_Q4_K, [dq4k, dxq], (rows_n,)),
     ]
-    bench_backends: List[Tuple[str, int]] = [
-        ("SCALAR_C99", BACKEND_SCALAR_C99),
-        ("AVX2_FMA", BACKEND_AVX2_FMA),
+    bench_backends: List[Tuple[str, int, Any, bool]] = [
+        ("SCALAR_C99", BACKEND_SCALAR_C99, None, False),
+        ("AVX2_FMA", BACKEND_AVX2_FMA, None, False),
     ]
     if ptx_available:
-        bench_backends.append(("PTX_SM120", BACKEND_PTX_SM120))
-    bench_backends.append(("VULKAN_SPV_CPU", BACKEND_VULKAN_SPV))
+        bench_backends.append(("PTX_SM120", BACKEND_PTX_SM120, None, False))
+    ctx_val = rt.create_context(enable_validation_layer=True)
+    ctx_fast = rt.create_context(enable_validation_layer=False)
+    bench_backends.append(("VULKAN_SPV_CPU", BACKEND_VULKAN_SPV, None, True))
+    bench_backends.append(("VULKAN_SPV_CTX_VAL", BACKEND_VULKAN_SPV, ctx_val, True))
+    bench_backends.append(("VULKAN_SPV_CTX_FAST", BACKEND_VULKAN_SPV, ctx_fast, False))
 
     results: List[Dict[str, Any]] = []
-    for label, op_id, in_descs, out_shape in workloads:
-        n_out = 1
-        for d in out_shape:
-            n_out *= d
-        out_d, _out_b = make_f32_desc([0.0] * n_out, out_shape)
-        for bname, bid in bench_backends:
-            rc_w, _, _ = rt.exec_v2(op_id, in_descs, out_d, backend=bid, policy=POLICY_EXACT_REQUIRED, accum=ACCUM_FP32_FMA)
-            iters = 3
-            t0 = time.perf_counter()
-            last_json: Dict[str, Any] = {}
-            for _ in range(iters):
-                rc_r, last_json, _ = rt.exec_v2(op_id, in_descs, out_d, backend=bid, policy=POLICY_EXACT_REQUIRED, accum=ACCUM_FP32_FMA)
-            avg_ms = ((time.perf_counter() - t0) / iters) * 1000.0
-            results.append({
-                "workload": label,
-                "backend": bname,
-                "device_type": vk_caps.device_type_str.decode() if bid == BACKEND_VULKAN_SPV else bname,
-                "status_code": rc_r if rc_w == 0 else rc_w,
-                "avg_ms": round(avg_ms, 3),
-                "output_sha256": last_json.get("output_buffer_sha256", ""),
-            })
+    try:
+        for label, op_id, in_descs, out_shape in workloads:
+            n_out = 1
+            for d in out_shape:
+                n_out *= d
+            out_d, _out_b = make_f32_desc([0.0] * n_out, out_shape)
+            for bname, bid, bctx, req_val in bench_backends:
+                rc_w, _, _ = rt.exec_v2(
+                    op_id, in_descs, out_d, backend=bid, policy=POLICY_EXACT_REQUIRED,
+                    accum=ACCUM_FP32_FMA, require_validation_layer=req_val, ctx=bctx,
+                )
+                iters = 3
+                t0 = time.perf_counter()
+                last_json: Dict[str, Any] = {}
+                for _ in range(iters):
+                    rc_r, last_json, _ = rt.exec_v2(
+                        op_id, in_descs, out_d, backend=bid, policy=POLICY_EXACT_REQUIRED,
+                        accum=ACCUM_FP32_FMA, require_validation_layer=req_val, ctx=bctx,
+                    )
+                avg_ms = ((time.perf_counter() - t0) / iters) * 1000.0
+                results.append({
+                    "workload": label,
+                    "backend": bname,
+                    "device_type": vk_caps.device_type_str.decode() if bid == BACKEND_VULKAN_SPV else bname,
+                    "status_code": rc_r if rc_w == 0 else rc_w,
+                    "avg_ms": round(avg_ms, 3),
+                    "output_sha256": last_json.get("output_buffer_sha256", ""),
+                })
+    finally:
+        ctx_fast.close()
+        ctx_val.close()
     return {
         "schema_version": "track21b.performance_report.v1",
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "note": (
             f"VULKAN_SPV executed on {vk_caps.device_type_str.decode()} ICD "
-            f"({vk_caps.device_name.decode()}) with VK_LAYER_KHRONOS_validation enabled; "
-            "native GPU gates T21B-GPU-NV and T21B-GPU-AMD are DEFERRED."
+            f"({vk_caps.device_name.decode()}); compares stateless vs persistent zcc_vulkan_ctx_t "
+            "(validated and non-validation release); native GPU gates T21B-GPU-NV and T21B-GPU-AMD are DEFERRED."
         ),
         "results": results,
     }
@@ -656,6 +670,56 @@ def main() -> int:
         d_ro, _bro = make_f32_desc([0.0, 0.0], (2,), owner=OWNER_READONLY | OWNER_BORROWED_HOST)
         rc_bad, _, _ = rt.exec_v2(OP_VEC_ADD_F32, [d_bad1, d_bad2], d_ro, backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED)
         edge_checks.append({"check": "vulkan_invalid_shape_readonly_rejected", "rc": rc_bad, "status": "PASS" if rc_bad != 0 else "FAIL"})
+
+        # Non-Vulkan SCALAR_C99 omits redundant Vulkan ICD/validation probe cleanly
+        rc_sc0, j_sc0, rec_sc0 = rt.exec_v2(OP_VEC_ADD_F32, [d_ok1, d_ok2], d_oko, backend=BACKEND_SCALAR_C99, policy=POLICY_EXACT_REQUIRED)
+        sc_canon_ok = (rt.lib.zcc_receipt_v2_verify_canonical(ctypes.byref(rec_sc0), None, 0) == 0)
+        edge_checks.append({
+            "check": "scalar_skips_redundant_vulkan_probe",
+            "rc": rc_sc0,
+            "vk_type": j_sc0["vulkan_caps"]["device_type"],
+            "vk_avail": j_sc0["vulkan_caps"]["vulkan_available"],
+            "status": "PASS" if (rc_sc0 == 0 and sc_canon_ok and j_sc0["vulkan_caps"]["device_type"] == "NONE" and j_sc0["vulkan_caps"]["vulkan_available"] == 0) else "FAIL",
+        })
+
+        # Persistent zcc_vulkan_ctx_t parity + shrink/grow + replay + fast ctx validation gate
+        with rt.create_context(enable_validation_layer=True) as pctx:
+            d_ctx1, b_ctx1 = make_f32_desc([0.0, 0.0], (2,))
+            d_ctx2, b_ctx2 = make_f32_desc([0.0, 0.0], (2,))
+            d_stat, b_stat = make_f32_desc([0.0, 0.0], (2,))
+            rc_p0, _, _ = rt.exec_v2(OP_VEC_ADD_F32, [d_ok1, d_ok2], d_stat, backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED)
+            rc_p1, j_p1, rec_p1 = pctx.exec_v2(OP_VEC_ADD_F32, [d_ok1, d_ok2], d_ctx1, backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED, hmac_key=hmac_key)
+            rc_p2, j_p2, _ = pctx.exec_v2(OP_VEC_ADD_F32, [d_ok1, d_ok2], d_ctx2, backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED, hmac_key=hmac_key)
+            p_hmac_ok = (rt.lib.zcc_receipt_v2_verify_canonical(ctypes.byref(rec_p1), key_arr, len(hmac_key)) == 0)
+            # Grow buffer on same ctx via 256-elem VEC_MUL_F32, then verify tiny 1-elem DOT_F32 shrink
+            ga, _bga = make_f32_desc([float(i % 7) for i in range(256)], (256,))
+            gb, _bgb = make_f32_desc([0.5 for _ in range(256)], (256,))
+            go_v, _bgov = make_f32_desc([0.0] * 256, (256,))
+            go_s, _bgos = make_f32_desc([0.0] * 256, (256,))
+            rc_g0, _, _ = rt.exec_v2(OP_VEC_MUL_F32, [ga, gb], go_s, backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED)
+            rc_g1, j_g1, _ = pctx.exec_v2(OP_VEC_MUL_F32, [ga, gb], go_v, backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED)
+            sd_o, _bsdo = make_f32_desc([0.0], (1,))
+            rc_s1, _, _ = pctx.exec_v2(OP_DOT_F32, [d_ok1, d_ok2], sd_o, backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED)
+            dot_got = struct.unpack("<f", bytes(_bsdo)[:4])[0]
+            with rt.create_context(enable_validation_layer=False) as fctx:
+                rc_f_rej, _, _ = fctx.exec_v2(OP_VEC_ADD_F32, [d_ok1, d_ok2], d_ctx2, backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED, require_validation_layer=True)
+                rc_f_ok, j_f_ok, _ = fctx.exec_v2(OP_VEC_ADD_F32, [d_ok1, d_ok2], d_ctx2, backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED, require_validation_layer=False)
+            p_ok = (
+                rc_p0 == 0 and rc_p1 == 0 and rc_p2 == 0 and p_hmac_ok
+                and j_p1["output_buffer_sha256"] == j_p2["output_buffer_sha256"]
+                and bytes(b_ctx1) == bytes(b_stat)
+                and j_p1["sync_barrier_count"] == 2 and j_p1["validation_error_count"] == 0
+                and rc_g0 == 0 and rc_g1 == 0 and j_g1["output_buffer_sha256"] != ""
+                and bytes(_bgov) == bytes(_bgos)
+                and rc_s1 == 0 and abs(dot_got - 11.0) < 1e-5
+                and rc_f_rej != 0 and rc_f_ok == 0 and j_f_ok["output_buffer_sha256"] == j_p1["output_buffer_sha256"]
+            )
+            edge_checks.append({
+                "check": "persistent_ctx_parity_grow_shrink_and_val_gate",
+                "rc_p": [rc_p0, rc_p1, rc_p2, rc_g0, rc_g1, rc_s1, rc_f_rej, rc_f_ok],
+                "dot_got": dot_got,
+                "status": "PASS" if p_ok else "FAIL",
+            })
 
         all_checks = cases + replay_checks + edge_checks
         failed = [c for c in all_checks if c["status"] != "PASS"]
