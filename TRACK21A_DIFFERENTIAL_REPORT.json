@@ -1,0 +1,1489 @@
+{
+  "schema_version": "track21a.differential_report.v1",
+  "generated_at_utc": "2026-11-26T02:39:38Z",
+  "hardware": {
+    "cpu_cpuid": 1,
+    "cpu_osxsave": 1,
+    "cpu_xcr0_ymm": 1,
+    "cpu_avx2": 1,
+    "cpu_fma": 1,
+    "gpu_available": 1,
+    "gpu_name": "NVIDIA GeForce RTX 5070 Laptop GPU",
+    "gpu_cc": "12.0"
+  },
+  "total_checks": 148,
+  "passed": 148,
+  "failed": 0,
+  "verdict": "PASS",
+  "cases": [
+    {
+      "case": "vec_add_normal_256",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.88e-08,
+      "max_ulp": 0,
+      "output_sha256": "b3d206ae1bab0b8287aee6383c66ef8675463a903be1c674693d02637131479f",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_normal_256",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.88e-08,
+      "max_ulp": 0,
+      "output_sha256": "b3d206ae1bab0b8287aee6383c66ef8675463a903be1c674693d02637131479f",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_normal_256",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.88e-08,
+      "max_ulp": 0,
+      "output_sha256": "b3d206ae1bab0b8287aee6383c66ef8675463a903be1c674693d02637131479f",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_normal_256",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.88e-08,
+      "max_ulp": 0,
+      "output_sha256": "b3d206ae1bab0b8287aee6383c66ef8675463a903be1c674693d02637131479f",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_normal_256",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 0.0001155064,
+      "max_rel_err": 5.82e-08,
+      "max_ulp": 0,
+      "output_sha256": "14b072823e26bbbfa2dc0e6391b2702dbedb1c51bd80c4247ddf263b16e4b08c",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_normal_256",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0001155064,
+      "max_rel_err": 5.82e-08,
+      "max_ulp": 0,
+      "output_sha256": "14b072823e26bbbfa2dc0e6391b2702dbedb1c51bd80c4247ddf263b16e4b08c",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_normal_256",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0001155064,
+      "max_rel_err": 5.82e-08,
+      "max_ulp": 0,
+      "output_sha256": "14b072823e26bbbfa2dc0e6391b2702dbedb1c51bd80c4247ddf263b16e4b08c",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_normal_256",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 0.0001155064,
+      "max_rel_err": 5.82e-08,
+      "max_ulp": 0,
+      "output_sha256": "14b072823e26bbbfa2dc0e6391b2702dbedb1c51bd80c4247ddf263b16e4b08c",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_normal_256",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 0.000120088,
+      "max_rel_err": 5.64e-08,
+      "max_ulp": 0,
+      "output_sha256": "dbd5ae685ea1222c726b8b7b7ba0a1e3af87b759bf378619cb852b5d2ce5fbe7",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_normal_256",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.000120088,
+      "max_rel_err": 5.64e-08,
+      "max_ulp": 0,
+      "output_sha256": "dbd5ae685ea1222c726b8b7b7ba0a1e3af87b759bf378619cb852b5d2ce5fbe7",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_normal_256",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.000120088,
+      "max_rel_err": 5.64e-08,
+      "max_ulp": 0,
+      "output_sha256": "dbd5ae685ea1222c726b8b7b7ba0a1e3af87b759bf378619cb852b5d2ce5fbe7",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_normal_256",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 0.000120088,
+      "max_rel_err": 5.64e-08,
+      "max_ulp": 0,
+      "output_sha256": "dbd5ae685ea1222c726b8b7b7ba0a1e3af87b759bf378619cb852b5d2ce5fbe7",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_prime_1",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 4.768e-07,
+      "max_rel_err": 1.77e-08,
+      "max_ulp": 0,
+      "output_sha256": "3546ea4fd9c76d62a955cbe88c8c5024ccafb8ffebde8985269d2eecca23930d",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_prime_1",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 4.768e-07,
+      "max_rel_err": 1.77e-08,
+      "max_ulp": 0,
+      "output_sha256": "3546ea4fd9c76d62a955cbe88c8c5024ccafb8ffebde8985269d2eecca23930d",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_prime_1",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 4.768e-07,
+      "max_rel_err": 1.77e-08,
+      "max_ulp": 0,
+      "output_sha256": "3546ea4fd9c76d62a955cbe88c8c5024ccafb8ffebde8985269d2eecca23930d",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_prime_1",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 4.768e-07,
+      "max_rel_err": 1.77e-08,
+      "max_ulp": 0,
+      "output_sha256": "3546ea4fd9c76d62a955cbe88c8c5024ccafb8ffebde8985269d2eecca23930d",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_prime_1",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 1.421e-06,
+      "max_rel_err": 2.28e-08,
+      "max_ulp": 0,
+      "output_sha256": "147138e1d4f44f722fa26a76f2a8f3898733b7d97967ab05cedb0ec34f4fdf30",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_prime_1",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.421e-06,
+      "max_rel_err": 2.28e-08,
+      "max_ulp": 0,
+      "output_sha256": "147138e1d4f44f722fa26a76f2a8f3898733b7d97967ab05cedb0ec34f4fdf30",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_prime_1",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.421e-06,
+      "max_rel_err": 2.28e-08,
+      "max_ulp": 0,
+      "output_sha256": "147138e1d4f44f722fa26a76f2a8f3898733b7d97967ab05cedb0ec34f4fdf30",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_prime_1",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 1.421e-06,
+      "max_rel_err": 2.28e-08,
+      "max_ulp": 0,
+      "output_sha256": "147138e1d4f44f722fa26a76f2a8f3898733b7d97967ab05cedb0ec34f4fdf30",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_prime_1",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 1.421e-06,
+      "max_rel_err": 1.79e-08,
+      "max_ulp": 0,
+      "output_sha256": "c109f50f796df709ded142270dbe78d0c602e505005e879c2df7293790ac4202",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_prime_1",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.421e-06,
+      "max_rel_err": 1.79e-08,
+      "max_ulp": 0,
+      "output_sha256": "c109f50f796df709ded142270dbe78d0c602e505005e879c2df7293790ac4202",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_prime_1",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.421e-06,
+      "max_rel_err": 1.79e-08,
+      "max_ulp": 0,
+      "output_sha256": "c109f50f796df709ded142270dbe78d0c602e505005e879c2df7293790ac4202",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_prime_1",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 1.421e-06,
+      "max_rel_err": 1.79e-08,
+      "max_ulp": 0,
+      "output_sha256": "c109f50f796df709ded142270dbe78d0c602e505005e879c2df7293790ac4202",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_prime_17_unaligned4",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.56e-08,
+      "max_ulp": 0,
+      "output_sha256": "a98661b385a6f7b9a971267f8aac8bd97c412e1f962f07b2ab0754571225ab8a",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_prime_17_unaligned4",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.56e-08,
+      "max_ulp": 0,
+      "output_sha256": "a98661b385a6f7b9a971267f8aac8bd97c412e1f962f07b2ab0754571225ab8a",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_prime_17_unaligned4",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.56e-08,
+      "max_ulp": 0,
+      "output_sha256": "a98661b385a6f7b9a971267f8aac8bd97c412e1f962f07b2ab0754571225ab8a",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_prime_17_unaligned4",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.56e-08,
+      "max_ulp": 0,
+      "output_sha256": "a98661b385a6f7b9a971267f8aac8bd97c412e1f962f07b2ab0754571225ab8a",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_prime_17_unaligned4",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 4.79227e-05,
+      "max_rel_err": 4.32e-08,
+      "max_ulp": 0,
+      "output_sha256": "05bb6b1759088ffd2f90464c699ec5fd6d52b88848c7d67be110ce61e7f07f10",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_prime_17_unaligned4",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 4.79227e-05,
+      "max_rel_err": 4.32e-08,
+      "max_ulp": 0,
+      "output_sha256": "05bb6b1759088ffd2f90464c699ec5fd6d52b88848c7d67be110ce61e7f07f10",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_prime_17_unaligned4",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 4.79227e-05,
+      "max_rel_err": 4.32e-08,
+      "max_ulp": 0,
+      "output_sha256": "05bb6b1759088ffd2f90464c699ec5fd6d52b88848c7d67be110ce61e7f07f10",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_prime_17_unaligned4",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 4.79227e-05,
+      "max_rel_err": 4.32e-08,
+      "max_ulp": 0,
+      "output_sha256": "05bb6b1759088ffd2f90464c699ec5fd6d52b88848c7d67be110ce61e7f07f10",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_prime_17_unaligned4",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 5.74373e-05,
+      "max_rel_err": 4.89e-08,
+      "max_ulp": 0,
+      "output_sha256": "9394f7aa02de466e1df4e9d7b2dfff2d5214339664d960cf614fa25b5dcc0de6",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_prime_17_unaligned4",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 5.74373e-05,
+      "max_rel_err": 4.89e-08,
+      "max_ulp": 0,
+      "output_sha256": "9394f7aa02de466e1df4e9d7b2dfff2d5214339664d960cf614fa25b5dcc0de6",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_prime_17_unaligned4",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 5.74373e-05,
+      "max_rel_err": 4.89e-08,
+      "max_ulp": 0,
+      "output_sha256": "9394f7aa02de466e1df4e9d7b2dfff2d5214339664d960cf614fa25b5dcc0de6",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_prime_17_unaligned4",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 5.74373e-05,
+      "max_rel_err": 4.89e-08,
+      "max_ulp": 0,
+      "output_sha256": "9394f7aa02de466e1df4e9d7b2dfff2d5214339664d960cf614fa25b5dcc0de6",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_boundary_33_unaligned1",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.61e-08,
+      "max_ulp": 0,
+      "output_sha256": "726ed029fdede968d4f63af26874ac01765e9d9f1ab5a1c757f5f3e4614c0d05",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_boundary_33_unaligned1",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.61e-08,
+      "max_ulp": 0,
+      "output_sha256": "726ed029fdede968d4f63af26874ac01765e9d9f1ab5a1c757f5f3e4614c0d05",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_boundary_33_unaligned1",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.61e-08,
+      "max_ulp": 0,
+      "output_sha256": "726ed029fdede968d4f63af26874ac01765e9d9f1ab5a1c757f5f3e4614c0d05",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_boundary_33_unaligned1",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.61e-08,
+      "max_ulp": 0,
+      "output_sha256": "726ed029fdede968d4f63af26874ac01765e9d9f1ab5a1c757f5f3e4614c0d05",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_boundary_33_unaligned1",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 4.75332e-05,
+      "max_rel_err": 5.43e-08,
+      "max_ulp": 0,
+      "output_sha256": "cbaa09fa32b8d5d5772e86cb70e2fd6cb150709ca26a48617493c816d8918fda",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_boundary_33_unaligned1",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 4.75332e-05,
+      "max_rel_err": 5.43e-08,
+      "max_ulp": 0,
+      "output_sha256": "cbaa09fa32b8d5d5772e86cb70e2fd6cb150709ca26a48617493c816d8918fda",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_boundary_33_unaligned1",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 4.75332e-05,
+      "max_rel_err": 5.43e-08,
+      "max_ulp": 0,
+      "output_sha256": "cbaa09fa32b8d5d5772e86cb70e2fd6cb150709ca26a48617493c816d8918fda",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_boundary_33_unaligned1",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 4.75332e-05,
+      "max_rel_err": 5.43e-08,
+      "max_ulp": 0,
+      "output_sha256": "cbaa09fa32b8d5d5772e86cb70e2fd6cb150709ca26a48617493c816d8918fda",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_boundary_33_unaligned1",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 5.92895e-05,
+      "max_rel_err": 5.05e-08,
+      "max_ulp": 0,
+      "output_sha256": "66a45658109b9aa6bea97f63dbe1fa7aa31b365c298957b554f85e94ccd0ec8f",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_boundary_33_unaligned1",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 5.92895e-05,
+      "max_rel_err": 5.05e-08,
+      "max_ulp": 0,
+      "output_sha256": "66a45658109b9aa6bea97f63dbe1fa7aa31b365c298957b554f85e94ccd0ec8f",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_boundary_33_unaligned1",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 5.92895e-05,
+      "max_rel_err": 5.05e-08,
+      "max_ulp": 0,
+      "output_sha256": "66a45658109b9aa6bea97f63dbe1fa7aa31b365c298957b554f85e94ccd0ec8f",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_boundary_33_unaligned1",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 5.92895e-05,
+      "max_rel_err": 5.05e-08,
+      "max_ulp": 0,
+      "output_sha256": "66a45658109b9aa6bea97f63dbe1fa7aa31b365c298957b554f85e94ccd0ec8f",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_strided_23_s12",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.66e-08,
+      "max_ulp": 0,
+      "output_sha256": "82bc58d18891a638eef96fd68904d9bd389820d83800948e0b8036c1ffc2f35b",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_strided_23_s12",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.66e-08,
+      "max_ulp": 0,
+      "output_sha256": "82bc58d18891a638eef96fd68904d9bd389820d83800948e0b8036c1ffc2f35b",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_strided_23_s12",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.66e-08,
+      "max_ulp": 0,
+      "output_sha256": "82bc58d18891a638eef96fd68904d9bd389820d83800948e0b8036c1ffc2f35b",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_add_strided_23_s12",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 3.8147e-06,
+      "max_rel_err": 5.66e-08,
+      "max_ulp": 0,
+      "output_sha256": "82bc58d18891a638eef96fd68904d9bd389820d83800948e0b8036c1ffc2f35b",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_strided_23_s12",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 4.05115e-05,
+      "max_rel_err": 5.7e-08,
+      "max_ulp": 0,
+      "output_sha256": "d1b2079727cf0e8fe6beaa669fc925b7e552a5ebe8e78a83f0168be597901e1e",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_strided_23_s12",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 4.05115e-05,
+      "max_rel_err": 5.7e-08,
+      "max_ulp": 0,
+      "output_sha256": "d1b2079727cf0e8fe6beaa669fc925b7e552a5ebe8e78a83f0168be597901e1e",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_strided_23_s12",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 4.05115e-05,
+      "max_rel_err": 5.7e-08,
+      "max_ulp": 0,
+      "output_sha256": "d1b2079727cf0e8fe6beaa669fc925b7e552a5ebe8e78a83f0168be597901e1e",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_strided_23_s12",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 4.05115e-05,
+      "max_rel_err": 5.7e-08,
+      "max_ulp": 0,
+      "output_sha256": "d1b2079727cf0e8fe6beaa669fc925b7e552a5ebe8e78a83f0168be597901e1e",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_strided_23_s12",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 4.81176e-05,
+      "max_rel_err": 4.3e-08,
+      "max_ulp": 0,
+      "output_sha256": "6ef8661d2d10133328a8b22ac6367e302f9a06f5dcc45b468c1ac1cd7b808c30",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_strided_23_s12",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 4.81176e-05,
+      "max_rel_err": 4.3e-08,
+      "max_ulp": 0,
+      "output_sha256": "6ef8661d2d10133328a8b22ac6367e302f9a06f5dcc45b468c1ac1cd7b808c30",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_strided_23_s12",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 4.81176e-05,
+      "max_rel_err": 4.3e-08,
+      "max_ulp": 0,
+      "output_sha256": "6ef8661d2d10133328a8b22ac6367e302f9a06f5dcc45b468c1ac1cd7b808c30",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_fma_strided_23_s12",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 4.81176e-05,
+      "max_rel_err": 4.3e-08,
+      "max_ulp": 0,
+      "output_sha256": "6ef8661d2d10133328a8b22ac6367e302f9a06f5dcc45b468c1ac1cd7b808c30",
+      "detail": "ok"
+    },
+    {
+      "case": "dot_prime_63",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 1.206e-07,
+      "max_rel_err": 1.72e-08,
+      "max_ulp": 0,
+      "output_sha256": "b426bf13fbd253d49bc17bf1c63f18a7755fbffb70aaac20ef7f3d76f17008e8",
+      "detail": "ok"
+    },
+    {
+      "case": "dot_prime_63",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 5.974e-07,
+      "max_rel_err": 8.54e-08,
+      "max_ulp": 1,
+      "output_sha256": "fab9260f93ae6b95d33c9a996b48f6a381061d6432fa80001b94ab41ea7bc0ac",
+      "detail": "ok"
+    },
+    {
+      "case": "dot_prime_63",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.5511e-06,
+      "max_rel_err": 2.217e-07,
+      "max_ulp": 3,
+      "output_sha256": "3b0ff5604e5954eff32bb3f48ce161e12348fa75843361a5b416341cbb2a1da4",
+      "detail": "ok"
+    },
+    {
+      "case": "dot_prime_63",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 1.206e-07,
+      "max_rel_err": 1.72e-08,
+      "max_ulp": 0,
+      "output_sha256": "b426bf13fbd253d49bc17bf1c63f18a7755fbffb70aaac20ef7f3d76f17008e8",
+      "detail": "ok"
+    },
+    {
+      "case": "dot_extreme_subnormal",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "21fd37d7e8c776e5c2b7813fb098bc27e221625db2a5d50cc687c889307851e8",
+      "detail": "ok"
+    },
+    {
+      "case": "dot_extreme_subnormal",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "21fd37d7e8c776e5c2b7813fb098bc27e221625db2a5d50cc687c889307851e8",
+      "detail": "ok"
+    },
+    {
+      "case": "dot_extreme_subnormal",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "21fd37d7e8c776e5c2b7813fb098bc27e221625db2a5d50cc687c889307851e8",
+      "detail": "ok"
+    },
+    {
+      "case": "dot_extreme_subnormal",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "21fd37d7e8c776e5c2b7813fb098bc27e221625db2a5d50cc687c889307851e8",
+      "detail": "ok"
+    },
+    {
+      "case": "dot_cancellation_fp64_vs_cond_bound",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "ee0a6628f97214b7ef5d15c54388ea478862369e517aa4ef4593aea18c3ff618",
+      "detail": "cond_bound=1.000e-05 ok"
+    },
+    {
+      "case": "dot_cancellation_fp64_vs_cond_bound",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "ee0a6628f97214b7ef5d15c54388ea478862369e517aa4ef4593aea18c3ff618",
+      "detail": "cond_bound=1.500e+03 ok"
+    },
+    {
+      "case": "dot_cancellation_fp64_vs_cond_bound",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "ee0a6628f97214b7ef5d15c54388ea478862369e517aa4ef4593aea18c3ff618",
+      "detail": "cond_bound=1.500e+03 ok"
+    },
+    {
+      "case": "dot_cancellation_fp64_vs_cond_bound",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 7.0,
+      "max_rel_err": 1.0,
+      "max_ulp": 1088421888,
+      "output_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "detail": "cond_bound=1.500e+03 ok"
+    },
+    {
+      "case": "gemm_16x32x24",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 4.427e-07,
+      "max_rel_err": 5.34e-08,
+      "max_ulp": 0,
+      "output_sha256": "f7bdb8bcf7ef8bb68c482fa5289ecd2ffb19ced7ce64c95747496de52f4b7755",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_16x32x24",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 2.2564e-06,
+      "max_rel_err": 1.62788e-05,
+      "max_ulp": 270,
+      "output_sha256": "ac5959822aaab4c6ada6f9214e0ad9d4fb13d0d7f5f8c17308b234cc82c303ce",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_16x32x24",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 2.2564e-06,
+      "max_rel_err": 1.62788e-05,
+      "max_ulp": 270,
+      "output_sha256": "ac5959822aaab4c6ada6f9214e0ad9d4fb13d0d7f5f8c17308b234cc82c303ce",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_16x32x24",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 2.2564e-06,
+      "max_rel_err": 1.62788e-05,
+      "max_ulp": 270,
+      "output_sha256": "ac5959822aaab4c6ada6f9214e0ad9d4fb13d0d7f5f8c17308b234cc82c303ce",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_prime_7x19x11_unaligned4",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 4.262e-07,
+      "max_rel_err": 5.39e-08,
+      "max_ulp": 0,
+      "output_sha256": "79c7c4f7d9184119b77e4b07b733a6f358ab1cee7c93174045d9a817253a3862",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_prime_7x19x11_unaligned4",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 7.554e-07,
+      "max_rel_err": 1.9698e-06,
+      "max_ulp": 21,
+      "output_sha256": "b47f41de4c953fa72d6e90d66cf84785b7a777cfbb947819c3309ec5261b74b1",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_prime_7x19x11_unaligned4",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 7.554e-07,
+      "max_rel_err": 1.9698e-06,
+      "max_ulp": 21,
+      "output_sha256": "b47f41de4c953fa72d6e90d66cf84785b7a777cfbb947819c3309ec5261b74b1",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_prime_7x19x11_unaligned4",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 7.554e-07,
+      "max_rel_err": 1.9698e-06,
+      "max_ulp": 21,
+      "output_sha256": "b47f41de4c953fa72d6e90d66cf84785b7a777cfbb947819c3309ec5261b74b1",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_padded_stride",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 2.328e-07,
+      "max_rel_err": 5.77e-08,
+      "max_ulp": 0,
+      "output_sha256": "d82aaf6e2e8a115cfe8fec395265b2fcabd2f574a63d216a26d00d03d90468a8",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_padded_stride",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 8.412e-07,
+      "max_rel_err": 1.02441e-05,
+      "max_ulp": 109,
+      "output_sha256": "6cf6d3c9db01ca25a803cafbd61090fb33b4cc65f4e3287e403d3b20d2a41788",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_padded_stride",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 8.412e-07,
+      "max_rel_err": 1.02441e-05,
+      "max_ulp": 109,
+      "output_sha256": "6cf6d3c9db01ca25a803cafbd61090fb33b4cc65f4e3287e403d3b20d2a41788",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_padded_stride",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 8.412e-07,
+      "max_rel_err": 1.02441e-05,
+      "max_ulp": 109,
+      "output_sha256": "6cf6d3c9db01ca25a803cafbd61090fb33b4cc65f4e3287e403d3b20d2a41788",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_transposed_A_stride",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 8.78e-08,
+      "max_rel_err": 4.9e-08,
+      "max_ulp": 0,
+      "output_sha256": "6c9cb3476de260a505fa5e05e35fcfe8e667c59087333e57baa9398c7254eb49",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_transposed_A_stride",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.507e-07,
+      "max_rel_err": 5.106e-07,
+      "max_ulp": 4,
+      "output_sha256": "37bfee019717a783ee3ae31ed057d9fa1dde3f6e3316885562e52f45b6a97218",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_transposed_A_stride",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.507e-07,
+      "max_rel_err": 5.106e-07,
+      "max_ulp": 4,
+      "output_sha256": "37bfee019717a783ee3ae31ed057d9fa1dde3f6e3316885562e52f45b6a97218",
+      "detail": "ok"
+    },
+    {
+      "case": "gemm_transposed_A_stride",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 1.507e-07,
+      "max_rel_err": 5.106e-07,
+      "max_ulp": 4,
+      "output_sha256": "37bfee019717a783ee3ae31ed057d9fa1dde3f6e3316885562e52f45b6a97218",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_8x128",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 1.136e-07,
+      "max_rel_err": 5.87e-08,
+      "max_ulp": 0,
+      "output_sha256": "908c802f497bafd587cc6df14f984127b2ac4d9eda5e9a3d373722f4b2b8241c",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_8x128",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 3.415e-07,
+      "max_rel_err": 1.728e-07,
+      "max_ulp": 3,
+      "output_sha256": "689cdea44468ae9ca11b93bb135cdda8075f3c5f447d3cfa7eca55f268f4ae92",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_8x128",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 2.918e-07,
+      "max_rel_err": 1.247e-07,
+      "max_ulp": 2,
+      "output_sha256": "6d84ab81a09d4e1c74c575caf7460496492dbd63a6d99ee647d028b7fcb6e9f2",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_8x128",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 2.918e-07,
+      "max_rel_err": 1.247e-07,
+      "max_ulp": 2,
+      "output_sha256": "6d84ab81a09d4e1c74c575caf7460496492dbd63a6d99ee647d028b7fcb6e9f2",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_prime_3x37_padded",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 1.011e-07,
+      "max_rel_err": 5.52e-08,
+      "max_ulp": 0,
+      "output_sha256": "e3cb0d14052a2ca3f3d602c78b2d0a3d53c87d7e45b0d99aca62c78846ae2743",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_prime_3x37_padded",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 2.498e-07,
+      "max_rel_err": 1.534e-07,
+      "max_ulp": 2,
+      "output_sha256": "80eddcfa0d7ed15665d8b0ff81731e69dddb036d32e49f3783275b55d9b7c50d",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_prime_3x37_padded",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 2.498e-07,
+      "max_rel_err": 1.534e-07,
+      "max_ulp": 2,
+      "output_sha256": "80eddcfa0d7ed15665d8b0ff81731e69dddb036d32e49f3783275b55d9b7c50d",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_prime_3x37_padded",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 2.301e-07,
+      "max_rel_err": 1.494e-07,
+      "max_ulp": 2,
+      "output_sha256": "9d6174fa6a48c6967c6dfc3627052a56fd1b45f2f86188fe81bbfcea3ae88675",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_extreme_mag",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 1.003e-07,
+      "max_rel_err": 5.24e-08,
+      "max_ulp": 0,
+      "output_sha256": "aef2380986c3591da253c4455ec2ec29283b3762acc8cc3a297f49318e4840cc",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_extreme_mag",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 3.387e-07,
+      "max_rel_err": 1.925e-07,
+      "max_ulp": 3,
+      "output_sha256": "0b1edcab15d5cddf9ab78799bba28c31209a2315b34f03cee8cda02cf9e42e82",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_extreme_mag",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.961e-07,
+      "max_rel_err": 1.143e-07,
+      "max_ulp": 1,
+      "output_sha256": "dd0c26a4b3318a2b81e84a51f7189e54f7a4af530b7d460de4bb103563b257ff",
+      "detail": "ok"
+    },
+    {
+      "case": "rmsnorm_extreme_mag",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 1.961e-07,
+      "max_rel_err": 1.143e-07,
+      "max_ulp": 1,
+      "output_sha256": "dd0c26a4b3318a2b81e84a51f7189e54f7a4af530b7d460de4bb103563b257ff",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_6x64",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 6e-09,
+      "max_rel_err": 5.93e-08,
+      "max_ulp": 0,
+      "output_sha256": "44d6de3cae34cbaece225703d59d9589851c085f756cfee50fadc899391d76b5",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_6x64",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.93e-08,
+      "max_rel_err": 6.47e-07,
+      "max_ulp": 8,
+      "output_sha256": "bfffa630f9c37aadd2514dc6d564eaf120baadb196779daa0ea61be0500982aa",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_6x64",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.95e-08,
+      "max_rel_err": 6.47e-07,
+      "max_ulp": 8,
+      "output_sha256": "b4f5e90ec358dd668e833d532db61c452c98e869d2f5b3990c3ba2e859d5fcd4",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_6x64",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 1.11e-08,
+      "max_rel_err": 7.947e-07,
+      "max_ulp": 12,
+      "output_sha256": "27b241f7cddb40d005072ba3d5caad4bc4c5030f9b03e051a86902d9e084ec0e",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_prime_3x19_extreme",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 6.9e-09,
+      "max_rel_err": 4.93e-08,
+      "max_ulp": 0,
+      "output_sha256": "370a2be450f7beb815264963a972b682af24baaa814e1a12f7b9e1e253ce852f",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_prime_3x19_extreme",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 6.9e-09,
+      "max_rel_err": 7.98e-08,
+      "max_ulp": 1,
+      "output_sha256": "8fe16c4cc7db279f4555a3a1a315ceb511aa76a053d06760f52bbfd6b51b4417",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_prime_3x19_extreme",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 8.8e-09,
+      "max_rel_err": 9.34e-08,
+      "max_ulp": 1,
+      "output_sha256": "ece6ce53ca4b1225a879ef9291877aebb0cdb8620f31999ecff0e4b87e807611",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_prime_3x19_extreme",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 9.8e-09,
+      "max_rel_err": 1.614e-07,
+      "max_ulp": 2,
+      "output_sha256": "ffc79674a1434f12905cccc91248b824a61c9f4f3ed68cdd9a682147adc24eff",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_neginf",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 1.23e-08,
+      "max_rel_err": 1.94e-08,
+      "max_ulp": 0,
+      "output_sha256": "a6c4544994bfcdb478480e8013237dc77d737e16fd034118d9bc506589730be9",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_neginf",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.23e-08,
+      "max_rel_err": 1.94e-08,
+      "max_ulp": 0,
+      "output_sha256": "a6c4544994bfcdb478480e8013237dc77d737e16fd034118d9bc506589730be9",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_neginf",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.23e-08,
+      "max_rel_err": 1.94e-08,
+      "max_ulp": 0,
+      "output_sha256": "a6c4544994bfcdb478480e8013237dc77d737e16fd034118d9bc506589730be9",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_neginf",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 7.19e-08,
+      "max_rel_err": 1.082e-07,
+      "max_ulp": 2,
+      "output_sha256": "c8ffba9c42246aad81fa9f9dbf49a172092ed6f16a26fdf6963d0d318d0b5f17",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_nan_prop",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "ef99cfd192ee2fe43a68cef2af40c85c2c215759f491c1b3fa09ed0f794f9201",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_nan_prop",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "ef99cfd192ee2fe43a68cef2af40c85c2c215759f491c1b3fa09ed0f794f9201",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_nan_prop",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "ef99cfd192ee2fe43a68cef2af40c85c2c215759f491c1b3fa09ed0f794f9201",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_nan_prop",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "c66856d3622ef1af1acca8762554ca873b9ea946fc38967d2d42caba297dc8d7",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_posinf",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "ea06fd74e68592f9e87de99c9c3a4d3cca4373493c781475263d463f49fbf2a5",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_posinf",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "ea06fd74e68592f9e87de99c9c3a4d3cca4373493c781475263d463f49fbf2a5",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_posinf",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "ea06fd74e68592f9e87de99c9c3a4d3cca4373493c781475263d463f49fbf2a5",
+      "detail": "ok"
+    },
+    {
+      "case": "softmax_posinf",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "c66856d3622ef1af1acca8762554ca873b9ea946fc38967d2d42caba297dc8d7",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_nan_inf",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "4f3f31390e14ca468a19f74a53add99b383446da40a1a7f73a9fae88cc3ba279",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_nan_inf",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "4f3f31390e14ca468a19f74a53add99b383446da40a1a7f73a9fae88cc3ba279",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_nan_inf",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "4f3f31390e14ca468a19f74a53add99b383446da40a1a7f73a9fae88cc3ba279",
+      "detail": "ok"
+    },
+    {
+      "case": "vec_mul_nan_inf",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "94f391348ea937efc45765835241984bc8c25fddd5d4af139f05228a1aeb21ab",
+      "detail": "ok"
+    },
+    {
+      "case": "dequant_q8_0_5x96",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "d9f336b7940e5b4ed1f4fdf7ce883c928d875b409afa536976882b5da9615f2c",
+      "detail": "ok"
+    },
+    {
+      "case": "dequant_q8_0_5x96",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "d9f336b7940e5b4ed1f4fdf7ce883c928d875b409afa536976882b5da9615f2c",
+      "detail": "ok"
+    },
+    {
+      "case": "dequant_q8_0_5x96",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "d9f336b7940e5b4ed1f4fdf7ce883c928d875b409afa536976882b5da9615f2c",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q8_0_5x96",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 2.4696e-06,
+      "max_rel_err": 2.26e-08,
+      "max_ulp": 0,
+      "output_sha256": "d30ff6ad213a442a6adb50d75c2800e8f7b1ca6217270a91ea195823ec5a067f",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q8_0_5x96",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 2.36862e-05,
+      "max_rel_err": 5.005e-07,
+      "max_ulp": 6,
+      "output_sha256": "832669eeeead400392b5b148d96ad37ee5de4c67bf5b353e882e1ffa6e23ba20",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q8_0_5x96",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 4.6127e-06,
+      "max_rel_err": 9.75e-08,
+      "max_ulp": 1,
+      "output_sha256": "7c56ec1626fd9d5057aa4e543d7d54253525414553de08b42961baeeff5f277e",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q8_0_5x96",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 2.4696e-06,
+      "max_rel_err": 2.26e-08,
+      "max_ulp": 0,
+      "output_sha256": "d30ff6ad213a442a6adb50d75c2800e8f7b1ca6217270a91ea195823ec5a067f",
+      "detail": "ok"
+    },
+    {
+      "case": "dequant_q4_0_4x128",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "cb4c429c6f3ab212884035125db18eec1203e7ad9f5efc76e2872e2062ae8681",
+      "detail": "ok"
+    },
+    {
+      "case": "dequant_q4_0_4x128",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "cb4c429c6f3ab212884035125db18eec1203e7ad9f5efc76e2872e2062ae8681",
+      "detail": "ok"
+    },
+    {
+      "case": "dequant_q4_0_4x128",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "cb4c429c6f3ab212884035125db18eec1203e7ad9f5efc76e2872e2062ae8681",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q4_0_4x128",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 1.094e-07,
+      "max_rel_err": 3.58e-08,
+      "max_ulp": 0,
+      "output_sha256": "cbed972ab7f8904041c5cbd39d87c9342a1170c8424617ae0d191be8587d78bd",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q4_0_4x128",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 2.0033e-06,
+      "max_rel_err": 9.674e-07,
+      "max_ulp": 8,
+      "output_sha256": "9787a194fd0901e1871aca6f0314dcef2d677730783b9e94245322fb0f065391",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q4_0_4x128",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 1.0496e-06,
+      "max_rel_err": 8.958e-07,
+      "max_ulp": 8,
+      "output_sha256": "b70852f299cc710e6793c8726e7a5d934df2ef909f7df8a4f8d651b3cb167ecc",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q4_0_4x128",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 6.786e-07,
+      "max_rel_err": 6.629e-07,
+      "max_ulp": 6,
+      "output_sha256": "9e832043fc73ff9c2b8f5ca6afb178698dd7c306b77c0b681ef096eefed46e96",
+      "detail": "ok"
+    },
+    {
+      "case": "dequant_q4_k_3x512",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "9a74c97b750f84ac0b684f86db8eba2a34d44894d301b67cd5701df364e8ec9a",
+      "detail": "ok"
+    },
+    {
+      "case": "dequant_q4_k_3x512",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "9a74c97b750f84ac0b684f86db8eba2a34d44894d301b67cd5701df364e8ec9a",
+      "detail": "ok"
+    },
+    {
+      "case": "dequant_q4_k_3x512",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 0.0,
+      "max_rel_err": 0.0,
+      "max_ulp": 0,
+      "output_sha256": "9a74c97b750f84ac0b684f86db8eba2a34d44894d301b67cd5701df364e8ec9a",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q4_k_3x512",
+      "backend": "SCALAR_C99_FP64",
+      "status": "PASS",
+      "max_abs_err": 5.10268e-05,
+      "max_rel_err": 4.14e-08,
+      "max_ulp": 0,
+      "output_sha256": "0851471ed2bea2f15bcb7eddb72d04c35be69b2d0e822fc581dc911ffc37d8c0",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q4_k_3x512",
+      "backend": "SCALAR_C99_FMA",
+      "status": "PASS",
+      "max_abs_err": 0.0001931138,
+      "max_rel_err": 4.594e-07,
+      "max_ulp": 6,
+      "output_sha256": "e04aabe70343d2f1488f6450ddce118361df32944393f55cd2e7579c0a3b606b",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q4_k_3x512",
+      "backend": "AVX2_FMA",
+      "status": "PASS",
+      "max_abs_err": 8.22887e-05,
+      "max_rel_err": 2.175e-07,
+      "max_ulp": 3,
+      "output_sha256": "fc6d142190c30f3ffb92aaa8d5dc3e19c283c9061dc8a76a995294acd6cf35a5",
+      "detail": "ok"
+    },
+    {
+      "case": "matvec_q4_k_3x512",
+      "backend": "PTX_SM120",
+      "status": "PASS",
+      "max_abs_err": 0.0001313343,
+      "max_rel_err": 3.471e-07,
+      "max_ulp": 4,
+      "output_sha256": "7aa7823623e81d8dc43cca48f53b84c1da8980b0f3f7a5b37985ec81126d0719",
+      "detail": "ok"
+    }
+  ],
+  "edge_checks": [
+    {
+      "check": "invalid_shape_plus_readonly_rejected",
+      "rc": -8,
+      "status": "PASS"
+    },
+    {
+      "check": "simulated_missing_xcr0_exact_avx2_rejected",
+      "rc": -11,
+      "status": "PASS"
+    },
+    {
+      "check": "simulated_missing_xcr0_auto_fallback_scalar",
+      "rc": 0,
+      "backend_executed": 1,
+      "fallback": 1,
+      "status": "PASS"
+    }
+  ]
+}

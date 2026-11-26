@@ -1,0 +1,400 @@
+{
+  "schema_version": "track21a.repo_audit.v1",
+  "generated_at_utc": "2026-11-26T01:30:00Z",
+  "governing_rules": [
+    "ZCC-EF-0",
+    "ZCC-EF-7",
+    "RBT-Phase-0"
+  ],
+  "repository_state": {
+    "repo_path": "/mnt/h/__DOWNLOADS/zcc_github_upload",
+    "git_head_sha": "8ff7da72d3840594b38946df0ee45085eb479d7f",
+    "git_head_summary": "8ff7da72d 2026-11-25 feat(gpu,llm,lora,studio,sdk): add sovereign Tracks 6-20 Win64/Linux GPU LLM & LoRA Studio, cartridges, OpenAPI/SDKs & gate evidence, no spin",
+    "forensic_latest_sha": "049edf00553c5f114b3c9d200b0e9010636326f2",
+    "forensic_latest_file": "FORENSIC_025_PACKED_ALIGNMENT.md",
+    "rbt_phase0_verdict": {
+      "BASELINE": "GREEN",
+      "SYMPTOM_IN_HISTORY": "NO",
+      "FORENSIC_LATEST_SHA": "049edf00553c5f114b3c9d200b0e9010636326f2",
+      "PROCEED": "YES"
+    },
+    "preexisting_unstaged_modifications_untouched": [
+      "LAUNCH_COSMIC_ELEPHANT.bat",
+      "LAUNCH_DEMO_SPRITES.bat",
+      "LAUNCH_HAMILTONIAN_VISUALIZER.bat",
+      "LAUNCH_HEIST_DASHBOARD.bat",
+      "LAUNCH_MASTER_GOD.bat",
+      "LAUNCH_MASTER_GOD.py",
+      "exp1_raytracer_simd.c",
+      "spectrogram_waterfall_prime.html",
+      "tools/dashboards/master_god_dashboard.html"
+    ],
+    "host_constraints": [
+      "Windows Device Guard / Smart App Control blocks unsigned new Win64 .exe launches on native Windows host (Linux ELF64 ./zcc, gcc, and WSL2 libcuda.so.1 run natively; ./zcc -target win64 PE32+ static/IAT build paths compile on host).",
+      "Repository .githooks/pre-commit (tools/pre-commit-binary-tripwire.py) rejects staged files > 1.00 MiB (1048576 bytes) and root binaries/non-whitelisted extensions."
+    ]
+  },
+  "toolchain_and_hardware": {
+    "os_kernel": "Linux 6.18.58.1-microsoft-standard-WSL2 x86_64",
+    "host_gcc": "gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+    "python": "Python 3.14.4",
+    "cpu_model": "AMD Ryzen AI 7 350 w/ Radeon 860M",
+    "logical_cpus": 16,
+    "cpu_flags_observed": [
+      "sse2",
+      "ssse3",
+      "sse4_1",
+      "sse4_2",
+      "xsave",
+      "avx",
+      "avx2",
+      "fma",
+      "bmi1",
+      "bmi2",
+      "f16c",
+      "avx512f",
+      "avx512dq",
+      "avx512bw",
+      "avx512vl",
+      "sha_ni"
+    ],
+    "gpu": {
+      "name": "NVIDIA GeForce RTX 5070 Laptop GPU",
+      "compute_cap": "12.0",
+      "driver_version": "576.76",
+      "memory_total": "8151 MiB",
+      "cuda_driver_api": "/usr/lib/wsl/lib/libcuda.so.1"
+    }
+  },
+  "baseline_verification": {
+    "make_selfhost": {
+      "status": "PASS",
+      "command": "make selfhost && cmp zcc2.s zcc3.s && md5sum zcc2.s zcc3.s",
+      "zcc2_s_md5": "6b83f8d4c14bbdc925fc33be6af1979b",
+      "zcc3_s_md5": "6b83f8d4c14bbdc925fc33be6af1979b",
+      "stage2_s_sha256": "59d64567d536cf6263f3dd971777b7626b28951f02f014c5197e785a138ccd9c",
+      "stage3_s_sha256": "59d64567d536cf6263f3dd971777b7626b28951f02f014c5197e785a138ccd9c",
+      "stage2_bin_sha256": "5c8d164bdc021e4534da92871af87a8e9b8c5f8994a458cd2cb35e80bb32f471",
+      "stage3_bin_sha256": "5c8d164bdc021e4534da92871af87a8e9b8c5f8994a458cd2cb35e80bb32f471",
+      "argon4_suites": "6/6 PASSED",
+      "evidence_class": "OBSERVED"
+    },
+    "make_check_forgezero_receipt": {
+      "status": "PASS",
+      "result": "72 passed, 0 failed",
+      "note": "Compiled standalone with gcc (Makefile target check-forgezero-receipt), not linked into default zcc binary.",
+      "evidence_class": "OBSERVED"
+    },
+    "make_check_ir_vuln_tag": {
+      "status": "PASS",
+      "result": "69 passed, 0 failed",
+      "evidence_class": "OBSERVED"
+    },
+    "make_test_avxzkd": {
+      "status": "PASS",
+      "result": "AVXZKD SUPREME v2.5 ALL C TESTS 100% VERIFIED",
+      "caveat": "Built with global -O3 -mavx2 -mfma -fopenmp flags on AVX2/AVX512F host; masks missing scalar fallback and unsafe OSXSAVE/XCR0 CPUID gating.",
+      "evidence_class": "OBSERVED"
+    },
+    "make_verify_differential": {
+      "status": "PASS",
+      "result": "32 seeds, 64 UB-free C99 TUs, 192 executions [ZCC2 + GCC -O0 + GCC UBSan/ASan], 0 divergences in 5.33s",
+      "evidence_class": "OBSERVED"
+    }
+  },
+  "module_inventory": [
+    {
+      "path": "part6_ptx.c",
+      "tracked_in_git": true,
+      "lines": 4740,
+      "bytes": 298267,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "call_sites": [
+        "part5.c:2361 (ptx_try_compile_gguf)",
+        "part5.c:3114 (ptx_lower_program)"
+      ],
+      "build_wiring": "Makefile PARTS -> concatenated into zcc.c; compiled into ./zcc",
+      "reusable_for_track21a": true,
+      "role_in_track21a": "C99 -> PTX ISA 8.7 (sm_80..sm_120) compiler backend. Compare against untracked src/backend/ir_to_ptx.c (legacy .version 7.8 sm_80, 0 callers for ir_module_lower_ptx_string).",
+      "gaps_or_risks": [
+        "Compiler-side emitter only; needs runtime host launcher/memory contract (using libcuda.so.1 / Win64 nvcuda.dll pattern from src/win64_gpu_compute.c) and strict error propagation."
+      ]
+    },
+    {
+      "path": "forgezero_receipt.c",
+      "headers_or_companions": ["forgezero_receipt.h", "forgezero_receipt_stub.c"],
+      "tracked_in_git": true,
+      "lines": 581,
+      "bytes": 18717,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": false,
+      "call_sites": [
+        "part5.c:3481-3495 (calls fzr_*, resolves to forgezero_receipt_stub.c no-ops in default zcc and selfhost zcc.c)",
+        "tests/test_forgezero_receipt.c (standalone gcc binary via make check-forgezero-receipt)"
+      ],
+      "build_wiring": "forgezero_receipt_stub.c is in PARTS; forgezero_receipt.c is NOT in PASSES.",
+      "reusable_for_track21a": false,
+      "role_in_track21a": "Reference JSONL schema structure only. Uses 32-bit non-cryptographic djb2 hash and targets IR vulnerability scans (FZR_SCHEMA_VERSION 1.0), unsuitable for cryptographic tamper-evident compute receipts.",
+      "gaps_or_risks": [
+        "Stubbed out in main zcc compiler binary.",
+        "Non-cryptographic djb2 hash cannot provide tamper resistance under T21-G09."
+      ]
+    },
+    {
+      "path": "ir_telemetry.c",
+      "headers_or_companions": ["ir_telemetry.h", "ir_telemetry_stub.c"],
+      "tracked_in_git": true,
+      "lines": 423,
+      "bytes": 13362,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "call_sites": [
+        "part5.c:2523 (ir_telem_init)",
+        "part5.c:3519 (ir_telem_shutdown)"
+      ],
+      "build_wiring": "ir_telemetry.c is in PASSES for host gcc zcc build; ir_telemetry_stub.c is in PARTS for self-hosted zcc.c.",
+      "reusable_for_track21a": false,
+      "role_in_track21a": "Best-effort POSIX UDP/stdout compiler optimization telemetry (127.0.0.1:41337, enabled by ZCC_EMIT_TELEMETRY=1); not usable as authoritative compute provenance.",
+      "gaps_or_risks": [
+        "POSIX socket dependency (Linux/WSL only).",
+        "Fire-and-forget telemetry stream (observer only per ZCC-EF-0)."
+      ]
+    },
+    {
+      "path": "ir_pass_warden.c",
+      "headers_or_companions": ["ir_pass_warden.h"],
+      "tracked_in_git": true,
+      "lines": 556,
+      "bytes": 21778,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "call_sites": [
+        "ir_pass_manager.c:1899,1931 (registered as \"warden\")"
+      ],
+      "build_wiring": "In Makefile PASSES.",
+      "reusable_for_track21a": false,
+      "role_in_track21a": "EVM data-flow taint analysis pass over compiler IR (IR_TAG_CALLDATALOAD, IR_TAG_SSTORE); outside compute tensor runtime scope."
+    },
+    {
+      "path": "ir_pass_taint.c",
+      "headers_or_companions": ["ir_pass_taint.h"],
+      "tracked_in_git": true,
+      "lines": 96,
+      "bytes": 3561,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "call_sites": [
+        "ir_pass_manager.c:1918 (registered as \"taint_propagate\")"
+      ],
+      "build_wiring": "In Makefile PASSES.",
+      "reusable_for_track21a": false,
+      "role_in_track21a": "EVM flow-sensitive FFI taint pass setting IR_VULN_PRIV_BOUNDARY; outside compute runtime scope."
+    },
+    {
+      "path": "ir_vuln_tag.c",
+      "headers_or_companions": ["ir_vuln_tag.h"],
+      "tracked_in_git": true,
+      "lines": 244,
+      "bytes": 8334,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "call_sites": [
+        "evm_lifter.c:759,1965",
+        "ir_pass_taint.c:40,53",
+        "src/evm/evm_symbolic_harness.c:32,37,44",
+        "tests/test_ir_vuln_tag.c (69 passed via make check-ir-vuln-tag)"
+      ],
+      "build_wiring": "In Makefile PASSES.",
+      "reusable_for_track21a": false,
+      "role_in_track21a": "EVM/IR node bitmask schema; retained untouched for compiler regression preservation."
+    },
+    {
+      "path": "src/x86_codegen_sse.c",
+      "headers_or_companions": ["src/x86_codegen_sse.h"],
+      "tracked_in_git": true,
+      "lines": 887,
+      "bytes": 54599,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "call_sites": [
+        "part5.c:1255 (zcc_x86_peephole_boost IS reachable and active)",
+        "sse_emit_float_binop (0 callers - unreachable dead helper)"
+      ],
+      "build_wiring": "In Makefile PASSES.",
+      "reusable_for_track21a": false,
+      "role_in_track21a": "x86-64 compiler assembly peephole optimizer (Pass 0a..8); sse_emit_* helpers are unwired. Retained untouched."
+    },
+    {
+      "path": "src/avxzkd_supreme.c",
+      "headers_or_companions": ["include/avxzkd_supreme.h"],
+      "tracked_in_git": true,
+      "lines": 750,
+      "bytes": 28523,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": false,
+      "call_sites": [
+        "tests/test_avxzkd_supreme.c (only caller; built with make test-avxzkd)"
+      ],
+      "build_wiring": "Built into standalone libavxzkd.a / libavxzkd.so / avxzkd using AVXZKD_CFLAGS = -O3 -mavx2 -mfma -fopenmp.",
+      "reusable_for_track21a": false,
+      "role_in_track21a": "2D PDE Hamiltonian recursion, Laplacian/Hessian curvature, SipHash-64 audit, two-regime walker, 16-node DTQW. NOT general tensor/GEMM/quant compute.",
+      "gaps_or_risks": [
+        "DEFECT-01: Global -mavx2 -mfma compilation permits AVX2/VEX code generation outside gated SIMD TUs (unsafe on pre-AVX2 CPUs prior to CPUID).",
+        "DEFECT-02: avxzkd_get_cpu_features() relies on __builtin_cpu_supports and lacks explicit CPUID+OSXSAVE+XCR0[2:1] state check and independent FMA bit check.",
+        "DEFECT-03: avxzkd_deep_recurse_auto() line 259 calls avxzkd_deep_recurse_avx2(...) even when AVXZKD_CPU_AVX2 is clear (no scalar fallback).",
+        "DEFECT-04: avxzkd_dtqw_step_auto() line 734 unconditionally calls avxzkd_dtqw_step_avx2(...) without checking AVXZKD_CPU_AVX2."
+      ]
+    },
+    {
+      "path": "src/zcc_smt_prover.c",
+      "headers_or_companions": ["src/zcc_smt_prover.h"],
+      "tracked_in_git": true,
+      "lines": 673,
+      "bytes": 27324,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "call_sites": [
+        "part5.c:822,845 (smt_prove_push_pop_elision)",
+        "zcc_ir_opt_passes.h:271,283,298 (smt_prove_ir_peephole)",
+        "verify_smt.c"
+      ],
+      "build_wiring": "In Makefile PASSES; weak stub in src/opt/zcc_ir_opt_helpers.c.",
+      "reusable_for_track21a": false,
+      "role_in_track21a": "Compiler optimization SMT-LIB2 (QF_BV) obligation emitter; complementary compiler verification, not runtime tensor compute."
+    },
+    {
+      "path": "src/zcc_tensor_attest.c",
+      "headers_or_companions": ["src/zcc_tensor_attest.h"],
+      "tracked_in_git": true,
+      "lines": 567,
+      "bytes": 22213,
+      "implemented": true,
+      "tested": false,
+      "reachable_at_runtime": false,
+      "call_sites": [
+        "0 C callers for zcc_verify_tensor_manifest() across tracked .c/.h/Makefile; ELF .zcc_tensor_attest section emitted by src/zld.c and verified offline by tools/zcc_verify_attest.py."
+      ],
+      "build_wiring": "NOT in PARTS or PASSES.",
+      "reusable_for_track21a": true,
+      "role_in_track21a": "Contains verified freestanding pure-C99 FIPS 180-4 SHA-256 (ZccSHA256_CTX) and tensor manifest structures; SHA-256 primitive pattern can be extracted into Track 21A receipt library (Note: src/gguf_emit.c, src/win64_gpu_llm.c, src/zcc_oracle_substrate.c each currently duplicate static copies of zcc_sha256_init)."
+    },
+    {
+      "path": "src/zcc_oracle_substrate.c",
+      "headers_or_companions": ["src/zcc_oracle_substrate.h"],
+      "tracked_in_git": true,
+      "lines": 2170,
+      "bytes": 77766,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "call_sites": [
+        "part5.c:3499 (zxr_emit_record)",
+        "part5.c:3503 (zxr_replay_record)"
+      ],
+      "build_wiring": "In Makefile PASSES; stubbed in win64_runtime_bridge.c and wasm_zcc_stubs.c.",
+      "reusable_for_track21a": false,
+      "role_in_track21a": "Compiler pass JSON replay trace (ZXR); includes duplicate local compiler AST struct declarations (lines 12-180) and hardcoded stage fingerprint constants (lines 552-556), unsuitable for tensor execution provenance."
+    },
+    {
+      "path": "src/zk/zk_stark_emit.c",
+      "tracked_in_git": true,
+      "lines": 314,
+      "bytes": 11198,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "call_sites": [
+        "part5.c:3200 (g_emit_stark_proof)"
+      ],
+      "build_wiring": "In Makefile PASSES; linked in zcc.",
+      "reusable_for_track21a": false,
+      "role_in_track21a": "Goldilocks/Keccak-256 STARK calldata proof emitter for compiler IR; distinguished in Track 21A contract from hash integrity and deterministic replay."
+    },
+    {
+      "path": "src/win64_gpu_llm_kernels.c",
+      "headers_or_companions": ["src/win64_gpu_compute.c", "src/win64_gpu_llm.c", "include/zcc_gpu_llm_api.h"],
+      "tracked_in_git": true,
+      "lines": 1427,
+      "bytes": 53394,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "call_sites": [
+        "part5.c / CLI PTX GGUF compilation and Track 17-20 runtime/DLL/HTTP Studio"
+      ],
+      "reusable_for_track21a": true,
+      "role_in_track21a": "Concrete GPU kernel reference formulas (Q8_0 34B, Q4_0 18B, Q4_K 144B/256-elem super-block, Q6_K, F16, BF16, RMSNorm, Softmax, GEMM) and CUDA Driver dynamic dlopen/cuInit/cuModuleLoadDataEx pattern plus existing ZccLlmGenConfig/ZccLlmStats ABI."
+    },
+    {
+      "path": "Makefile",
+      "tracked_in_git": true,
+      "lines": 2063,
+      "bytes": 99140,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "reusable_for_track21a": true,
+      "role_in_track21a": "Build/test orchestration defining PARTS, PASSES, selfhost (gate.sh), verify-differential, check-forgezero-receipt, check-ir-vuln-tag, test-avxzkd, and release-verify."
+    },
+    {
+      "path": "BOOTSTRAP_BASELINES.tsv",
+      "tracked_in_git": true,
+      "lines": 284,
+      "bytes": 60439,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "reusable_for_track21a": true,
+      "role_in_track21a": "Self-hosting bootstrap MD5/line ledger across WSL2 and Azure CI runners; MUST NOT be altered by Track 21A unless compiler codegen changes with explicit approval."
+    },
+    {
+      "path": "sdk/zcc_client.py",
+      "headers_or_companions": ["sdk/zcc_client.mjs"],
+      "tracked_in_git": true,
+      "lines": 456,
+      "bytes": 17539,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": true,
+      "reusable_for_track21a": true,
+      "role_in_track21a": "Existing zero-dependency HTTP/SSE Python/MJS SDKs for Blackwell Studio (/health, /metrics, /openapi.json, /v1/models, /v1/chat/completions, /v1/embeddings, /v1/lora/*); Track 21A compute SDK and C ABI must maintain full backward compatibility."
+    },
+    {
+      "path": "src/backend/ir_to_ptx.c",
+      "tracked_in_git": false,
+      "lines": 723,
+      "bytes": 32234,
+      "implemented": true,
+      "tested": true,
+      "reachable_at_runtime": false,
+      "call_sites": [
+        "0 callers for ir_module_lower_ptx_string across tracked .c/.h/Makefile"
+      ],
+      "reusable_for_track21a": false,
+      "role_in_track21a": "Untracked legacy IR->PTX emitter (PTX 7.8 / sm_80); do not rely on untracked files for Track 21A."
+    }
+  ],
+  "existing_verification_infrastructure": {
+    "selfhost_and_abi_gate": "gate.sh via zcc_quest.py (Stage 1->2->3->4->5 SHA-256 lineage, cmp stage2.s stage3.s, SystemV ABI MV1.3b, ARGON-4 6 suites)",
+    "differential_c99_oracle": "tools/zcc_differential_c99_oracle.py (32+ seeded metamorphic C99 pairs, ZCC2 vs GCC -O0 vs GCC UBSan/ASan + negative controls)",
+    "blackwell_kernel_audit": "tools/audit_blackwell_kernel.py + tests/test_blackwell_audit_meta_verifier.py (Windows-specific nvcuda.dll ctypes path; M01-M04 use synthetic math checks rather than live mutant execution)",
+    "attestation_verifier": "tools/zcc_verify_attest.py (offline ELF .zcc_tensor_attest header + Merkle/GGUF checker)",
+    "gap_summary_for_track21a": [
+      "No canonical backend-independent tensor/compute C ABI across scalar C99, AVX2, and PTX.",
+      "No verified tensor/ML compute runtime with strict separated-TU AVX2+OSXSAVE+XCR0+FMA gating (avxzkd_supreme.c covers PDE/DTQW and has unsafe global -mavx2 and fallback bugs).",
+      "No differential oracle comparing scalar C99, AVX2, PTX, and independent FP64 reference across quantization (Q8_0, Q4_0, Q4_K), GEMM, RMSNorm, softmax, and NaN/Inf/unaligned/invalid-shape edges.",
+      "No controlled Silent Failure Observatory mutation campaign for tensor compute, quantization decoding, dispatch, CPUID gating, receipt tamper, and verifier bypass.",
+      "No cryptographic SHA-256 compute execution receipt library + fail-closed independent release verifier covering T21-G03..T21-G10."
+    ]
+  }
+}

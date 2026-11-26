@@ -1,0 +1,20 @@
+{
+  "schema_version": "track21a.performance.v1",
+  "workload_dimensions": {"gemm_m": 128, "gemm_k": 512, "gemm_n": 128, "rmsnorm_rows": 128, "rmsnorm_dim": 512, "q4k_rows": 128, "q4k_cols": 512},
+  "hardware": {"avx2": 1, "fma": 1, "gpu_available": 1, "gpu_name": "NVIDIA GeForce RTX 5070 Laptop GPU", "gpu_cc": "12.0"},
+  "notes": "Measurements include full runtime dispatch + buffer SHA-256 receipt sealing + HtoD/DtoH transfers on PTX_SM120 (not kernel-only microseconds).",
+  "results": [
+    {"backend": "SCALAR_C99", "workload": "GEMM_F32_128x512x128", "iters": 10, "avg_us": 15563.42, "last_output_sha256": "b93ca76cd42cf0b9891bf82869957c7546a9cf289018dd4509f123064db0f7e9"}
+,    {"backend": "SCALAR_C99", "workload": "RMSNORM_F32_128x512", "iters": 20, "avg_us": 1923.77, "last_output_sha256": "7b7d289702276fcde3ae2274dad437e1a64788164ab0bf58fcdc103d1cad8902"}
+,    {"backend": "SCALAR_C99", "workload": "SOFTMAX_F32_128x512", "iters": 20, "avg_us": 1768.42, "last_output_sha256": "b06ec8733105c632eae32327cda8b17746d0c3372f1568d478969c80f8e2ef26"}
+,    {"backend": "SCALAR_C99", "workload": "MATVEC_Q4_K_128x512", "iters": 20, "avg_us": 358.71, "last_output_sha256": "cf1b87f7e1b2f6ff46c4aabc50770a1457b149fbea29ba6b47a2509a764315d8"}
+,    {"backend": "AVX2_FMA", "workload": "GEMM_F32_128x512x128", "iters": 10, "avg_us": 2521.01, "last_output_sha256": "b93ca76cd42cf0b9891bf82869957c7546a9cf289018dd4509f123064db0f7e9"}
+,    {"backend": "AVX2_FMA", "workload": "RMSNORM_F32_128x512", "iters": 20, "avg_us": 1490.49, "last_output_sha256": "5f457c00befca380e400dd01c0a0a245486c7f773361cba9f50d9b3cf46d7758"}
+,    {"backend": "AVX2_FMA", "workload": "SOFTMAX_F32_128x512", "iters": 20, "avg_us": 1823.57, "last_output_sha256": "3b08ad39436e6a5be270ae5d7c5f5941332127c5ea4aeaa77cc094f43e65be07"}
+,    {"backend": "AVX2_FMA", "workload": "MATVEC_Q4_K_128x512", "iters": 20, "avg_us": 170.56, "last_output_sha256": "4cb367da7c5a652eaae862abe555bfe7883bef8305eb35262edc152baf7b9bbe"}
+,    {"backend": "PTX_SM120", "workload": "GEMM_F32_128x512x128", "iters": 10, "avg_us": 4694.86, "last_output_sha256": "b93ca76cd42cf0b9891bf82869957c7546a9cf289018dd4509f123064db0f7e9"}
+,    {"backend": "PTX_SM120", "workload": "RMSNORM_F32_128x512", "iters": 20, "avg_us": 3992.97, "last_output_sha256": "e8a08e05b13037c76fc3b597b91686ce75d93e40713ee8bfc72d6569e40fb510"}
+,    {"backend": "PTX_SM120", "workload": "SOFTMAX_F32_128x512", "iters": 20, "avg_us": 4217.28, "last_output_sha256": "6ef3ae5bced170a05fcbcfd5559c5faf780971280e973d5abeccc20d3bce05fb"}
+,    {"backend": "PTX_SM120", "workload": "MATVEC_Q4_K_128x512", "iters": 20, "avg_us": 1616.68, "last_output_sha256": "c705b8e4e666e124df363f00435bd3bf718e6dcf3ee6443bb4182f9fceba424b"}
+  ]
+}

@@ -1,0 +1,199 @@
+{
+  "schema_version": "track21a.release_evidence.v1",
+  "generated_at_utc": "2026-11-26T02:39:59Z",
+  "governing_rule_version": "ZCC-EF-7 v1.0.0 + ZCC-EF-0",
+  "evidence_tier": "E3",
+  "git_head_sha": "8ff7da72d3840594b38946df0ee45085eb479d7f",
+  "manifest_file_count": 31,
+  "canonical_manifest_sha256": "52f1b9a08318c495515ea2f680b9f28072328859b3f37cd3f851fcd9e505ab59",
+  "ptx_regeneration": {
+    "status": "BYTE_IDENTICAL",
+    "sha256": "b171ca757be5adb127d55e460cd70a6abd12d6a09a4c860cbc04d19149c3cf84"
+  },
+  "oversized_files": [],
+  "dirty_core_files": "",
+  "verifier_purity_drifts": [],
+  "release_closure": {
+    "missing": [],
+    "oversized": [],
+    "ignored": [],
+    "staged": {
+      "checked": false,
+      "missing_staged": [],
+      "unexpected_staged": [],
+      "index_sha_mismatches": []
+    }
+  },
+  "artifact_sha256": {
+    ".gitignore": "b972524e3f787ae24d01dd72e23bf3d6b9b765030088e2ad0090c8279bc0f512",
+    "Makefile": "954489a1f3946771e87d487ed63c613c19cc06d8ce078254a495127f5decff33",
+    "TRACK21A_COMPUTE_CONTRACT.md": "00e32e89bc10f4ad2a759cefd72f167206f79a944244b9f8a2904ba527218da7",
+    "TRACK21A_DIFFERENTIAL_REPORT.json": "fd96a18c970b9079c04591bdbe9f1d7c23ac68f49046ace2f9537742967e413d",
+    "TRACK21A_IMPLEMENTATION_PLAN.md": "633da817fc645ea38270f7f962fe8b124a73da5325bb6ec30aa90ef0a452c65b",
+    "TRACK21A_INVARIANT_REGISTRY.json": "248d9d8b888cad76b25891bc933c4086c417f6ed4b42b54562fe71170ba16bd3",
+    "TRACK21A_MUTATION_REPORT.json": "3645e2834ec105929a4ca31d942ffc6581d340547f8afb823af91aa7a7b28906",
+    "TRACK21A_PERFORMANCE_REPORT.json": "bdfb129988cd5408b09a68b2f0005a1392fb0c421eeed4d9dff933ada35a561f",
+    "TRACK21A_REPO_AUDIT.json": "db4797fd2f6f8f42c9b314446702df387422155c7c126959c09cb78b811c169d",
+    "docs/TRACK21A_REPRODUCTION_AND_MIGRATION.md": "a453cacaf9113d2b7a0079f78ad6bb70964c771ffd7e7fba57a4c5302cf991e0",
+    "include/zcc_compute.h": "35c9d78121a8c1b3ec2581c3bb10597615c8ac3e0e86974ad773e92f32bf24d5",
+    "runtime/compute_avx2.c": "196284a4c6c95dfc6d99cf9a3558ca3c14b0c6b1507212d2fb3b99a20b3ea72e",
+    "runtime/compute_dispatch.c": "5a699c0072439ec7ac28a06d932951ed28beabd99a559fef2371adebfcabd19e",
+    "runtime/compute_ptx.c": "d2960c0c2a9ed950d4f8172cb6d39d58de4a262e8d772a7328d7c5085761cb50",
+    "runtime/compute_scalar.c": "6f40ff810c2f538ae01e986cc45363aafb5176476b19eb29e1ed80ac87a4339b",
+    "runtime/compute_sha256.c": "3303a6c30543c51c19727f2ab6fe9765609b70eda45a9c774e5b05f7e02844d9",
+    "runtime/cpu_capabilities.c": "4fa898b0f96ab112fd5232830b3705383f16d1ca3a5639a8d969187824708eb9",
+    "runtime/execution_receipt.c": "6cad1bf866370dff552a35a81125ea105194b643748d188c34bafb0a8a386275",
+    "runtime/kernels_t21a_ptx.c": "dcd63a6ff4ecd379bab606a8236ece0f1048c60c37c88bb5c7e6cc2c636ba0ae",
+    "runtime/kernels_t21a_sm120.ptx": "b171ca757be5adb127d55e460cd70a6abd12d6a09a4c860cbc04d19149c3cf84",
+    "sdk/zcc_compute.mjs": "ee05f4c76153c37d507cfa38909b96e0a3faaf30d3e5f69bab8f68515b9bfcb2",
+    "sdk/zcc_compute.py": "41172f35f841a7b0128f40eaac73182f86de33ca54e0dd6565518e7d98d1860a",
+    "tests/track21a/build_runtime.sh": "0582995c44fba1d454c686397957256e5916d02d4f6a21234b57cc655d085754",
+    "tests/track21a/differential_oracle.py": "e336d833bce2606ba9760f2ac4dd85413c6d3c80d5f158143f4962ba520371d5",
+    "tests/track21a/mutation_observatory.py": "b53de0d1b14d4da2aac19c4243360ea672c9f72738564cf9dba1cf8fe7d7e40d",
+    "tests/track21a/run_c_suite.sh": "fad5fab40b689ad2792be6627ed3ab32b9d78a8d85e67715771d68ad92b7e93d",
+    "tests/track21a/test_scalar_zcc.c": "0e354c1c51537620600aa1645e07cd4c907c54bbacb0567cbe6fc07ba077acd3",
+    "tests/track21a/test_sdk_mjs.mjs": "3c747a2478e61655e8ba9403d8696df116de3c01557eda82e9b12af1e9033b01",
+    "tests/track21a/test_track21a_compute.c": "de1843bf2271af4e573256f76908dbcb729a0f8a63c770c9c0852a10652610d2",
+    "tickets/VERIFIER-PURITY-LOG-BOOTSTRAP-HASH-MUTATION.md": "661357b04b9ec7dc5032e778a0d5e4a3ec0807e7fcebf56e023ed16a97d397ca",
+    "tools/verify_track21a_release.py": "9dad2f262db388825d06099f1554301f38dd369f1974c245ff843a185449eafe",
+    "/tmp/libzcc_compute.so": "5749bedbaec3958c3bf45e88b90fa53c2f95e23ef91c08723e5703da3b9a5cee"
+  },
+  "gates": {
+    "T21-G01": {
+      "status": "DEFERRED",
+      "target": "Track 21B (SPIR-V)",
+      "evidence": "Explicitly out of scope for Track 21A"
+    },
+    "T21-G02": {
+      "status": "DEFERRED",
+      "target": "Track 21B (Vulkan)",
+      "evidence": "Explicitly out of scope for Track 21A"
+    },
+    "T21-G03": {
+      "status": "PASS",
+      "evidence": {
+        "portable_avx_opcode_counts": {
+          "compute_sha256.o": 0,
+          "cpu_capabilities.o": 0,
+          "compute_scalar.o": 0,
+          "compute_ptx.o": 0,
+          "compute_dispatch.o": 0,
+          "execution_receipt.o": 0
+        },
+        "cpuid_osxsave_xcr0_fma_fallback": "tested"
+      }
+    },
+    "T21-G04": {
+      "status": "PASS",
+      "evidence": "Scalar C99 compiled & verified with GCC (-mno-avx/-mno-avx2/-mno-fma) and ./zcc"
+    },
+    "T21-G05": {
+      "status": "PASS",
+      "evidence": {
+        "differential": "148/148 PASS",
+        "ptx_regeneration": "BYTE_IDENTICAL",
+        "ptx_sha256": "b171ca757be5adb127d55e460cd70a6abd12d6a09a4c860cbc04d19149c3cf84"
+      }
+    },
+    "T21-G06": {
+      "status": "PASS",
+      "evidence": "ASan+LSan+UBSan (CPU/OOM/bounds) + full UBSan (CPU+PTX) 0 errors"
+    },
+    "T21-G07": {
+      "status": "PASS",
+      "evidence": "13/13 controlled mutants killed; false_pos=0; unknown preserved"
+    },
+    "T21-G08": {
+      "status": "PASS",
+      "evidence": "Bitwise output SHA-256 identical across 3x replay per backend (SCALAR_C99, AVX2_FMA, PTX_SM120)"
+    },
+    "T21-G09": {
+      "status": "PASS",
+      "evidence": [
+        {
+          "control": "POSITIVE_VALID_HMAC_RECEIPT",
+          "expected": "ACCEPT",
+          "observed": "ACCEPT",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_OUTPUT_SHA256",
+          "expected": "REJECT",
+          "observed": "REJECT:canonical_sha256_mismatch",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_INPUT_SHA256",
+          "expected": "REJECT",
+          "observed": "REJECT:canonical_sha256_mismatch",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_BACKEND_SPOOF",
+          "expected": "REJECT",
+          "observed": "REJECT:canonical_sha256_mismatch",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_STATUS_CODE",
+          "expected": "REJECT",
+          "observed": "REJECT:canonical_sha256_mismatch",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_SELF_CERTIFY_PASS",
+          "expected": "REJECT",
+          "observed": "REJECT:illegal_verification_status:PASS",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_ZK_CLAIM_FORGED",
+          "expected": "REJECT",
+          "observed": "REJECT:illegal_zk_proof_claim",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_SCHEMA_DOWNGRADE",
+          "expected": "REJECT",
+          "observed": "REJECT:schema_version_mismatch",
+          "status": "PASS"
+        },
+        {
+          "control": "TAMPER_WRONG_HMAC_KEY",
+          "expected": "REJECT",
+          "observed": "REJECT:hmac_sha256_mismatch",
+          "status": "PASS"
+        }
+      ]
+    },
+    "T21-G10": {
+      "status": "PASS",
+      "evidence": {
+        "release_closure": {
+          "missing": [],
+          "oversized": [],
+          "ignored": [],
+          "staged": {
+            "checked": false,
+            "missing_staged": [],
+            "unexpected_staged": [],
+            "index_sha_mismatches": []
+          }
+        },
+        "verifier_purity_drifts": []
+      }
+    }
+  },
+  "host_limitations": [
+    "Native Windows PE32+ .exe execution remains blocked by Windows Smart App Control / Device Guard on this workstation; Linux WSL2 ELF64 + libcuda.so.1 execution runs natively.",
+    "NVIDIA proprietary WSL2 driver (libnvdxgdmal.so.1 / libcuda.so.1) triggers an internal ASan double-free inside cuInit(0); ASan+LSan+UBSan ran 100% cleanly on CPU paths (--cpu-only) while full UBSan (-fsanitize=undefined -fno-sanitize-recover=all) verified CPU + PTX_SM120 together.",
+    "T21-G01 (SPIR-V) and T21-G02 (Vulkan) are explicitly DEFERRED to Track 21B.",
+    "Tracked defect DEFECT-T21A-VP01 (tickets/VERIFIER-PURITY-LOG-BOOTSTRAP-HASH-MUTATION.md): scripts/log_bootstrap_hash.sh --check appends a row to BOOTSTRAP_BASELINES.tsv unless restored/remediated separately."
+  ],
+  "ef7_adjudication": {
+    "claim": "ZCC Track 21A Portable Verified Compute Foundation satisfies T21-G03..T21-G10 and INV-T21A-012/013 without compiler core or bootstrap regression.",
+    "evidence_class": "OBSERVED",
+    "evidence_tier": "E3",
+    "verdict": "PASS"
+  }
+}

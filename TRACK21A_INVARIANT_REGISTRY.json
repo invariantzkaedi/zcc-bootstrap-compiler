@@ -1,0 +1,136 @@
+{
+  "schema_version": "track21a.invariant_registry.v1",
+  "contract_version": "1.0.0",
+  "governing_rules": [
+    "ZCC-EF-0",
+    "ZCC-EF-7"
+  ],
+  "deferred_gates": [
+    {
+      "gate_id": "T21-G01",
+      "name": "SPIR-V Binary Module Emission",
+      "status": "DEFERRED_TO_TRACK_21B",
+      "reason": "Explicitly out of scope for Track 21A foundation."
+    },
+    {
+      "gate_id": "T21-G02",
+      "name": "Vulkan Compute Execution",
+      "status": "DEFERRED_TO_TRACK_21B",
+      "reason": "Explicitly out of scope for Track 21A foundation."
+    }
+  ],
+  "invariants": [
+    {
+      "id": "INV-T21A-001",
+      "gate": "T21-G03",
+      "title": "CPUID + OSXSAVE + XCR0[2:1] + Independent FMA Gating",
+      "proposition": "AVX2_FMA backend execution is permitted if and only if CPUID leaf 1 OSXSAVE=1, XGETBV(0) bits [2:1]==0b11, CPUID.01H:ECX.AVX=1, CPUID.01H:ECX.FMA=1, and CPUID.07H(0):EBX.AVX2=1.",
+      "fail_closed_condition": "Any simulated or physical hardware missing OSXSAVE, YMM state, AVX2, or FMA selects SCALAR_C99 under AUTO_FALLBACK or returns ZCC_STATUS_ERR_UNSUPPORTED_HW under EXACT_REQUIRED; zero AVX instructions execute.",
+      "verification_method": "Unit tests injecting mocked zcc_cpu_caps_t masks + objdump ISA scan of portable .o files + mutation M_CAP_DROP_XCR0 & M_CAP_DROP_FMA."
+    },
+    {
+      "id": "INV-T21A-002",
+      "gate": "T21-G03",
+      "title": "Separate Compilation Unit ISA Isolation",
+      "proposition": "Portable translation units (cpu_capabilities.c, compute_sha256.c, compute_scalar.c, compute_dispatch.c, compute_ptx.c, execution_receipt.c) are compiled with -mno-avx -mno-avx2 -mno-fma and contain zero VEX/EVEX AVX or FMA instructions.",
+      "fail_closed_condition": "Presence of ymm/zmm registers or vfmadd/vaddps/vpadd* opcodes in portable .o disassembly blocks release.",
+      "verification_method": "Automated objdump -d inspection executed during T21-G03 verification."
+    },
+    {
+      "id": "INV-T21A-003",
+      "gate": "T21-G04",
+      "title": "Scalar C99 Reference Correctness and Dual-Compiler Portability",
+      "proposition": "Scalar C99 kernels compile cleanly with both GCC (-std=c99 -mno-avx -mno-avx2 -mno-fma) and ZCC (./zcc), matching an independent IEEE-754 float64 reference oracle within tight scalar tolerances.",
+      "fail_closed_condition": "Compilation failure on either GCC or ZCC, or output divergence exceeding op tolerance bounds.",
+      "verification_method": "Dual-compiler build + execution against Python float64 oracle."
+    },
+    {
+      "id": "INV-T21A-004",
+      "gate": "T21-G05",
+      "title": "Cross-Backend Differential Numerical Equivalence (Scalar, AVX2, PTX)",
+      "proposition": "For all 13 Track 21A operations across normal, prime/boundary, non-contiguous stride, unaligned (+4/+8/+12), extreme-magnitude, and finite randomized inputs, Scalar C99, AVX2_FMA, and PTX_SM120 outputs agree with the independent FP64 oracle and each other within declared (atol, rtol, ulp) tolerances.",
+      "tolerances": {
+        "elementwise_f32": { "atol": 1e-6, "rtol": 1e-6 },
+        "dot_and_gemm_f32": { "atol_base": 1e-4, "rtol": 1e-4 },
+        "rmsnorm_f32": { "atol": 1e-5, "rtol": 1e-4 },
+        "softmax_f32": { "atol": 1e-5, "rtol": 1e-4, "prob_sum_tol": 1e-4 },
+        "dequant_f32": { "atol": 1e-6, "rtol": 1e-5 },
+        "matvec_quant": { "atol": 5e-4, "rtol": 5e-4 }
+      },
+      "fail_closed_condition": "Any backend exceeds tolerance bounds, crashes on unaligned/boundary sizes, or swaps backends silently when EXACT_REQUIRED is specified.",
+      "verification_method": "tests/track21a/differential_oracle.py"
+    },
+    {
+      "id": "INV-T21A-005",
+      "gate": "T21-G05",
+      "title": "Quantization Block Format Parity (Q8_0, Q4_0, Q4_K)",
+      "proposition": "Scalar, AVX2, and PTX quantization decoders implement identical GGUF byte layouts (Q8_0=34B/32, Q4_0=18B/32 split-half nibbles, Q4_K=144B/256 with 6-bit packed scales/mins) and reject non-divisible K fail-closed.",
+      "fail_closed_condition": "Mismatch vs independent bit-exact Python decoder or acceptance of malformed K.",
+      "verification_method": "Bitwise-exact Q8_0/Q4_0/Q4_K reference vectors + boundary invalid-K negative test."
+    },
+    {
+      "id": "INV-T21A-006",
+      "gate": "T21-G05",
+      "title": "Non-Finite IEEE-754 & Invalid Parameter Discipline",
+      "proposition": "NaN and +/-Inf tensor elements propagate without SIGFPE or silent finite garbage; invalid ops, NaN/non-positive rmsnorm eps, negative strides, or rank out of [1..4] return explicit ZCC_STATUS_ERR_* codes.",
+      "fail_closed_condition": "Zero return on invalid shape/eps/stride, process crash/SIGFPE, or corrupted finite result when input contains NaN.",
+      "verification_method": "Adversarial edge test matrix in test_track21a_compute and differential_oracle.py."
+    },
+    {
+      "id": "INV-T21A-007",
+      "gate": "T21-G06",
+      "title": "Bounds, Overflow, Aliasing, Ownership & ASan/UBSan Safety",
+      "proposition": "All array accesses are bounded by overflow-checked descriptor extents; ZCC_OWNER_READONLY outputs, overlapping buffers, null pointers, and OOM conditions fail cleanly with zero memory leaks or UB under -fsanitize=address,undefined.",
+      "fail_closed_condition": "Any ASan/UBSan error, size_t overflow acceptance, or write to READONLY output.",
+      "verification_method": "GCC -fsanitize=address,undefined -fno-sanitize-recover=all execution + OOM allocator fault injection."
+    },
+    {
+      "id": "INV-T21A-008",
+      "gate": "T21-G07",
+      "title": "Silent Failure Observatory Mutation Sensitivity",
+      "proposition": "Controlled fault injections across arithmetic, tensor indexing, quantization decode, accumulation/norm precision, dispatch fallback, capability detection, receipt generation, and verifier authorization are detected and killed by the verification pipeline.",
+      "fail_closed_condition": "Any injected mutant survives, or unknown failure signature is falsely relabeled as a known pass/match.",
+      "verification_method": "tests/track21a/mutation_observatory.py generating TRACK21A_MUTATION_REPORT.json."
+    },
+    {
+      "id": "INV-T21A-009",
+      "gate": "T21-G08",
+      "title": "Defined Deterministic Replay Per Backend",
+      "proposition": "Re-executing identical (inputs, kernel op, dtype, options, seed) repeatedly on the same backend and hardware produces identical status code and bitwise-identical output_buffer_sha256.",
+      "fail_closed_condition": "Output SHA-256 differs between repeat executions of identical deterministic configuration.",
+      "verification_method": "Multi-run SHA-256 comparison across SCALAR_C99, AVX2_FMA, and PTX_SM120."
+    },
+    {
+      "id": "INV-T21A-010",
+      "gate": "T21-G09",
+      "title": "Cryptographic SHA-256 Execution Receipt Tamper Detection",
+      "proposition": "Execution receipts seal metadata, input descriptor/buffer digests, output digest, backend identity, hardware caps, and status using FIPS 180-4 SHA-256 (plus optional HMAC-SHA256 attestation) and label verification_status=UNVERIFIED_RUNTIME_ONLY at runtime.",
+      "fail_closed_condition": "Independent verifier accepts tampered field/hash/schema or runtime self-certified PASS receipt.",
+      "verification_method": "Receipt tamper negative control battery in tools/verify_track21a_release.py."
+    },
+    {
+      "id": "INV-T21A-011",
+      "gate": "T21-G10",
+      "title": "Independent Fail-Closed Release Authority & Non-Regression",
+      "proposition": "Standalone verifier independently inspects artifact digests, ISA disassembly, differential/mutation/tamper evidence, verifier negative controls (--self-test), and existing compiler selfhost + differential non-regression before issuing PASS.",
+      "fail_closed_condition": "Missing, stale, contradictory, self-certified, or unverified evidence returns non-zero exit status.",
+      "verification_method": "tools/verify_track21a_release.py + --self-test negative controls."
+    },
+    {
+      "id": "INV-T21A-012",
+      "gate": "T21-G10",
+      "title": "INV-RELEASE-CLOSURE (Tracked & Staged Deliverable Completeness)",
+      "proposition": "Every required release deliverable (A_required <= A_release) is non-ignored in git, hashed in canonical release evidence, present in the exact staged candidate tree, and isolated from unrelated workspace modifications.",
+      "fail_closed_condition": "Any required artifact is gitignored, missing from release evidence or git index, or accompanied by unexpected staged/unrelated files.",
+      "verification_method": "tools/verify_track21a_release.py canonical manifest closure audit + --verify-staged git index check + isolated checkout reproduction."
+    },
+    {
+      "id": "INV-T21A-013",
+      "gate": "T21-G10",
+      "title": "INV-VERIFIER-PURITY (Protected Baseline State Invariance)",
+      "proposition": "Verification-only commands MUST preserve protected baseline ledgers, compiler core sources, and unrelated workspace files identically across execution (S_before == S_after).",
+      "fail_closed_condition": "Any verification run mutates BOOTSTRAP_BASELINES.tsv, part0_pp.c..part6_ptx.c, or unrelated files (observed historical defect DEFECT-T21A-VP01 in scripts/log_bootstrap_hash.sh --check).",
+      "verification_method": "Pre/post SHA-256 snapshot comparison in tools/verify_track21a_release.py + negative self-test control."
+    }
+  ]
+}

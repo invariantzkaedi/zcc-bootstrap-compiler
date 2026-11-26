@@ -1,0 +1,1807 @@
+// ZCC Native C99->PTX Backend (Target: sm_120, PTX ISA 8.7)
+.version 8.7
+.target sm_120
+.address_size 64
+
+.func (.param .f32 _ret) t21_fast_expf(.param .f32 _p0);
+.func (.param .f32 _ret) t21_warp_sum(.param .f32 _p0);
+.func (.param .f32 _ret) t21_warp_max(.param .f32 _p0);
+.func (.param .s32 _ret) t21_s8(.param .u32 _p0);
+.func (.param .u32 _ret) t21_q4k_scale(.param .u64 _p0, .param .u32 _p1);
+.func (.param .u32 _ret) t21_q4k_min(.param .u64 _p0, .param .u32 _p1);
+
+.func (.param .f32 _ret) t21_fast_expf(
+    .param .f32 _p0
+) {
+    .reg .f32 %f<5>;
+    ld.param.f32 %f0, [_p0];
+    mov.f32 %f1, 0f3FB8AA3B;
+    mul.f32 %f2, %f0, %f1;
+    ex2.approx.f32 %f3, %f2;
+    st.param.f32 [_ret+0], %f3;
+    ret;
+    mov.f32 %f4, 0f00000000;
+    st.param.f32 [_ret+0], %f4;
+    ret;
+}
+
+.func (.param .f32 _ret) t21_warp_sum(
+    .param .f32 _p0
+) {
+    .reg .b32 %r<6>;
+    .reg .f32 %f<13>;
+    ld.param.f32 %f0, [_p0];
+    mov.u32 %r0, 0x00000010U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.down.b32 %sh_out, %sh_in, %r0, 31, 0xffffffff; mov.b32 %f1, %sh_out; }
+    add.f32 %f2, %f0, %f1;
+    mov.f32 %f0, %f2;
+    mov.u32 %r1, 0x00000008U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.down.b32 %sh_out, %sh_in, %r1, 31, 0xffffffff; mov.b32 %f3, %sh_out; }
+    add.f32 %f4, %f0, %f3;
+    mov.f32 %f0, %f4;
+    mov.u32 %r2, 0x00000004U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.down.b32 %sh_out, %sh_in, %r2, 31, 0xffffffff; mov.b32 %f5, %sh_out; }
+    add.f32 %f6, %f0, %f5;
+    mov.f32 %f0, %f6;
+    mov.u32 %r3, 0x00000002U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.down.b32 %sh_out, %sh_in, %r3, 31, 0xffffffff; mov.b32 %f7, %sh_out; }
+    add.f32 %f8, %f0, %f7;
+    mov.f32 %f0, %f8;
+    mov.u32 %r4, 0x00000001U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.down.b32 %sh_out, %sh_in, %r4, 31, 0xffffffff; mov.b32 %f9, %sh_out; }
+    add.f32 %f10, %f0, %f9;
+    mov.f32 %f0, %f10;
+    mov.u32 %r5, 0x00000000U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.idx.b32 %sh_out, %sh_in, %r5, 31, 0xffffffff; mov.b32 %f11, %sh_out; }
+    st.param.f32 [_ret+0], %f11;
+    ret;
+    mov.f32 %f12, 0f00000000;
+    st.param.f32 [_ret+0], %f12;
+    ret;
+}
+
+.func (.param .f32 _ret) t21_warp_max(
+    .param .f32 _p0
+) {
+    .reg .b32 %r<6>;
+    .reg .f32 %f<13>;
+    ld.param.f32 %f0, [_p0];
+    mov.u32 %r0, 0x00000010U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.down.b32 %sh_out, %sh_in, %r0, 31, 0xffffffff; mov.b32 %f1, %sh_out; }
+    max.f32 %f2, %f0, %f1;
+    mov.f32 %f0, %f2;
+    mov.u32 %r1, 0x00000008U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.down.b32 %sh_out, %sh_in, %r1, 31, 0xffffffff; mov.b32 %f3, %sh_out; }
+    max.f32 %f4, %f0, %f3;
+    mov.f32 %f0, %f4;
+    mov.u32 %r2, 0x00000004U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.down.b32 %sh_out, %sh_in, %r2, 31, 0xffffffff; mov.b32 %f5, %sh_out; }
+    max.f32 %f6, %f0, %f5;
+    mov.f32 %f0, %f6;
+    mov.u32 %r3, 0x00000002U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.down.b32 %sh_out, %sh_in, %r3, 31, 0xffffffff; mov.b32 %f7, %sh_out; }
+    max.f32 %f8, %f0, %f7;
+    mov.f32 %f0, %f8;
+    mov.u32 %r4, 0x00000001U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.down.b32 %sh_out, %sh_in, %r4, 31, 0xffffffff; mov.b32 %f9, %sh_out; }
+    max.f32 %f10, %f0, %f9;
+    mov.f32 %f0, %f10;
+    mov.u32 %r5, 0x00000000U;
+    { .reg .b32 %sh_in, %sh_out; mov.b32 %sh_in, %f0; shfl.sync.idx.b32 %sh_out, %sh_in, %r5, 31, 0xffffffff; mov.b32 %f11, %sh_out; }
+    st.param.f32 [_ret+0], %f11;
+    ret;
+    mov.f32 %f12, 0f00000000;
+    st.param.f32 [_ret+0], %f12;
+    ret;
+}
+
+.func (.param .s32 _ret) t21_s8(
+    .param .u32 _p0
+) {
+    .reg .pred %p<2>;
+    .reg .b32 %r<9>;
+    ld.param.u32 %r0, [_p0];
+    mov.u32 %r1, 0x000000FFU;
+    and.b32 %r2, %r0, %r1;
+    mov.u32 %r0, %r2;
+    mov.u32 %r4, 0x00000080U;
+    setp.ge.u32 %p0, %r0, %r4;
+    selp.u32 %r5, 1, 0, %p0;
+    setp.ne.u32 %p1, %r5, 0;
+    @!%p1 bra L_te_0;
+    mov.u32 %r6, 0x00000100U;
+    sub.s32 %r7, %r0, %r6;
+    mov.u32 %r3, %r7;
+    bra L_td_1;
+L_te_0:
+    mov.u32 %r3, %r0;
+L_td_1:
+    st.param.s32 [_ret+0], %r3;
+    ret;
+    mov.u32 %r8, 0;
+    st.param.s32 [_ret+0], %r8;
+    ret;
+}
+
+.func (.param .u32 _ret) t21_q4k_scale(
+    .param .u64 _p0,
+    .param .u32 _p1
+) {
+    .reg .pred %p<2>;
+    .reg .b32 %r<20>;
+    .reg .b64 %rd<7>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u32 %r0, [_p1];
+    mov.u32 %r1, 0x00000004U;
+    setp.lt.u32 %p0, %r0, %r1;
+    selp.u32 %r2, 1, 0, %p0;
+    setp.ne.u32 %p1, %r2, 0;
+    @!%p1 bra L_if_d_3;
+    cvt.u64.u32 %rd1, %r0;
+    add.u64 %rd2, %rd0, %rd1;
+    ld.u8 %r3, [%rd2];
+    mov.u32 %r4, 0x0000003FU;
+    and.b32 %r5, %r3, %r4;
+    st.param.u32 [_ret+0], %r5;
+    ret;
+L_if_d_3:
+    mov.u32 %r6, 0x00000004U;
+    add.u32 %r7, %r0, %r6;
+    cvt.u64.u32 %rd3, %r7;
+    add.u64 %rd4, %rd0, %rd3;
+    ld.u8 %r8, [%rd4];
+    mov.u32 %r9, 0x0000000FU;
+    and.b32 %r10, %r8, %r9;
+    mov.u32 %r11, 0x00000004U;
+    sub.u32 %r12, %r0, %r11;
+    cvt.u64.u32 %rd5, %r12;
+    add.u64 %rd6, %rd0, %rd5;
+    ld.u8 %r13, [%rd6];
+    mov.u32 %r14, 0x00000006U;
+    shr.s32 %r15, %r13, %r14;
+    mov.u32 %r16, 0x00000004U;
+    shl.b32 %r17, %r15, %r16;
+    or.b32 %r18, %r10, %r17;
+    st.param.u32 [_ret+0], %r18;
+    ret;
+    mov.u32 %r19, 0;
+    st.param.u32 [_ret+0], %r19;
+    ret;
+}
+
+.func (.param .u32 _ret) t21_q4k_min(
+    .param .u64 _p0,
+    .param .u32 _p1
+) {
+    .reg .pred %p<2>;
+    .reg .b32 %r<20>;
+    .reg .b64 %rd<7>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u32 %r0, [_p1];
+    mov.u32 %r1, 0x00000004U;
+    setp.lt.u32 %p0, %r0, %r1;
+    selp.u32 %r2, 1, 0, %p0;
+    setp.ne.u32 %p1, %r2, 0;
+    @!%p1 bra L_if_d_5;
+    mov.u32 %r3, 0x00000004U;
+    add.u32 %r4, %r0, %r3;
+    cvt.u64.u32 %rd1, %r4;
+    add.u64 %rd2, %rd0, %rd1;
+    ld.u8 %r5, [%rd2];
+    mov.u32 %r6, 0x0000003FU;
+    and.b32 %r7, %r5, %r6;
+    st.param.u32 [_ret+0], %r7;
+    ret;
+L_if_d_5:
+    mov.u32 %r8, 0x00000004U;
+    add.u32 %r9, %r0, %r8;
+    cvt.u64.u32 %rd3, %r9;
+    add.u64 %rd4, %rd0, %rd3;
+    ld.u8 %r10, [%rd4];
+    mov.u32 %r11, 0x00000004U;
+    shr.s32 %r12, %r10, %r11;
+    cvt.u64.u32 %rd5, %r0;
+    add.u64 %rd6, %rd0, %rd5;
+    ld.u8 %r13, [%rd6];
+    mov.u32 %r14, 0x00000006U;
+    shr.s32 %r15, %r13, %r14;
+    mov.u32 %r16, 0x00000004U;
+    shl.b32 %r17, %r15, %r16;
+    or.b32 %r18, %r12, %r17;
+    st.param.u32 [_ret+0], %r18;
+    ret;
+    mov.u32 %r19, 0;
+    st.param.u32 [_ret+0], %r19;
+    ret;
+}
+
+.visible .entry t21_vec_add_f32(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u64 _p2,
+    .param .u32 _p3
+) {
+    .reg .pred %p<2>;
+    .reg .b32 %r<8>;
+    .reg .b64 %rd<13>;
+    .reg .f32 %f<3>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u64 %rd2, [_p2];
+    ld.param.u32 %r0, [_p3];
+    mov.u32 %r1, 0;
+    mov.u32 %r2, %ctaid.x;
+    mov.u32 %r3, %ntid.x;
+    mul.lo.u32 %r4, %r2, %r3;
+    mov.u32 %r5, %tid.x;
+    add.u32 %r6, %r4, %r5;
+    mov.u32 %r1, %r6;
+    setp.lt.u32 %p0, %r1, %r0;
+    selp.u32 %r7, 1, 0, %p0;
+    setp.ne.u32 %p1, %r7, 0;
+    @!%p1 bra L_if_d_7;
+    cvt.u64.u32 %rd3, %r1;
+    mul.lo.u64 %rd4, %rd3, 0x0000000000000004U;
+    add.u64 %rd5, %rd0, %rd4;
+    ld.f32 %f0, [%rd5];
+    cvt.u64.u32 %rd6, %r1;
+    mul.lo.u64 %rd7, %rd6, 0x0000000000000004U;
+    add.u64 %rd8, %rd1, %rd7;
+    ld.f32 %f1, [%rd8];
+    add.f32 %f2, %f0, %f1;
+    cvt.u64.u32 %rd10, %r1;
+    mul.lo.u64 %rd11, %rd10, 0x0000000000000004U;
+    add.u64 %rd12, %rd2, %rd11;
+    st.f32 [%rd12], %f2;
+L_if_d_7:
+    ret;
+}
+
+.visible .entry t21_vec_mul_f32(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u64 _p2,
+    .param .u32 _p3
+) {
+    .reg .pred %p<2>;
+    .reg .b32 %r<8>;
+    .reg .b64 %rd<13>;
+    .reg .f32 %f<3>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u64 %rd2, [_p2];
+    ld.param.u32 %r0, [_p3];
+    mov.u32 %r1, 0;
+    mov.u32 %r2, %ctaid.x;
+    mov.u32 %r3, %ntid.x;
+    mul.lo.u32 %r4, %r2, %r3;
+    mov.u32 %r5, %tid.x;
+    add.u32 %r6, %r4, %r5;
+    mov.u32 %r1, %r6;
+    setp.lt.u32 %p0, %r1, %r0;
+    selp.u32 %r7, 1, 0, %p0;
+    setp.ne.u32 %p1, %r7, 0;
+    @!%p1 bra L_if_d_9;
+    cvt.u64.u32 %rd3, %r1;
+    mul.lo.u64 %rd4, %rd3, 0x0000000000000004U;
+    add.u64 %rd5, %rd0, %rd4;
+    ld.f32 %f0, [%rd5];
+    cvt.u64.u32 %rd6, %r1;
+    mul.lo.u64 %rd7, %rd6, 0x0000000000000004U;
+    add.u64 %rd8, %rd1, %rd7;
+    ld.f32 %f1, [%rd8];
+    mul.f32 %f2, %f0, %f1;
+    cvt.u64.u32 %rd10, %r1;
+    mul.lo.u64 %rd11, %rd10, 0x0000000000000004U;
+    add.u64 %rd12, %rd2, %rd11;
+    st.f32 [%rd12], %f2;
+L_if_d_9:
+    ret;
+}
+
+.visible .entry t21_vec_fma_f32(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u64 _p2,
+    .param .u64 _p3,
+    .param .u32 _p4
+) {
+    .reg .pred %p<2>;
+    .reg .b32 %r<8>;
+    .reg .b64 %rd<17>;
+    .reg .f32 %f<4>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u64 %rd2, [_p2];
+    ld.param.u64 %rd3, [_p3];
+    ld.param.u32 %r0, [_p4];
+    mov.u32 %r1, 0;
+    mov.u32 %r2, %ctaid.x;
+    mov.u32 %r3, %ntid.x;
+    mul.lo.u32 %r4, %r2, %r3;
+    mov.u32 %r5, %tid.x;
+    add.u32 %r6, %r4, %r5;
+    mov.u32 %r1, %r6;
+    setp.lt.u32 %p0, %r1, %r0;
+    selp.u32 %r7, 1, 0, %p0;
+    setp.ne.u32 %p1, %r7, 0;
+    @!%p1 bra L_if_d_11;
+    cvt.u64.u32 %rd4, %r1;
+    mul.lo.u64 %rd5, %rd4, 0x0000000000000004U;
+    add.u64 %rd6, %rd0, %rd5;
+    ld.f32 %f0, [%rd6];
+    cvt.u64.u32 %rd7, %r1;
+    mul.lo.u64 %rd8, %rd7, 0x0000000000000004U;
+    add.u64 %rd9, %rd1, %rd8;
+    ld.f32 %f1, [%rd9];
+    cvt.u64.u32 %rd10, %r1;
+    mul.lo.u64 %rd11, %rd10, 0x0000000000000004U;
+    add.u64 %rd12, %rd2, %rd11;
+    ld.f32 %f2, [%rd12];
+    fma.rn.f32 %f3, %f0, %f1, %f2;
+    cvt.u64.u32 %rd14, %r1;
+    mul.lo.u64 %rd15, %rd14, 0x0000000000000004U;
+    add.u64 %rd16, %rd3, %rd15;
+    st.f32 [%rd16], %f3;
+L_if_d_11:
+    ret;
+}
+
+.visible .entry t21_dot_f32(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u64 _p2,
+    .param .u32 _p3
+) {
+    .reg .pred %p<6>;
+    .reg .b32 %r<16>;
+    .reg .b64 %rd<13>;
+    .reg .f32 %f<6>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u64 %rd2, [_p2];
+    ld.param.u32 %r0, [_p3];
+    mov.u32 %r1, 0;
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r2, 0;
+    mov.u32 %r3, 0;
+    mov.u32 %r4, %tid.x;
+    mov.u32 %r5, 0x0000001FU;
+    and.b32 %r6, %r4, %r5;
+    mov.u32 %r1, %r6;
+    mov.f32 %f1, 0f00000000;
+    mov.f32 %f0, %f1;
+    mov.u32 %r7, 0x00000000U;
+    mov.u32 %r2, %r7;
+L_f_12:
+    setp.lt.u32 %p0, %r2, %r0;
+    selp.u32 %r8, 1, 0, %p0;
+    setp.ne.u32 %p1, %r8, 0;
+    @!%p1 bra L_br_14;
+    add.u32 %r9, %r2, %r1;
+    mov.u32 %r3, %r9;
+    setp.lt.u32 %p2, %r3, %r0;
+    selp.u32 %r10, 1, 0, %p2;
+    setp.ne.u32 %p3, %r10, 0;
+    @!%p3 bra L_if_d_16;
+    cvt.u64.u32 %rd3, %r3;
+    mul.lo.u64 %rd4, %rd3, 0x0000000000000004U;
+    add.u64 %rd5, %rd0, %rd4;
+    ld.f32 %f2, [%rd5];
+    cvt.u64.u32 %rd6, %r3;
+    mul.lo.u64 %rd7, %rd6, 0x0000000000000004U;
+    add.u64 %rd8, %rd1, %rd7;
+    ld.f32 %f3, [%rd8];
+    fma.rn.f32 %f4, %f2, %f3, %f0;
+    mov.f32 %f0, %f4;
+L_if_d_16:
+L_ct_13:
+    mov.u32 %r11, 0x00000020U;
+    add.u32 %r12, %r2, %r11;
+    mov.u32 %r2, %r12;
+    bra L_f_12;
+L_br_14:
+    {
+        .param .f32 _ca0;
+        st.param.f32 [_ca0+0], %f0;
+        .param .f32 _cret;
+        call.uni (_cret), t21_warp_sum, (_ca0);
+        ld.param.f32 %f5, [_cret+0];
+    }
+    mov.f32 %f0, %f5;
+    mov.u32 %r13, 0x00000000U;
+    setp.eq.u32 %p4, %r1, %r13;
+    selp.u32 %r14, 1, 0, %p4;
+    setp.ne.u32 %p5, %r14, 0;
+    @!%p5 bra L_if_d_18;
+    mov.u32 %r15, 0x00000000U;
+    cvt.s64.s32 %rd10, %r15;
+    mul.lo.u64 %rd11, %rd10, 0x0000000000000004U;
+    add.u64 %rd12, %rd2, %rd11;
+    st.f32 [%rd12], %f0;
+L_if_d_18:
+    ret;
+}
+
+.visible .entry t21_gemm_f32(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u64 _p2,
+    .param .u32 _p3,
+    .param .u32 _p4,
+    .param .u32 _p5,
+    .param .u32 _p6,
+    .param .u32 _p7,
+    .param .u32 _p8
+) {
+    .reg .pred %p<7>;
+    .reg .b32 %r<23>;
+    .reg .b64 %rd<27>;
+    .reg .f32 %f<7>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u64 %rd2, [_p2];
+    ld.param.u32 %r0, [_p3];
+    ld.param.u32 %r1, [_p4];
+    ld.param.u32 %r2, [_p5];
+    ld.param.u32 %r3, [_p6];
+    ld.param.u32 %r4, [_p7];
+    ld.param.u32 %r5, [_p8];
+    mov.u32 %r6, 0;
+    mov.u32 %r7, 0;
+    mov.u64 %rd3, 0;
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r8, 0;
+    mov.f32 %f1, 0f00000000;
+    mov.f32 %f2, 0f00000000;
+    mov.u32 %r9, %ctaid.x;
+    mov.u32 %r10, %ntid.x;
+    mul.lo.u32 %r11, %r9, %r10;
+    mov.u32 %r12, %tid.x;
+    add.u32 %r13, %r11, %r12;
+    mov.u32 %r6, %r13;
+    mov.u32 %r14, %ctaid.y;
+    mov.u32 %r7, %r14;
+    setp.lt.u32 %p0, %r7, %r0;
+    selp.u32 %r16, 1, 0, %p0;
+    setp.ne.u32 %p1, %r16, 0;
+    @!%p1 bra L_sc_21;
+    setp.lt.u32 %p2, %r6, %r1;
+    selp.u32 %r17, 1, 0, %p2;
+    setp.ne.u32 %p3, %r17, 0;
+    selp.u32 %r15, 1, 0, %p3;
+    bra L_sce_22;
+L_sc_21:
+    mov.u32 %r15, 0;
+L_sce_22:
+    setp.ne.u32 %p4, %r15, 0;
+    @!%p4 bra L_if_d_20;
+    cvt.u64.u32 %rd4, %r7;
+    cvt.u64.u32 %rd5, %r3;
+    mul.lo.u64 %rd6, %rd4, %rd5;
+    mul.lo.u64 %rd7, %rd6, 0x0000000000000004U;
+    add.u64 %rd8, %rd0, %rd7;
+    mov.u64 %rd3, %rd8;
+    mov.f32 %f3, 0f00000000;
+    mov.f32 %f0, %f3;
+    mov.u32 %r18, 0x00000000U;
+    mov.u32 %r8, %r18;
+L_f_23:
+    setp.lt.u32 %p5, %r8, %r2;
+    selp.u32 %r19, 1, 0, %p5;
+    setp.ne.u32 %p6, %r19, 0;
+    @!%p6 bra L_br_25;
+    cvt.u64.u32 %rd9, %r8;
+    mul.lo.u64 %rd10, %rd9, 0x0000000000000004U;
+    add.u64 %rd11, %rd3, %rd10;
+    ld.f32 %f4, [%rd11];
+    mov.f32 %f1, %f4;
+    cvt.u64.u32 %rd12, %r8;
+    cvt.u64.u32 %rd13, %r4;
+    mul.lo.u64 %rd14, %rd12, %rd13;
+    cvt.u64.u32 %rd15, %r6;
+    add.u64 %rd16, %rd14, %rd15;
+    mul.lo.u64 %rd17, %rd16, 0x0000000000000004U;
+    add.u64 %rd18, %rd1, %rd17;
+    ld.f32 %f5, [%rd18];
+    mov.f32 %f2, %f5;
+    fma.rn.f32 %f6, %f1, %f2, %f0;
+    mov.f32 %f0, %f6;
+L_ct_24:
+    mov.u32 %r20, %r8;
+    mov.u32 %r21, 1;
+    add.u32 %r22, %r8, %r21;
+    mov.u32 %r8, %r22;
+    bra L_f_23;
+L_br_25:
+    cvt.u64.u32 %rd20, %r7;
+    cvt.u64.u32 %rd21, %r5;
+    mul.lo.u64 %rd22, %rd20, %rd21;
+    cvt.u64.u32 %rd23, %r6;
+    add.u64 %rd24, %rd22, %rd23;
+    mul.lo.u64 %rd25, %rd24, 0x0000000000000004U;
+    add.u64 %rd26, %rd2, %rd25;
+    st.f32 [%rd26], %f0;
+L_if_d_20:
+    ret;
+}
+
+.visible .entry t21_rmsnorm_f32(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u64 _p2,
+    .param .u32 _p3,
+    .param .u32 _p4,
+    .param .u32 _p5,
+    .param .u32 _p6,
+    .param .f32 _p7
+) {
+    .reg .pred %p<10>;
+    .reg .b32 %r<25>;
+    .reg .b64 %rd<28>;
+    .reg .f32 %f<18>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u64 %rd2, [_p2];
+    ld.param.u32 %r0, [_p3];
+    ld.param.u32 %r1, [_p4];
+    ld.param.u32 %r2, [_p5];
+    ld.param.u32 %r3, [_p6];
+    ld.param.f32 %f0, [_p7];
+    mov.u32 %r4, 0;
+    mov.u32 %r5, 0;
+    mov.u64 %rd3, 0;
+    mov.u64 %rd4, 0;
+    mov.f32 %f1, 0f00000000;
+    mov.u32 %r6, 0;
+    mov.u32 %r7, 0;
+    mov.f32 %f2, 0f00000000;
+    mov.f32 %f3, 0f00000000;
+    mov.u32 %r8, %ctaid.x;
+    mov.u32 %r4, %r8;
+    mov.u32 %r9, %tid.x;
+    mov.u32 %r10, 0x0000001FU;
+    and.b32 %r11, %r9, %r10;
+    mov.u32 %r5, %r11;
+    setp.ge.u32 %p0, %r4, %r0;
+    selp.u32 %r12, 1, 0, %p0;
+    setp.ne.u32 %p1, %r12, 0;
+    @!%p1 bra L_if_d_27;
+    ret;
+L_if_d_27:
+    cvt.u64.u32 %rd5, %r4;
+    cvt.u64.u32 %rd6, %r2;
+    mul.lo.u64 %rd7, %rd5, %rd6;
+    mul.lo.u64 %rd8, %rd7, 0x0000000000000004U;
+    add.u64 %rd9, %rd0, %rd8;
+    mov.u64 %rd3, %rd9;
+    cvt.u64.u32 %rd10, %r4;
+    cvt.u64.u32 %rd11, %r3;
+    mul.lo.u64 %rd12, %rd10, %rd11;
+    mul.lo.u64 %rd13, %rd12, 0x0000000000000004U;
+    add.u64 %rd14, %rd2, %rd13;
+    mov.u64 %rd4, %rd14;
+    mov.f32 %f4, 0f00000000;
+    mov.f32 %f1, %f4;
+    mov.u32 %r13, 0x00000000U;
+    mov.u32 %r6, %r13;
+L_f_28:
+    setp.lt.u32 %p2, %r6, %r1;
+    selp.u32 %r14, 1, 0, %p2;
+    setp.ne.u32 %p3, %r14, 0;
+    @!%p3 bra L_br_30;
+    add.u32 %r15, %r6, %r5;
+    mov.u32 %r7, %r15;
+    setp.lt.u32 %p4, %r7, %r1;
+    selp.u32 %r16, 1, 0, %p4;
+    setp.ne.u32 %p5, %r16, 0;
+    @!%p5 bra L_if_d_32;
+    cvt.u64.u32 %rd15, %r7;
+    mul.lo.u64 %rd16, %rd15, 0x0000000000000004U;
+    add.u64 %rd17, %rd3, %rd16;
+    ld.f32 %f5, [%rd17];
+    mov.f32 %f2, %f5;
+    fma.rn.f32 %f6, %f2, %f2, %f1;
+    mov.f32 %f1, %f6;
+L_if_d_32:
+L_ct_29:
+    mov.u32 %r17, 0x00000020U;
+    add.u32 %r18, %r6, %r17;
+    mov.u32 %r6, %r18;
+    bra L_f_28;
+L_br_30:
+    {
+        .param .f32 _ca0;
+        st.param.f32 [_ca0+0], %f1;
+        .param .f32 _cret;
+        call.uni (_cret), t21_warp_sum, (_ca0);
+        ld.param.f32 %f7, [_cret+0];
+    }
+    mov.f32 %f1, %f7;
+    mov.f32 %f8, 0f3F800000;
+    cvt.rn.f32.u32 %f9, %r1;
+    div.rn.f32 %f10, %f1, %f9;
+    add.f32 %f11, %f10, %f0;
+    sqrt.rn.f32 %f12, %f11;
+    div.rn.f32 %f13, %f8, %f12;
+    mov.f32 %f3, %f13;
+    mov.u32 %r19, 0x00000000U;
+    mov.u32 %r6, %r19;
+L_f_33:
+    setp.lt.u32 %p6, %r6, %r1;
+    selp.u32 %r20, 1, 0, %p6;
+    setp.ne.u32 %p7, %r20, 0;
+    @!%p7 bra L_br_35;
+    add.u32 %r21, %r6, %r5;
+    mov.u32 %r7, %r21;
+    setp.lt.u32 %p8, %r7, %r1;
+    selp.u32 %r22, 1, 0, %p8;
+    setp.ne.u32 %p9, %r22, 0;
+    @!%p9 bra L_if_d_37;
+    cvt.u64.u32 %rd18, %r7;
+    mul.lo.u64 %rd19, %rd18, 0x0000000000000004U;
+    add.u64 %rd20, %rd3, %rd19;
+    ld.f32 %f14, [%rd20];
+    mul.f32 %f15, %f14, %f3;
+    cvt.u64.u32 %rd21, %r7;
+    mul.lo.u64 %rd22, %rd21, 0x0000000000000004U;
+    add.u64 %rd23, %rd1, %rd22;
+    ld.f32 %f16, [%rd23];
+    mul.f32 %f17, %f15, %f16;
+    cvt.u64.u32 %rd25, %r7;
+    mul.lo.u64 %rd26, %rd25, 0x0000000000000004U;
+    add.u64 %rd27, %rd4, %rd26;
+    st.f32 [%rd27], %f17;
+L_if_d_37:
+L_ct_34:
+    mov.u32 %r23, 0x00000020U;
+    add.u32 %r24, %r6, %r23;
+    mov.u32 %r6, %r24;
+    bra L_f_33;
+L_br_35:
+    ret;
+}
+
+.visible .entry t21_softmax_f32(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u32 _p2,
+    .param .u32 _p3,
+    .param .u32 _p4,
+    .param .u32 _p5
+) {
+    .reg .pred %p<20>;
+    .reg .b32 %r<34>;
+    .reg .b64 %rd<31>;
+    .reg .f32 %f<30>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u32 %r0, [_p2];
+    ld.param.u32 %r1, [_p3];
+    ld.param.u32 %r2, [_p4];
+    ld.param.u32 %r3, [_p5];
+    mov.u32 %r4, 0;
+    mov.u32 %r5, 0;
+    mov.u64 %rd2, 0;
+    mov.u64 %rd3, 0;
+    mov.f32 %f0, 0f00000000;
+    mov.f32 %f1, 0f00000000;
+    mov.u32 %r6, 0;
+    mov.u32 %r7, 0;
+    mov.f32 %f2, 0f00000000;
+    mov.f32 %f3, 0f00000000;
+    mov.f32 %f4, 0f00000000;
+    mov.f32 %f5, 0f00000000;
+    mov.f32 %f6, 0f00000000;
+    mov.f32 %f7, 0f00000000;
+    mov.f32 %f8, 0f00000000;
+    mov.u32 %r8, %ctaid.x;
+    mov.u32 %r4, %r8;
+    mov.u32 %r9, %tid.x;
+    mov.u32 %r10, 0x0000001FU;
+    and.b32 %r11, %r9, %r10;
+    mov.u32 %r5, %r11;
+    setp.ge.u32 %p0, %r4, %r0;
+    selp.u32 %r12, 1, 0, %p0;
+    setp.ne.u32 %p1, %r12, 0;
+    @!%p1 bra L_if_d_39;
+    ret;
+L_if_d_39:
+    cvt.u64.u32 %rd4, %r4;
+    cvt.u64.u32 %rd5, %r2;
+    mul.lo.u64 %rd6, %rd4, %rd5;
+    mul.lo.u64 %rd7, %rd6, 0x0000000000000004U;
+    add.u64 %rd8, %rd0, %rd7;
+    mov.u64 %rd2, %rd8;
+    cvt.u64.u32 %rd9, %r4;
+    cvt.u64.u32 %rd10, %r3;
+    mul.lo.u64 %rd11, %rd9, %rd10;
+    mul.lo.u64 %rd12, %rd11, 0x0000000000000004U;
+    add.u64 %rd13, %rd1, %rd12;
+    mov.u64 %rd3, %rd13;
+    mov.f32 %f9, 0f7F7FFFFF;
+    neg.f32 %f10, %f9;
+    mov.f32 %f0, %f10;
+    mov.f32 %f11, 0f00000000;
+    mov.f32 %f1, %f11;
+    mov.u32 %r13, 0x00000000U;
+    mov.u32 %r6, %r13;
+L_f_40:
+    setp.lt.u32 %p2, %r6, %r1;
+    selp.u32 %r14, 1, 0, %p2;
+    setp.ne.u32 %p3, %r14, 0;
+    @!%p3 bra L_br_42;
+    add.u32 %r15, %r6, %r5;
+    mov.u32 %r7, %r15;
+    setp.lt.u32 %p4, %r7, %r1;
+    selp.u32 %r16, 1, 0, %p4;
+    setp.ne.u32 %p5, %r16, 0;
+    @!%p5 bra L_if_d_44;
+    cvt.u64.u32 %rd14, %r7;
+    mul.lo.u64 %rd15, %rd14, 0x0000000000000004U;
+    add.u64 %rd16, %rd2, %rd15;
+    ld.f32 %f12, [%rd16];
+    mov.f32 %f2, %f12;
+    setp.neu.f32 %p6, %f2, %f2;
+    selp.u32 %r17, 1, 0, %p6;
+    setp.ne.u32 %p7, %r17, 0;
+    @!%p7 bra L_if_e_45;
+    mov.f32 %f13, 0f3F800000;
+    mov.f32 %f1, %f13;
+    bra L_if_d_46;
+L_if_e_45:
+    setp.gt.f32 %p8, %f2, %f0;
+    selp.u32 %r18, 1, 0, %p8;
+    setp.ne.u32 %p9, %r18, 0;
+    @!%p9 bra L_if_d_48;
+    mov.f32 %f0, %f2;
+L_if_d_48:
+L_if_d_46:
+L_if_d_44:
+L_ct_41:
+    mov.u32 %r19, 0x00000020U;
+    add.u32 %r20, %r6, %r19;
+    mov.u32 %r6, %r20;
+    bra L_f_40;
+L_br_42:
+    {
+        .param .f32 _ca0;
+        st.param.f32 [_ca0+0], %f1;
+        .param .f32 _cret;
+        call.uni (_cret), t21_warp_sum, (_ca0);
+        ld.param.f32 %f14, [_cret+0];
+    }
+    mov.f32 %f3, %f14;
+    {
+        .param .f32 _ca0;
+        st.param.f32 [_ca0+0], %f0;
+        .param .f32 _cret;
+        call.uni (_cret), t21_warp_max, (_ca0);
+        ld.param.f32 %f15, [_cret+0];
+    }
+    mov.f32 %f4, %f15;
+    mov.f32 %f16, 0f00000000;
+    setp.gt.f32 %p10, %f3, %f16;
+    selp.u32 %r21, 1, 0, %p10;
+    setp.ne.u32 %p11, %r21, 0;
+    @!%p11 bra L_if_d_50;
+    mov.f32 %f17, 0f00000000;
+    mov.f32 %f18, 0f00000000;
+    div.rn.f32 %f19, %f17, %f18;
+    mov.f32 %f4, %f19;
+L_if_d_50:
+    mov.f32 %f20, 0f00000000;
+    mov.f32 %f5, %f20;
+    mov.u32 %r22, 0x00000000U;
+    mov.u32 %r6, %r22;
+L_f_51:
+    setp.lt.u32 %p12, %r6, %r1;
+    selp.u32 %r23, 1, 0, %p12;
+    setp.ne.u32 %p13, %r23, 0;
+    @!%p13 bra L_br_53;
+    add.u32 %r24, %r6, %r5;
+    mov.u32 %r7, %r24;
+    setp.lt.u32 %p14, %r7, %r1;
+    selp.u32 %r25, 1, 0, %p14;
+    setp.ne.u32 %p15, %r25, 0;
+    @!%p15 bra L_if_d_55;
+    cvt.u64.u32 %rd17, %r7;
+    mul.lo.u64 %rd18, %rd17, 0x0000000000000004U;
+    add.u64 %rd19, %rd2, %rd18;
+    ld.f32 %f21, [%rd19];
+    sub.f32 %f22, %f21, %f4;
+    {
+        .param .f32 _ca0;
+        st.param.f32 [_ca0+0], %f22;
+        .param .f32 _cret;
+        call.uni (_cret), t21_fast_expf, (_ca0);
+        ld.param.f32 %f23, [_cret+0];
+    }
+    mov.f32 %f6, %f23;
+    cvt.u64.u32 %rd21, %r7;
+    mul.lo.u64 %rd22, %rd21, 0x0000000000000004U;
+    add.u64 %rd23, %rd3, %rd22;
+    st.f32 [%rd23], %f6;
+    add.f32 %f24, %f5, %f6;
+    mov.f32 %f5, %f24;
+L_if_d_55:
+L_ct_52:
+    mov.u32 %r26, 0x00000020U;
+    add.u32 %r27, %r6, %r26;
+    mov.u32 %r6, %r27;
+    bra L_f_51;
+L_br_53:
+    {
+        .param .f32 _ca0;
+        st.param.f32 [_ca0+0], %f5;
+        .param .f32 _cret;
+        call.uni (_cret), t21_warp_sum, (_ca0);
+        ld.param.f32 %f25, [_cret+0];
+    }
+    mov.f32 %f7, %f25;
+    mov.f32 %f26, 0f3F800000;
+    div.rn.f32 %f27, %f26, %f7;
+    mov.f32 %f8, %f27;
+    mov.u32 %r28, 0x00000000U;
+    mov.u32 %r6, %r28;
+L_f_56:
+    setp.lt.u32 %p16, %r6, %r1;
+    selp.u32 %r29, 1, 0, %p16;
+    setp.ne.u32 %p17, %r29, 0;
+    @!%p17 bra L_br_58;
+    add.u32 %r30, %r6, %r5;
+    mov.u32 %r7, %r30;
+    setp.lt.u32 %p18, %r7, %r1;
+    selp.u32 %r31, 1, 0, %p18;
+    setp.ne.u32 %p19, %r31, 0;
+    @!%p19 bra L_if_d_60;
+    cvt.u64.u32 %rd24, %r7;
+    mul.lo.u64 %rd25, %rd24, 0x0000000000000004U;
+    add.u64 %rd26, %rd3, %rd25;
+    ld.f32 %f28, [%rd26];
+    mul.f32 %f29, %f28, %f8;
+    cvt.u64.u32 %rd28, %r7;
+    mul.lo.u64 %rd29, %rd28, 0x0000000000000004U;
+    add.u64 %rd30, %rd3, %rd29;
+    st.f32 [%rd30], %f29;
+L_if_d_60:
+L_ct_57:
+    mov.u32 %r32, 0x00000020U;
+    add.u32 %r33, %r6, %r32;
+    mov.u32 %r6, %r33;
+    bra L_f_56;
+L_br_58:
+    ret;
+}
+
+.visible .entry t21_dequant_q8_0(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u32 _p2,
+    .param .u32 _p3,
+    .param .u32 _p4
+) {
+    .reg .pred %p<5>;
+    .reg .b32 %r<35>;
+    .reg .b64 %rd<26>;
+    .reg .f32 %f<4>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u32 %r0, [_p2];
+    ld.param.u32 %r1, [_p3];
+    ld.param.u32 %r2, [_p4];
+    mov.u32 %r3, 0;
+    mov.u32 %r4, 0;
+    mov.u32 %r5, 0;
+    mov.u32 %r6, 0;
+    mov.u32 %r7, 0;
+    mov.u64 %rd2, 0;
+    mov.u64 %rd3, 0;
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r8, 0;
+    mov.u32 %r9, %ctaid.y;
+    mov.u32 %r3, %r9;
+    mov.u32 %r10, %ctaid.x;
+    mov.u32 %r11, %ntid.x;
+    mul.lo.u32 %r12, %r10, %r11;
+    mov.u32 %r13, %tid.x;
+    add.u32 %r14, %r12, %r13;
+    mov.u32 %r4, %r14;
+    setp.lt.u32 %p0, %r3, %r0;
+    selp.u32 %r16, 1, 0, %p0;
+    setp.ne.u32 %p1, %r16, 0;
+    @!%p1 bra L_sc_63;
+    setp.lt.u32 %p2, %r4, %r1;
+    selp.u32 %r17, 1, 0, %p2;
+    setp.ne.u32 %p3, %r17, 0;
+    selp.u32 %r15, 1, 0, %p3;
+    bra L_sce_64;
+L_sc_63:
+    mov.u32 %r15, 0;
+L_sce_64:
+    setp.ne.u32 %p4, %r15, 0;
+    @!%p4 bra L_if_d_62;
+    mov.u32 %r18, 0x00000005U;
+    shr.u32 %r19, %r1, %r18;
+    mov.u32 %r5, %r19;
+    mov.u32 %r20, 0x00000005U;
+    shr.u32 %r21, %r4, %r20;
+    mov.u32 %r6, %r21;
+    mov.u32 %r22, 0x0000001FU;
+    and.b32 %r23, %r4, %r22;
+    mov.u32 %r7, %r23;
+    cvt.u64.u32 %rd4, %r3;
+    cvt.u64.u32 %rd5, %r5;
+    mul.lo.u64 %rd6, %rd4, %rd5;
+    cvt.u64.u32 %rd7, %r6;
+    add.u64 %rd8, %rd6, %rd7;
+    mov.u64 %rd9, 0x0000000000000022U;
+    mul.lo.u64 %rd10, %rd8, %rd9;
+    mov.u64 %rd2, %rd10;
+    add.u64 %rd11, %rd0, %rd2;
+    mov.u64 %rd3, %rd11;
+    mov.u32 %r24, 0x00000000U;
+    cvt.s64.s32 %rd12, %r24;
+    add.u64 %rd13, %rd3, %rd12;
+    ld.u8 %r25, [%rd13];
+    mov.u32 %r26, 0x00000001U;
+    cvt.s64.s32 %rd14, %r26;
+    add.u64 %rd15, %rd3, %rd14;
+    ld.u8 %r27, [%rd15];
+    mov.u32 %r28, 0x00000008U;
+    shl.b32 %r29, %r27, %r28;
+    or.b32 %r30, %r25, %r29;
+    { .reg .b16 %h_in; cvt.u16.u32 %h_in, %r30; cvt.f32.f16 %f1, %h_in; }
+    mov.f32 %f0, %f1;
+    mov.u32 %r31, 0x00000002U;
+    add.u32 %r32, %r31, %r7;
+    cvt.u64.u32 %rd16, %r32;
+    add.u64 %rd17, %rd3, %rd16;
+    ld.u8 %r33, [%rd17];
+    {
+        .param .u32 _ca0;
+        st.param.u32 [_ca0+0], %r33;
+        .param .s32 _cret;
+        call.uni (_cret), t21_s8, (_ca0);
+        ld.param.s32 %r34, [_cret+0];
+    }
+    mov.u32 %r8, %r34;
+    cvt.rn.f32.s32 %f2, %r8;
+    mul.f32 %f3, %f0, %f2;
+    cvt.u64.u32 %rd19, %r3;
+    cvt.u64.u32 %rd20, %r2;
+    mul.lo.u64 %rd21, %rd19, %rd20;
+    cvt.u64.u32 %rd22, %r4;
+    add.u64 %rd23, %rd21, %rd22;
+    mul.lo.u64 %rd24, %rd23, 0x0000000000000004U;
+    add.u64 %rd25, %rd1, %rd24;
+    st.f32 [%rd25], %f3;
+L_if_d_62:
+    ret;
+}
+
+.visible .entry t21_matvec_q8_0(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u64 _p2,
+    .param .u32 _p3,
+    .param .u32 _p4
+) {
+    .reg .pred %p<6>;
+    .reg .b32 %r<39>;
+    .reg .b64 %rd<24>;
+    .reg .f32 %f<9>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u64 %rd2, [_p2];
+    ld.param.u32 %r0, [_p3];
+    ld.param.u32 %r1, [_p4];
+    mov.u32 %r2, 0;
+    mov.u32 %r3, 0;
+    mov.u32 %r4, 0;
+    mov.u64 %rd3, 0;
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r5, 0;
+    mov.u64 %rd4, 0;
+    mov.f32 %f1, 0f00000000;
+    mov.u32 %r6, 0;
+    mov.u32 %r7, %ctaid.x;
+    mov.u32 %r2, %r7;
+    mov.u32 %r8, %tid.x;
+    mov.u32 %r9, 0x0000001FU;
+    and.b32 %r10, %r8, %r9;
+    mov.u32 %r3, %r10;
+    setp.ge.u32 %p0, %r2, %r0;
+    selp.u32 %r11, 1, 0, %p0;
+    setp.ne.u32 %p1, %r11, 0;
+    @!%p1 bra L_if_d_66;
+    ret;
+L_if_d_66:
+    mov.u32 %r12, 0x00000005U;
+    shr.u32 %r13, %r1, %r12;
+    mov.u32 %r4, %r13;
+    cvt.u64.u32 %rd5, %r2;
+    mov.u32 %r14, 0x00000022U;
+    mul.lo.u32 %r15, %r4, %r14;
+    cvt.u64.u32 %rd6, %r15;
+    mul.lo.u64 %rd7, %rd5, %rd6;
+    add.u64 %rd8, %rd0, %rd7;
+    mov.u64 %rd3, %rd8;
+    mov.f32 %f2, 0f00000000;
+    mov.f32 %f0, %f2;
+    mov.u32 %r16, 0x00000000U;
+    mov.u32 %r5, %r16;
+L_f_67:
+    setp.lt.u32 %p2, %r5, %r4;
+    selp.u32 %r17, 1, 0, %p2;
+    setp.ne.u32 %p3, %r17, 0;
+    @!%p3 bra L_br_69;
+    mov.u32 %r18, 0x00000022U;
+    mul.lo.u32 %r19, %r5, %r18;
+    cvt.u64.u32 %rd9, %r19;
+    add.u64 %rd10, %rd3, %rd9;
+    mov.u64 %rd4, %rd10;
+    mov.u32 %r20, 0x00000000U;
+    cvt.s64.s32 %rd11, %r20;
+    add.u64 %rd12, %rd4, %rd11;
+    ld.u8 %r21, [%rd12];
+    mov.u32 %r22, 0x00000001U;
+    cvt.s64.s32 %rd13, %r22;
+    add.u64 %rd14, %rd4, %rd13;
+    ld.u8 %r23, [%rd14];
+    mov.u32 %r24, 0x00000008U;
+    shl.b32 %r25, %r23, %r24;
+    or.b32 %r26, %r21, %r25;
+    { .reg .b16 %h_in; cvt.u16.u32 %h_in, %r26; cvt.f32.f16 %f3, %h_in; }
+    mov.f32 %f1, %f3;
+    mov.u32 %r27, 0x00000002U;
+    add.u32 %r28, %r27, %r3;
+    cvt.u64.u32 %rd15, %r28;
+    add.u64 %rd16, %rd4, %rd15;
+    ld.u8 %r29, [%rd16];
+    {
+        .param .u32 _ca0;
+        st.param.u32 [_ca0+0], %r29;
+        .param .s32 _cret;
+        call.uni (_cret), t21_s8, (_ca0);
+        ld.param.s32 %r30, [_cret+0];
+    }
+    mov.u32 %r6, %r30;
+    cvt.rn.f32.s32 %f4, %r6;
+    mul.f32 %f5, %f1, %f4;
+    mov.u32 %r31, 0x00000005U;
+    shl.b32 %r32, %r5, %r31;
+    add.u32 %r33, %r32, %r3;
+    cvt.u64.u32 %rd17, %r33;
+    mul.lo.u64 %rd18, %rd17, 0x0000000000000004U;
+    add.u64 %rd19, %rd1, %rd18;
+    ld.f32 %f6, [%rd19];
+    fma.rn.f32 %f7, %f5, %f6, %f0;
+    mov.f32 %f0, %f7;
+L_ct_68:
+    mov.u32 %r34, %r5;
+    mov.u32 %r35, 1;
+    add.u32 %r36, %r5, %r35;
+    mov.u32 %r5, %r36;
+    bra L_f_67;
+L_br_69:
+    {
+        .param .f32 _ca0;
+        st.param.f32 [_ca0+0], %f0;
+        .param .f32 _cret;
+        call.uni (_cret), t21_warp_sum, (_ca0);
+        ld.param.f32 %f8, [_cret+0];
+    }
+    mov.f32 %f0, %f8;
+    mov.u32 %r37, 0x00000000U;
+    setp.eq.u32 %p4, %r3, %r37;
+    selp.u32 %r38, 1, 0, %p4;
+    setp.ne.u32 %p5, %r38, 0;
+    @!%p5 bra L_if_d_71;
+    cvt.u64.u32 %rd21, %r2;
+    mul.lo.u64 %rd22, %rd21, 0x0000000000000004U;
+    add.u64 %rd23, %rd2, %rd22;
+    st.f32 [%rd23], %f0;
+L_if_d_71:
+    ret;
+}
+
+.visible .entry t21_dequant_q4_0(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u32 _p2,
+    .param .u32 _p3,
+    .param .u32 _p4
+) {
+    .reg .pred %p<7>;
+    .reg .b32 %r<46>;
+    .reg .b64 %rd<26>;
+    .reg .f32 %f<4>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u32 %r0, [_p2];
+    ld.param.u32 %r1, [_p3];
+    ld.param.u32 %r2, [_p4];
+    mov.u32 %r3, 0;
+    mov.u32 %r4, 0;
+    mov.u32 %r5, 0;
+    mov.u32 %r6, 0;
+    mov.u32 %r7, 0;
+    mov.u64 %rd2, 0;
+    mov.u64 %rd3, 0;
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r8, 0;
+    mov.u32 %r9, 0;
+    mov.u32 %r10, %ctaid.y;
+    mov.u32 %r3, %r10;
+    mov.u32 %r11, %ctaid.x;
+    mov.u32 %r12, %ntid.x;
+    mul.lo.u32 %r13, %r11, %r12;
+    mov.u32 %r14, %tid.x;
+    add.u32 %r15, %r13, %r14;
+    mov.u32 %r4, %r15;
+    setp.lt.u32 %p0, %r3, %r0;
+    selp.u32 %r17, 1, 0, %p0;
+    setp.ne.u32 %p1, %r17, 0;
+    @!%p1 bra L_sc_74;
+    setp.lt.u32 %p2, %r4, %r1;
+    selp.u32 %r18, 1, 0, %p2;
+    setp.ne.u32 %p3, %r18, 0;
+    selp.u32 %r16, 1, 0, %p3;
+    bra L_sce_75;
+L_sc_74:
+    mov.u32 %r16, 0;
+L_sce_75:
+    setp.ne.u32 %p4, %r16, 0;
+    @!%p4 bra L_if_d_73;
+    mov.u32 %r19, 0x00000005U;
+    shr.u32 %r20, %r1, %r19;
+    mov.u32 %r5, %r20;
+    mov.u32 %r21, 0x00000005U;
+    shr.u32 %r22, %r4, %r21;
+    mov.u32 %r6, %r22;
+    mov.u32 %r23, 0x0000001FU;
+    and.b32 %r24, %r4, %r23;
+    mov.u32 %r7, %r24;
+    cvt.u64.u32 %rd4, %r3;
+    cvt.u64.u32 %rd5, %r5;
+    mul.lo.u64 %rd6, %rd4, %rd5;
+    cvt.u64.u32 %rd7, %r6;
+    add.u64 %rd8, %rd6, %rd7;
+    mov.u64 %rd9, 0x0000000000000012U;
+    mul.lo.u64 %rd10, %rd8, %rd9;
+    mov.u64 %rd2, %rd10;
+    add.u64 %rd11, %rd0, %rd2;
+    mov.u64 %rd3, %rd11;
+    mov.u32 %r25, 0x00000000U;
+    cvt.s64.s32 %rd12, %r25;
+    add.u64 %rd13, %rd3, %rd12;
+    ld.u8 %r26, [%rd13];
+    mov.u32 %r27, 0x00000001U;
+    cvt.s64.s32 %rd14, %r27;
+    add.u64 %rd15, %rd3, %rd14;
+    ld.u8 %r28, [%rd15];
+    mov.u32 %r29, 0x00000008U;
+    shl.b32 %r30, %r28, %r29;
+    or.b32 %r31, %r26, %r30;
+    { .reg .b16 %h_in; cvt.u16.u32 %h_in, %r31; cvt.f32.f16 %f1, %h_in; }
+    mov.f32 %f0, %f1;
+    mov.u32 %r32, 0x00000002U;
+    mov.u32 %r33, 0x0000000FU;
+    and.b32 %r34, %r7, %r33;
+    add.u32 %r35, %r32, %r34;
+    cvt.u64.u32 %rd16, %r35;
+    add.u64 %rd17, %rd3, %rd16;
+    ld.u8 %r36, [%rd17];
+    mov.u32 %r8, %r36;
+    mov.u32 %r38, 0x00000010U;
+    setp.lt.u32 %p5, %r7, %r38;
+    selp.u32 %r39, 1, 0, %p5;
+    setp.ne.u32 %p6, %r39, 0;
+    @!%p6 bra L_te_76;
+    mov.u32 %r40, 0x0000000FU;
+    and.b32 %r41, %r8, %r40;
+    mov.u32 %r37, %r41;
+    bra L_td_77;
+L_te_76:
+    mov.u32 %r42, 0x00000004U;
+    shr.u32 %r43, %r8, %r42;
+    mov.u32 %r37, %r43;
+L_td_77:
+    mov.u32 %r44, 0x00000008U;
+    sub.s32 %r45, %r37, %r44;
+    mov.u32 %r9, %r45;
+    cvt.rn.f32.s32 %f2, %r9;
+    mul.f32 %f3, %f0, %f2;
+    cvt.u64.u32 %rd19, %r3;
+    cvt.u64.u32 %rd20, %r2;
+    mul.lo.u64 %rd21, %rd19, %rd20;
+    cvt.u64.u32 %rd22, %r4;
+    add.u64 %rd23, %rd21, %rd22;
+    mul.lo.u64 %rd24, %rd23, 0x0000000000000004U;
+    add.u64 %rd25, %rd1, %rd24;
+    st.f32 [%rd25], %f3;
+L_if_d_73:
+    ret;
+}
+
+.visible .entry t21_matvec_q4_0(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u64 _p2,
+    .param .u32 _p3,
+    .param .u32 _p4
+) {
+    .reg .pred %p<8>;
+    .reg .b32 %r<51>;
+    .reg .b64 %rd<24>;
+    .reg .f32 %f<9>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u64 %rd2, [_p2];
+    ld.param.u32 %r0, [_p3];
+    ld.param.u32 %r1, [_p4];
+    mov.u32 %r2, 0;
+    mov.u32 %r3, 0;
+    mov.u32 %r4, 0;
+    mov.u64 %rd3, 0;
+    mov.u32 %r5, 0;
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r6, 0;
+    mov.u64 %rd4, 0;
+    mov.f32 %f1, 0f00000000;
+    mov.u32 %r7, 0;
+    mov.u32 %r8, 0;
+    mov.u32 %r9, %ctaid.x;
+    mov.u32 %r2, %r9;
+    mov.u32 %r10, %tid.x;
+    mov.u32 %r11, 0x0000001FU;
+    and.b32 %r12, %r10, %r11;
+    mov.u32 %r3, %r12;
+    setp.ge.u32 %p0, %r2, %r0;
+    selp.u32 %r13, 1, 0, %p0;
+    setp.ne.u32 %p1, %r13, 0;
+    @!%p1 bra L_if_d_79;
+    ret;
+L_if_d_79:
+    mov.u32 %r14, 0x00000005U;
+    shr.u32 %r15, %r1, %r14;
+    mov.u32 %r4, %r15;
+    cvt.u64.u32 %rd5, %r2;
+    mov.u32 %r16, 0x00000012U;
+    mul.lo.u32 %r17, %r4, %r16;
+    cvt.u64.u32 %rd6, %r17;
+    mul.lo.u64 %rd7, %rd5, %rd6;
+    add.u64 %rd8, %rd0, %rd7;
+    mov.u64 %rd3, %rd8;
+    mov.u32 %r18, 0x00000002U;
+    mov.u32 %r19, 0x0000000FU;
+    and.b32 %r20, %r3, %r19;
+    add.u32 %r21, %r18, %r20;
+    mov.u32 %r5, %r21;
+    mov.f32 %f2, 0f00000000;
+    mov.f32 %f0, %f2;
+    mov.u32 %r22, 0x00000000U;
+    mov.u32 %r6, %r22;
+L_f_80:
+    setp.lt.u32 %p2, %r6, %r4;
+    selp.u32 %r23, 1, 0, %p2;
+    setp.ne.u32 %p3, %r23, 0;
+    @!%p3 bra L_br_82;
+    mov.u32 %r24, 0x00000012U;
+    mul.lo.u32 %r25, %r6, %r24;
+    cvt.u64.u32 %rd9, %r25;
+    add.u64 %rd10, %rd3, %rd9;
+    mov.u64 %rd4, %rd10;
+    mov.u32 %r26, 0x00000000U;
+    cvt.s64.s32 %rd11, %r26;
+    add.u64 %rd12, %rd4, %rd11;
+    ld.u8 %r27, [%rd12];
+    mov.u32 %r28, 0x00000001U;
+    cvt.s64.s32 %rd13, %r28;
+    add.u64 %rd14, %rd4, %rd13;
+    ld.u8 %r29, [%rd14];
+    mov.u32 %r30, 0x00000008U;
+    shl.b32 %r31, %r29, %r30;
+    or.b32 %r32, %r27, %r31;
+    { .reg .b16 %h_in; cvt.u16.u32 %h_in, %r32; cvt.f32.f16 %f3, %h_in; }
+    mov.f32 %f1, %f3;
+    cvt.u64.u32 %rd15, %r5;
+    add.u64 %rd16, %rd4, %rd15;
+    ld.u8 %r33, [%rd16];
+    mov.u32 %r7, %r33;
+    mov.u32 %r35, 0x00000010U;
+    setp.lt.u32 %p4, %r3, %r35;
+    selp.u32 %r36, 1, 0, %p4;
+    setp.ne.u32 %p5, %r36, 0;
+    @!%p5 bra L_te_83;
+    mov.u32 %r37, 0x0000000FU;
+    and.b32 %r38, %r7, %r37;
+    mov.u32 %r34, %r38;
+    bra L_td_84;
+L_te_83:
+    mov.u32 %r39, 0x00000004U;
+    shr.u32 %r40, %r7, %r39;
+    mov.u32 %r34, %r40;
+L_td_84:
+    mov.u32 %r41, 0x00000008U;
+    sub.s32 %r42, %r34, %r41;
+    mov.u32 %r8, %r42;
+    cvt.rn.f32.s32 %f4, %r8;
+    mul.f32 %f5, %f1, %f4;
+    mov.u32 %r43, 0x00000005U;
+    shl.b32 %r44, %r6, %r43;
+    add.u32 %r45, %r44, %r3;
+    cvt.u64.u32 %rd17, %r45;
+    mul.lo.u64 %rd18, %rd17, 0x0000000000000004U;
+    add.u64 %rd19, %rd1, %rd18;
+    ld.f32 %f6, [%rd19];
+    fma.rn.f32 %f7, %f5, %f6, %f0;
+    mov.f32 %f0, %f7;
+L_ct_81:
+    mov.u32 %r46, %r6;
+    mov.u32 %r47, 1;
+    add.u32 %r48, %r6, %r47;
+    mov.u32 %r6, %r48;
+    bra L_f_80;
+L_br_82:
+    {
+        .param .f32 _ca0;
+        st.param.f32 [_ca0+0], %f0;
+        .param .f32 _cret;
+        call.uni (_cret), t21_warp_sum, (_ca0);
+        ld.param.f32 %f8, [_cret+0];
+    }
+    mov.f32 %f0, %f8;
+    mov.u32 %r49, 0x00000000U;
+    setp.eq.u32 %p6, %r3, %r49;
+    selp.u32 %r50, 1, 0, %p6;
+    setp.ne.u32 %p7, %r50, 0;
+    @!%p7 bra L_if_d_86;
+    cvt.u64.u32 %rd21, %r2;
+    mul.lo.u64 %rd22, %rd21, 0x0000000000000004U;
+    add.u64 %rd23, %rd2, %rd22;
+    st.f32 [%rd23], %f0;
+L_if_d_86:
+    ret;
+}
+
+.visible .entry t21_dequant_q4_k(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u32 _p2,
+    .param .u32 _p3,
+    .param .u32 _p4
+) {
+    .reg .pred %p<6>;
+    .reg .b32 %r<71>;
+    .reg .b64 %rd<34>;
+    .reg .f32 %f<11>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u32 %r0, [_p2];
+    ld.param.u32 %r1, [_p3];
+    ld.param.u32 %r2, [_p4];
+    mov.u32 %r3, 0;
+    mov.u32 %r4, 0;
+    mov.u32 %r5, 0;
+    mov.u32 %r6, 0;
+    mov.u32 %r7, 0;
+    mov.u64 %rd2, 0;
+    mov.u64 %rd3, 0;
+    mov.f32 %f0, 0f00000000;
+    mov.f32 %f1, 0f00000000;
+    mov.u32 %r8, 0;
+    mov.u32 %r9, 0;
+    mov.u32 %r10, 0;
+    mov.u32 %r11, 0;
+    mov.u32 %r12, 0;
+    mov.u32 %r13, 0;
+    mov.u32 %r14, 0;
+    mov.u32 %r15, 0;
+    mov.u32 %r16, %ctaid.y;
+    mov.u32 %r3, %r16;
+    mov.u32 %r17, %ctaid.x;
+    mov.u32 %r18, %ntid.x;
+    mul.lo.u32 %r19, %r17, %r18;
+    mov.u32 %r20, %tid.x;
+    add.u32 %r21, %r19, %r20;
+    mov.u32 %r4, %r21;
+    setp.lt.u32 %p0, %r3, %r0;
+    selp.u32 %r23, 1, 0, %p0;
+    setp.ne.u32 %p1, %r23, 0;
+    @!%p1 bra L_sc_89;
+    setp.lt.u32 %p2, %r4, %r1;
+    selp.u32 %r24, 1, 0, %p2;
+    setp.ne.u32 %p3, %r24, 0;
+    selp.u32 %r22, 1, 0, %p3;
+    bra L_sce_90;
+L_sc_89:
+    mov.u32 %r22, 0;
+L_sce_90:
+    setp.ne.u32 %p4, %r22, 0;
+    @!%p4 bra L_if_d_88;
+    mov.u32 %r25, 0x00000008U;
+    shr.u32 %r26, %r1, %r25;
+    mov.u32 %r5, %r26;
+    mov.u32 %r27, 0x00000008U;
+    shr.u32 %r28, %r4, %r27;
+    mov.u32 %r6, %r28;
+    mov.u32 %r29, 0x000000FFU;
+    and.b32 %r30, %r4, %r29;
+    mov.u32 %r7, %r30;
+    cvt.u64.u32 %rd4, %r3;
+    cvt.u64.u32 %rd5, %r5;
+    mul.lo.u64 %rd6, %rd4, %rd5;
+    cvt.u64.u32 %rd7, %r6;
+    add.u64 %rd8, %rd6, %rd7;
+    mov.u64 %rd9, 0x0000000000000090U;
+    mul.lo.u64 %rd10, %rd8, %rd9;
+    mov.u64 %rd2, %rd10;
+    add.u64 %rd11, %rd0, %rd2;
+    mov.u64 %rd3, %rd11;
+    mov.u32 %r31, 0x00000000U;
+    cvt.s64.s32 %rd12, %r31;
+    add.u64 %rd13, %rd3, %rd12;
+    ld.u8 %r32, [%rd13];
+    mov.u32 %r33, 0x00000001U;
+    cvt.s64.s32 %rd14, %r33;
+    add.u64 %rd15, %rd3, %rd14;
+    ld.u8 %r34, [%rd15];
+    mov.u32 %r35, 0x00000008U;
+    shl.b32 %r36, %r34, %r35;
+    or.b32 %r37, %r32, %r36;
+    { .reg .b16 %h_in; cvt.u16.u32 %h_in, %r37; cvt.f32.f16 %f2, %h_in; }
+    mov.f32 %f0, %f2;
+    mov.u32 %r38, 0x00000002U;
+    cvt.s64.s32 %rd16, %r38;
+    add.u64 %rd17, %rd3, %rd16;
+    ld.u8 %r39, [%rd17];
+    mov.u32 %r40, 0x00000003U;
+    cvt.s64.s32 %rd18, %r40;
+    add.u64 %rd19, %rd3, %rd18;
+    ld.u8 %r41, [%rd19];
+    mov.u32 %r42, 0x00000008U;
+    shl.b32 %r43, %r41, %r42;
+    or.b32 %r44, %r39, %r43;
+    { .reg .b16 %h_in; cvt.u16.u32 %h_in, %r44; cvt.f32.f16 %f3, %h_in; }
+    mov.f32 %f1, %f3;
+    mov.u32 %r45, 0x00000006U;
+    shr.u32 %r46, %r7, %r45;
+    mov.u32 %r8, %r46;
+    mov.u32 %r47, 0x00000005U;
+    shr.u32 %r48, %r7, %r47;
+    mov.u32 %r49, 0x00000001U;
+    and.b32 %r50, %r48, %r49;
+    mov.u32 %r9, %r50;
+    mov.u32 %r51, 0x0000001FU;
+    and.b32 %r52, %r7, %r51;
+    mov.u32 %r10, %r52;
+    mov.u32 %r53, 0x00000001U;
+    shl.b32 %r54, %r8, %r53;
+    or.b32 %r55, %r54, %r9;
+    mov.u32 %r11, %r55;
+    mov.u32 %r56, 0x00000004U;
+    cvt.u64.u32 %rd20, %r56;
+    add.u64 %rd21, %rd3, %rd20;
+    {
+        .param .u64 _ca0;
+        st.param.u64 [_ca0+0], %rd21;
+        .param .u32 _ca1;
+        st.param.u32 [_ca1+0], %r11;
+        .param .u32 _cret;
+        call.uni (_cret), t21_q4k_scale, (_ca0, _ca1);
+        ld.param.u32 %r57, [_cret+0];
+    }
+    mov.u32 %r12, %r57;
+    mov.u32 %r58, 0x00000004U;
+    cvt.u64.u32 %rd22, %r58;
+    add.u64 %rd23, %rd3, %rd22;
+    {
+        .param .u64 _ca0;
+        st.param.u64 [_ca0+0], %rd23;
+        .param .u32 _ca1;
+        st.param.u32 [_ca1+0], %r11;
+        .param .u32 _cret;
+        call.uni (_cret), t21_q4k_min, (_ca0, _ca1);
+        ld.param.u32 %r59, [_cret+0];
+    }
+    mov.u32 %r13, %r59;
+    mov.u32 %r60, 0x00000010U;
+    mov.u32 %r61, 0x00000005U;
+    shl.b32 %r62, %r8, %r61;
+    add.u32 %r63, %r60, %r62;
+    add.u32 %r64, %r63, %r10;
+    cvt.u64.u32 %rd24, %r64;
+    add.u64 %rd25, %rd3, %rd24;
+    ld.u8 %r65, [%rd25];
+    mov.u32 %r14, %r65;
+    setp.ne.u32 %p5, %r9, 0;
+    @!%p5 bra L_te_91;
+    mov.u32 %r67, 0x00000004U;
+    shr.u32 %r68, %r14, %r67;
+    mov.u32 %r66, %r68;
+    bra L_td_92;
+L_te_91:
+    mov.u32 %r69, 0x0000000FU;
+    and.b32 %r70, %r14, %r69;
+    mov.u32 %r66, %r70;
+L_td_92:
+    mov.u32 %r15, %r66;
+    cvt.rn.f32.u32 %f4, %r12;
+    mul.f32 %f5, %f0, %f4;
+    cvt.rn.f32.u32 %f6, %r15;
+    mul.f32 %f7, %f5, %f6;
+    cvt.rn.f32.u32 %f8, %r13;
+    mul.f32 %f9, %f1, %f8;
+    sub.f32 %f10, %f7, %f9;
+    cvt.u64.u32 %rd27, %r3;
+    cvt.u64.u32 %rd28, %r2;
+    mul.lo.u64 %rd29, %rd27, %rd28;
+    cvt.u64.u32 %rd30, %r4;
+    add.u64 %rd31, %rd29, %rd30;
+    mul.lo.u64 %rd32, %rd31, 0x0000000000000004U;
+    add.u64 %rd33, %rd1, %rd32;
+    st.f32 [%rd33], %f10;
+L_if_d_88:
+    ret;
+}
+
+.visible .entry t21_matvec_q4_k(
+    .param .u64 _p0,
+    .param .u64 _p1,
+    .param .u64 _p2,
+    .param .u32 _p3,
+    .param .u32 _p4
+) {
+    .reg .pred %p<8>;
+    .reg .b32 %r<85>;
+    .reg .b64 %rd<38>;
+    .reg .f32 %f<31>;
+    ld.param.u64 %rd0, [_p0];
+    ld.param.u64 %rd1, [_p1];
+    ld.param.u64 %rd2, [_p2];
+    ld.param.u32 %r0, [_p3];
+    ld.param.u32 %r1, [_p4];
+    mov.u32 %r2, 0;
+    mov.u32 %r3, 0;
+    mov.u32 %r4, 0;
+    mov.u64 %rd3, 0;
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r5, 0;
+    mov.u64 %rd4, 0;
+    mov.f32 %f1, 0f00000000;
+    mov.f32 %f2, 0f00000000;
+    mov.u64 %rd5, 0;
+    mov.u64 %rd6, 0;
+    mov.u32 %r6, 0;
+    mov.u32 %r7, 0;
+    mov.u32 %r8, 0;
+    mov.u32 %r9, 0;
+    mov.u32 %r10, 0;
+    mov.f32 %f3, 0f00000000;
+    mov.f32 %f4, 0f00000000;
+    mov.f32 %f5, 0f00000000;
+    mov.f32 %f6, 0f00000000;
+    mov.u32 %r11, 0;
+    mov.f32 %f7, 0f00000000;
+    mov.f32 %f8, 0f00000000;
+    mov.u32 %r12, 0;
+    mov.u32 %r13, %ctaid.x;
+    mov.u32 %r2, %r13;
+    mov.u32 %r14, %tid.x;
+    mov.u32 %r15, 0x0000001FU;
+    and.b32 %r16, %r14, %r15;
+    mov.u32 %r3, %r16;
+    setp.ge.u32 %p0, %r2, %r0;
+    selp.u32 %r17, 1, 0, %p0;
+    setp.ne.u32 %p1, %r17, 0;
+    @!%p1 bra L_if_d_94;
+    ret;
+L_if_d_94:
+    mov.u32 %r18, 0x00000008U;
+    shr.u32 %r19, %r1, %r18;
+    mov.u32 %r4, %r19;
+    cvt.u64.u32 %rd7, %r2;
+    mov.u32 %r20, 0x00000090U;
+    mul.lo.u32 %r21, %r4, %r20;
+    cvt.u64.u32 %rd8, %r21;
+    mul.lo.u64 %rd9, %rd7, %rd8;
+    add.u64 %rd10, %rd0, %rd9;
+    mov.u64 %rd3, %rd10;
+    mov.f32 %f9, 0f00000000;
+    mov.f32 %f0, %f9;
+    mov.u32 %r22, 0x00000000U;
+    mov.u32 %r5, %r22;
+L_f_95:
+    setp.lt.u32 %p2, %r5, %r4;
+    selp.u32 %r23, 1, 0, %p2;
+    setp.ne.u32 %p3, %r23, 0;
+    @!%p3 bra L_br_97;
+    mov.u32 %r24, 0x00000090U;
+    mul.lo.u32 %r25, %r5, %r24;
+    cvt.u64.u32 %rd11, %r25;
+    add.u64 %rd12, %rd3, %rd11;
+    mov.u64 %rd4, %rd12;
+    mov.u32 %r26, 0x00000000U;
+    cvt.s64.s32 %rd13, %r26;
+    add.u64 %rd14, %rd4, %rd13;
+    ld.u8 %r27, [%rd14];
+    mov.u32 %r28, 0x00000001U;
+    cvt.s64.s32 %rd15, %r28;
+    add.u64 %rd16, %rd4, %rd15;
+    ld.u8 %r29, [%rd16];
+    mov.u32 %r30, 0x00000008U;
+    shl.b32 %r31, %r29, %r30;
+    or.b32 %r32, %r27, %r31;
+    { .reg .b16 %h_in; cvt.u16.u32 %h_in, %r32; cvt.f32.f16 %f10, %h_in; }
+    mov.f32 %f1, %f10;
+    mov.u32 %r33, 0x00000002U;
+    cvt.s64.s32 %rd17, %r33;
+    add.u64 %rd18, %rd4, %rd17;
+    ld.u8 %r34, [%rd18];
+    mov.u32 %r35, 0x00000003U;
+    cvt.s64.s32 %rd19, %r35;
+    add.u64 %rd20, %rd4, %rd19;
+    ld.u8 %r36, [%rd20];
+    mov.u32 %r37, 0x00000008U;
+    shl.b32 %r38, %r36, %r37;
+    or.b32 %r39, %r34, %r38;
+    { .reg .b16 %h_in; cvt.u16.u32 %h_in, %r39; cvt.f32.f16 %f11, %h_in; }
+    mov.f32 %f2, %f11;
+    mov.u32 %r40, 0x00000004U;
+    cvt.u64.u32 %rd21, %r40;
+    add.u64 %rd22, %rd4, %rd21;
+    mov.u64 %rd5, %rd22;
+    mov.u32 %r41, 0x00000008U;
+    shl.b32 %r42, %r5, %r41;
+    cvt.u64.u32 %rd23, %r42;
+    mul.lo.u64 %rd24, %rd23, 0x0000000000000004U;
+    add.u64 %rd25, %rd1, %rd24;
+    mov.u64 %rd6, %rd25;
+    mov.u32 %r43, 0x00000000U;
+    mov.u32 %r6, %r43;
+L_f_98:
+    mov.u32 %r44, 0x00000004U;
+    setp.lt.u32 %p4, %r6, %r44;
+    selp.u32 %r45, 1, 0, %p4;
+    setp.ne.u32 %p5, %r45, 0;
+    @!%p5 bra L_br_100;
+    mov.u32 %r46, 0x00000001U;
+    shl.b32 %r47, %r6, %r46;
+    {
+        .param .u64 _ca0;
+        st.param.u64 [_ca0+0], %rd5;
+        .param .u32 _ca1;
+        st.param.u32 [_ca1+0], %r47;
+        .param .u32 _cret;
+        call.uni (_cret), t21_q4k_scale, (_ca0, _ca1);
+        ld.param.u32 %r48, [_cret+0];
+    }
+    mov.u32 %r7, %r48;
+    mov.u32 %r49, 0x00000001U;
+    shl.b32 %r50, %r6, %r49;
+    {
+        .param .u64 _ca0;
+        st.param.u64 [_ca0+0], %rd5;
+        .param .u32 _ca1;
+        st.param.u32 [_ca1+0], %r50;
+        .param .u32 _cret;
+        call.uni (_cret), t21_q4k_min, (_ca0, _ca1);
+        ld.param.u32 %r51, [_cret+0];
+    }
+    mov.u32 %r8, %r51;
+    mov.u32 %r52, 0x00000001U;
+    shl.b32 %r53, %r6, %r52;
+    mov.u32 %r54, 0x00000001U;
+    add.u32 %r55, %r53, %r54;
+    {
+        .param .u64 _ca0;
+        st.param.u64 [_ca0+0], %rd5;
+        .param .u32 _ca1;
+        st.param.u32 [_ca1+0], %r55;
+        .param .u32 _cret;
+        call.uni (_cret), t21_q4k_scale, (_ca0, _ca1);
+        ld.param.u32 %r56, [_cret+0];
+    }
+    mov.u32 %r9, %r56;
+    mov.u32 %r57, 0x00000001U;
+    shl.b32 %r58, %r6, %r57;
+    mov.u32 %r59, 0x00000001U;
+    add.u32 %r60, %r58, %r59;
+    {
+        .param .u64 _ca0;
+        st.param.u64 [_ca0+0], %rd5;
+        .param .u32 _ca1;
+        st.param.u32 [_ca1+0], %r60;
+        .param .u32 _cret;
+        call.uni (_cret), t21_q4k_min, (_ca0, _ca1);
+        ld.param.u32 %r61, [_cret+0];
+    }
+    mov.u32 %r10, %r61;
+    cvt.rn.f32.u32 %f12, %r7;
+    mul.f32 %f13, %f1, %f12;
+    mov.f32 %f3, %f13;
+    cvt.rn.f32.u32 %f14, %r8;
+    mul.f32 %f15, %f2, %f14;
+    neg.f32 %f16, %f15;
+    mov.f32 %f4, %f16;
+    cvt.rn.f32.u32 %f17, %r9;
+    mul.f32 %f18, %f1, %f17;
+    mov.f32 %f5, %f18;
+    cvt.rn.f32.u32 %f19, %r10;
+    mul.f32 %f20, %f2, %f19;
+    neg.f32 %f21, %f20;
+    mov.f32 %f6, %f21;
+    mov.u32 %r62, 0x00000010U;
+    mov.u32 %r63, 0x00000005U;
+    shl.b32 %r64, %r6, %r63;
+    add.u32 %r65, %r62, %r64;
+    add.u32 %r66, %r65, %r3;
+    cvt.u64.u32 %rd26, %r66;
+    add.u64 %rd27, %rd4, %rd26;
+    ld.u8 %r67, [%rd27];
+    mov.u32 %r11, %r67;
+    mov.u32 %r68, 0x0000000FU;
+    and.b32 %r69, %r11, %r68;
+    cvt.rn.f32.u32 %f22, %r69;
+    fma.rn.f32 %f23, %f3, %f22, %f4;
+    mov.f32 %f7, %f23;
+    mov.u32 %r70, 0x00000004U;
+    shr.u32 %r71, %r11, %r70;
+    cvt.rn.f32.u32 %f24, %r71;
+    fma.rn.f32 %f25, %f5, %f24, %f6;
+    mov.f32 %f8, %f25;
+    mov.u32 %r72, 0x00000006U;
+    shl.b32 %r73, %r6, %r72;
+    add.u32 %r74, %r73, %r3;
+    mov.u32 %r12, %r74;
+    cvt.u64.u32 %rd28, %r12;
+    mul.lo.u64 %rd29, %rd28, 0x0000000000000004U;
+    add.u64 %rd30, %rd6, %rd29;
+    ld.f32 %f26, [%rd30];
+    fma.rn.f32 %f27, %f7, %f26, %f0;
+    mov.f32 %f0, %f27;
+    mov.u32 %r75, 0x00000020U;
+    add.u32 %r76, %r12, %r75;
+    cvt.u64.u32 %rd31, %r76;
+    mul.lo.u64 %rd32, %rd31, 0x0000000000000004U;
+    add.u64 %rd33, %rd6, %rd32;
+    ld.f32 %f28, [%rd33];
+    fma.rn.f32 %f29, %f8, %f28, %f0;
+    mov.f32 %f0, %f29;
+L_ct_99:
+    mov.u32 %r77, %r6;
+    mov.u32 %r78, 1;
+    add.u32 %r79, %r6, %r78;
+    mov.u32 %r6, %r79;
+    bra L_f_98;
+L_br_100:
+L_ct_96:
+    mov.u32 %r80, %r5;
+    mov.u32 %r81, 1;
+    add.u32 %r82, %r5, %r81;
+    mov.u32 %r5, %r82;
+    bra L_f_95;
+L_br_97:
+    {
+        .param .f32 _ca0;
+        st.param.f32 [_ca0+0], %f0;
+        .param .f32 _cret;
+        call.uni (_cret), t21_warp_sum, (_ca0);
+        ld.param.f32 %f30, [_cret+0];
+    }
+    mov.f32 %f0, %f30;
+    mov.u32 %r83, 0x00000000U;
+    setp.eq.u32 %p6, %r3, %r83;
+    selp.u32 %r84, 1, 0, %p6;
+    setp.ne.u32 %p7, %r84, 0;
+    @!%p7 bra L_if_d_102;
+    cvt.u64.u32 %rd35, %r2;
+    mul.lo.u64 %rd36, %rd35, 0x0000000000000004U;
+    add.u64 %rd37, %rd2, %rd36;
+    st.f32 [%rd37], %f0;
+L_if_d_102:
+    ret;
+}
+

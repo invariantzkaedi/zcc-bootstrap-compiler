@@ -1,0 +1,152 @@
+{
+  "schema_version": "track21a.mutation_report.v1",
+  "generated_at_utc": "2026-11-26T02:39:59Z",
+  "total_mutants": 13,
+  "killed": 13,
+  "survived": 0,
+  "detection_rate": 1.0,
+  "false_positives_on_clean_control": 0,
+  "false_negatives": 0,
+  "unknown_signature_probe": {
+    "input": {
+      "trap_kind": "NOVEL_COSMIC_BITFLIP_0xDEAD",
+      "detail": "unclassified anomalous event"
+    },
+    "classified_signature": "UNKNOWN",
+    "preserved_as_unknown": true
+  },
+  "scope_limitation": "100% kill rate over these 13 controlled fault injections demonstrates sensitivity to the tested arithmetic, indexing, quantization, accumulation, dispatch, capability, receipt, and verifier bypass fault classes only; it is NOT proof that all possible silent failures are detectable.",
+  "verdict": "PASS",
+  "mutants": [
+    {
+      "mutant_id": "M_ARITH_01_VEC_ADD_SIGN",
+      "domain": "arithmetic",
+      "target": "runtime/compute_avx2.c:avx2_vec_add",
+      "mutation": "Replace _mm256_add_ps with _mm256_sub_ps and + with -",
+      "status": "KILLED",
+      "failure_signature": "SIG_NUMERICAL_ORACLE_DIVERGENCE",
+      "trap_detail": "idx 0: got=0.75 ref=1.75 abs=1.000e+00 > tol=2.750e-06",
+      "minimal_reproducing_input": "OP_VEC_ADD_F32([1.25, -3.5, ...], [0.5, 1.5, ...], AVX2_FMA)"
+    },
+    {
+      "mutant_id": "M_INDEX_01_GEMM_COL_OFFBYONE",
+      "domain": "tensor_indexing",
+      "target": "runtime/compute_avx2.c:avx2_gemm_f32",
+      "mutation": "Drop +n offset on AVX2 B load (pb[k * ldb + n] -> pb[k * ldb], misindexing n>=8)",
+      "status": "KILLED",
+      "failure_signature": "SIG_NUMERICAL_ORACLE_DIVERGENCE",
+      "trap_detail": "idx 8: got=0.330688775 ref=0.534127134 abs=2.034e-01 > tol=1.534e-04",
+      "minimal_reproducing_input": "OP_GEMM_F32(A[4,5], B[5,18], AVX2_FMA)"
+    },
+    {
+      "mutant_id": "M_QUANT_01_Q4K_SCALE_MASK",
+      "domain": "quantization_decode",
+      "target": "runtime/compute_scalar.c:q4k_scale_at",
+      "mutation": "Corrupt 6-bit scale mask (scales[j] & 63U -> scales[j] & 31U)",
+      "status": "KILLED",
+      "failure_signature": "SIG_NUMERICAL_ORACLE_DIVERGENCE",
+      "trap_detail": "idx 0: got=-0.915161133 ref=19.1590576 abs=2.007e+01 > tol=2.016e-04",
+      "minimal_reproducing_input": "OP_DEQUANT_Q4_K(W[1,256], SCALAR_C99)"
+    },
+    {
+      "mutant_id": "M_QUANT_02_PTX_Q8_MATVEC_BIAS",
+      "domain": "quantization_decode",
+      "target": "runtime/kernels_t21a_ptx.c:t21_matvec_q8_0 (recompiled via ./zcc --target=ptx)",
+      "mutation": "Corrupt PTX Q8_0 dequantized weight q -> (q + 1)",
+      "status": "KILLED",
+      "failure_signature": "SIG_NUMERICAL_ORACLE_DIVERGENCE",
+      "trap_detail": "idx 0: got=72.1402359 ref=71.7903593 abs=3.499e-01 > tol=3.640e-02",
+      "minimal_reproducing_input": "OP_MATVEC_Q8_0(W[2,64], X[64], PTX_SM120)"
+    },
+    {
+      "mutant_id": "M_ACCUM_01_DOT_FP64_DOWNGRADE",
+      "domain": "accumulation_precision",
+      "target": "runtime/compute_scalar.c:exec_dot(ZCC_ACCUM_FP64_REF)",
+      "mutation": "Downgrade double accumulator to float inside FP64_REF path",
+      "status": "KILLED",
+      "failure_signature": "SIG_NUMERICAL_ORACLE_DIVERGENCE",
+      "trap_detail": "idx 0: got=7 ref=8 abs=1.000e+00 > tol=1.800e-05",
+      "minimal_reproducing_input": "OP_DOT_F32([1.0, 1e9, -1e9, 7.0], [1,1,1,1], ACCUM_FP64_REF)"
+    },
+    {
+      "mutant_id": "M_ACCUM_02_RMSNORM_DROP_EPS",
+      "domain": "accumulation_precision",
+      "target": "runtime/compute_scalar.c:exec_rmsnorm",
+      "mutation": "Omit + eps in RMSNorm denominator causing zero-vector 0/0 NaN",
+      "status": "KILLED",
+      "failure_signature": "SIG_NUMERICAL_ORACLE_DIVERGENCE",
+      "trap_detail": "idx 0: unexpected non-finite nan vs 0.0",
+      "minimal_reproducing_input": "OP_RMSNORM_F32([0,0,0,0], [1,1,1,1], eps=1e-5)"
+    },
+    {
+      "mutant_id": "M_DISPATCH_01_SILENT_SUBSTITUTION",
+      "domain": "backend_selection",
+      "target": "runtime/cpu_capabilities.c:zcc_negotiate_backend_with_caps",
+      "mutation": "Silently substitute SCALAR_C99 and return ZCC_STATUS_OK when AVX2_FMA EXACT_REQUIRED lacks HW support",
+      "status": "KILLED",
+      "failure_signature": "SIG_SILENT_BACKEND_SUBSTITUTION",
+      "trap_detail": "EXACT AVX2 returned rc=0, executed=1 under no_xcr0_ymm",
+      "minimal_reproducing_input": "EXACT_REQUIRED AVX2_FMA with xcr0_ymm=0"
+    },
+    {
+      "mutant_id": "M_CAP_01_DROP_XCR0_CHECK",
+      "domain": "capability_detection",
+      "target": "runtime/cpu_capabilities.c:zcc_cpu_has_avx2_fma",
+      "mutation": "Drop caps->xcr0_ymm check from AVX2 capability gate",
+      "status": "KILLED",
+      "failure_signature": "SIG_MISSING_CPUID_OSXSAVE_XCR0_FMA_GUARD",
+      "trap_detail": "zcc_cpu_has_avx2_fma returned non-zero when no_xcr0_ymm",
+      "minimal_reproducing_input": "zcc_cpu_has_avx2_fma(caps with avx2=1, fma=1, xcr0_ymm=0)"
+    },
+    {
+      "mutant_id": "M_CAP_02_DROP_FMA_CHECK",
+      "domain": "capability_detection",
+      "target": "runtime/cpu_capabilities.c:zcc_cpu_has_avx2_fma",
+      "mutation": "Drop independent caps->has_fma check from AVX2 capability gate",
+      "status": "KILLED",
+      "failure_signature": "SIG_MISSING_CPUID_OSXSAVE_XCR0_FMA_GUARD",
+      "trap_detail": "zcc_cpu_has_avx2_fma returned non-zero when no_fma",
+      "minimal_reproducing_input": "zcc_cpu_has_avx2_fma(caps with avx2=1, xcr0_ymm=1, has_fma=0)"
+    },
+    {
+      "mutant_id": "M_RECEIPT_01_RUNTIME_SELF_CERTIFY",
+      "domain": "receipt_generation",
+      "target": "runtime/compute_dispatch.c:exec_internal",
+      "mutation": "Set runtime receipt verification_status to PASS instead of UNVERIFIED_RUNTIME_ONLY",
+      "status": "KILLED",
+      "failure_signature": "SIG_EF0_RUNTIME_SELF_CERTIFICATION",
+      "trap_detail": "runtime emitted verification_status=PASS",
+      "minimal_reproducing_input": "inspect receipt.verification_status after OP_VEC_ADD_F32"
+    },
+    {
+      "mutant_id": "M_RECEIPT_02_STALE_OUTPUT_HASH",
+      "domain": "receipt_generation",
+      "target": "runtime/compute_dispatch.c:exec_internal",
+      "mutation": "Flip leading byte of receipt output_buffer_sha256 before sealing",
+      "status": "KILLED",
+      "failure_signature": "SIG_RECEIPT_CANONICAL_OR_BUFFER_TAMPER",
+      "trap_detail": "actual 7b1635497ac39786 != receipt ab1635497ac39786",
+      "minimal_reproducing_input": "compare receipt.output_buffer_sha256 vs SHA256(output buffer)"
+    },
+    {
+      "mutant_id": "M_VERIFY_01_MISSING_EVIDENCE_REJECTED",
+      "domain": "verifier_release_auth",
+      "target": "tools/verify_track21a_release.py",
+      "mutation": "Invoke release verifier against empty/missing evidence directory",
+      "status": "KILLED",
+      "failure_signature": "SIG_VERIFIER_AUTHORIZATION_BYPASS",
+      "trap_detail": "Verifier exited rc=2: RELEASE_BLOCKED: Missing deliverables in /tmp/t21a_M_VERIFY_9bp27u4z: ['TRACK21A_REPO_AUDIT.json', 'TRACK21A_COMPUTE_CONTRACT.md', 'TRACK21A",
+      "minimal_reproducing_input": "verify_track21a_release.py --verify-dir /tmp/t21a_M_VERIFY_9bp27u4z"
+    },
+    {
+      "mutant_id": "M_VERIFY_02_FAIL_OPEN_RECEIPT_BYPASS",
+      "domain": "verifier_release_auth",
+      "target": "tools/verify_track21a_release.py:independent_verify_json_receipt",
+      "mutation": "Force receipt verifier to return (True, 'bypassed') unconditionally",
+      "status": "KILLED",
+      "failure_signature": "SIG_VERIFIER_AUTHORIZATION_BYPASS",
+      "trap_detail": "Mutated verifier --self-test exited rc=1: SELF_TEST_FAIL: receipt tamper controls did not reject all tampered payloads",
+      "minimal_reproducing_input": "Mutated independent_verify_json_receipt returning True unconditionally -> caught by --self-test"
+    }
+  ]
+}

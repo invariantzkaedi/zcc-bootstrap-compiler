@@ -2059,5 +2059,28 @@ valgrind:
 	@if [ ! -x ./zcc ]; then $(MAKE) zcc; fi
 	valgrind --error-exitcode=1 ./zcc tests/zcc_quad_isa_torture.c -o /tmp/zcc_vg_torture.s
 
+# ─── Track 21A — Portable Verified Compute Foundation ─────────────────────────
+.PHONY: track21a-build track21a-ptx track21a-c-suite track21a-diff track21a-mutate track21a-verify
+
+track21a-build:
+	bash tests/track21a/build_runtime.sh
+
+track21a-ptx: zcc
+	./zcc --target=ptx --gpu-arch=sm_120 runtime/kernels_t21a_ptx.c -o runtime/kernels_t21a_sm120.ptx
+
+track21a-c-suite: zcc
+	bash tests/track21a/run_c_suite.sh
+
+track21a-diff: track21a-build
+	python3 tests/track21a/differential_oracle.py
+
+track21a-mutate: zcc
+	python3 tests/track21a/mutation_observatory.py
+
+track21a-verify: zcc
+	python3 tools/verify_track21a_release.py --self-test
+	python3 tools/verify_track21a_release.py
+
+
 
 
