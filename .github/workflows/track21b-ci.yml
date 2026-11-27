@@ -53,15 +53,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc g++ make python3 binutils \
-            libvulkan-dev vulkan-validationlayers mesa-vulkan-drivers \
+            build-essential gcc g++ make python3 binutils nodejs \
+            libvulkan-dev vulkan-validationlayers mesa-vulkan-drivers vulkan-tools \
             glslang-tools spirv-tools spirv-headers
 
-      - name: Verify ZCC Self-Host & Toolchain Preserved
+      - name: Verify ZCC Self-Host, Runtime Build & Release Verifier Self-Test
         run: |
-          make selfhost
-          cmp zcc2.s zcc3.s
           bash scripts/log_bootstrap_hash.sh --check
+          cmp zcc2.s zcc3.s
+          bash tests/track21b/build_runtime.sh
           python3 tools/verify_track21b_release.py --self-test
 
       - name: Run Stock Ubuntu 24.04 Compatibility + Transitive Attribution Lane
@@ -95,12 +95,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc g++ make python3 binutils curl xz-utils patch \
+            build-essential gcc g++ make python3 binutils curl xz-utils patch nodejs pkg-config \
             meson-1.7 ninja-build cmake bison flex \
             llvm-20-dev spirv-tools spirv-headers glslang-tools \
-            libvulkan-dev vulkan-validationlayers mesa-vulkan-drivers \
-            libdrm-dev libexpat1-dev libzstd-dev zlib1g-dev \
-            python3-mako python3-yaml
+            libvulkan-dev vulkan-validationlayers mesa-vulkan-drivers vulkan-tools \
+            libdrm-dev libexpat1-dev libzstd-dev zlib1g-dev libelf-dev \
+            python3-mako python3-yaml python3-packaging
 
       - name: Cache Patched Clean Mesa Lavapipe Build
         uses: actions/cache@v4
@@ -110,11 +110,11 @@ jobs:
             /tmp/zcc_mesa_src_cache
           key: zcc-mesa-25.2.8-lvp-${{ hashFiles('patches/mesa-25.2.8-u_cpu_detect-l3-teardown.patch', 'tests/track21b/build_clean_mesa_lvp.sh') }}
 
-      - name: Verify ZCC Self-Host & Release Verifier Self-Test
+      - name: Verify ZCC Self-Host, Runtime Build & Release Verifier Self-Test
         run: |
-          make selfhost
-          cmp zcc2.s zcc3.s
           bash scripts/log_bootstrap_hash.sh --check
+          cmp zcc2.s zcc3.s
+          bash tests/track21b/build_runtime.sh
           python3 tools/verify_track21b_release.py --self-test
 
       - name: Build Patched Lavapipe & Run Strict Unsuppressed ASan+UBSan+LSan Full Stack Gate
