@@ -1,0 +1,88 @@
+diff -ruN a/src/util/thread_sched.c b/src/util/thread_sched.c
+--- a/src/util/thread_sched.c	2026-11-27 00:39:01.396930412 -0800
++++ b/src/util/thread_sched.c	2026-11-27 00:39:01.397198240 -0800
+@@ -76,7 +76,9 @@
+     * core complex. (*sched_state contains the last set L3 index)
+     */
+    if (L3_cache == U_CPU_INVALID_L3 ||
+-       (sched_state && L3_cache == *sched_state))
++       (sched_state && L3_cache == *sched_state) ||
++       !caps->L3_affinity_mask ||
++       (unsigned)L3_cache >= caps->num_L3_caches)
+       return false;
+ 
+    /* Apply the policy. */
+diff -ruN a/src/util/u_cpu_detect.c b/src/util/u_cpu_detect.c
+--- a/src/util/u_cpu_detect.c	2026-11-27 00:39:01.396860249 -0800
++++ b/src/util/u_cpu_detect.c	2026-11-27 00:39:01.397147794 -0800
+@@ -106,6 +106,24 @@
+    .detect_done = 0,
+ };
+ 
++static bool l3_affinity_fini_registered = false;
++
++static void
++free_l3_affinity_masks(void)
++{
++   util_affinity_mask *masks = _util_cpu_caps_state.caps.L3_affinity_mask;
++   if (!masks)
++      masks = util_cpu_caps.L3_affinity_mask;
++   _util_cpu_caps_state.caps.L3_affinity_mask = NULL;
++   _util_cpu_caps_state.caps.num_L3_caches = 0;
++   memset(_util_cpu_caps_state.caps.cpu_to_L3, 0xff,
++          sizeof(_util_cpu_caps_state.caps.cpu_to_L3));
++   util_cpu_caps.L3_affinity_mask = NULL;
++   util_cpu_caps.num_L3_caches = 0;
++   memset(util_cpu_caps.cpu_to_L3, 0xff, sizeof(util_cpu_caps.cpu_to_L3));
++   free(masks);
++}
++
+ #if DETECT_ARCH_X86 || DETECT_ARCH_X86_64
+ static int has_cpuid(void);
+ #endif
+@@ -563,9 +581,14 @@
+             if (idx == -1) {
+                idx = num_L3_caches;
+                L3_found[num_L3_caches++] = l3_id;
+-               L3_affinity_masks = realloc(L3_affinity_masks, sizeof(util_affinity_mask) * num_L3_caches);
+-               if (!L3_affinity_masks)
+-                  return;
++               util_affinity_mask *new_masks =
++                  realloc(L3_affinity_masks, sizeof(util_affinity_mask) * num_L3_caches);
++               if (!new_masks) {
++                  free(L3_affinity_masks);
++                  L3_affinity_masks = NULL;
++                  break;
++               }
++               L3_affinity_masks = new_masks;
+                memset(&L3_affinity_masks[num_L3_caches - 1], 0, sizeof(util_affinity_mask));
+             }
+             util_cpu_caps.cpu_to_L3[i] = idx;
+@@ -575,8 +598,17 @@
+          mask[i / 32] = 0;
+       }
+ 
+-      util_cpu_caps.num_L3_caches = num_L3_caches;
+-      util_cpu_caps.L3_affinity_mask = L3_affinity_masks;
++      if (L3_affinity_masks) {
++         util_cpu_caps.num_L3_caches = num_L3_caches;
++         util_cpu_caps.L3_affinity_mask = L3_affinity_masks;
++         if (!l3_affinity_fini_registered) {
++            if (atexit(free_l3_affinity_masks) == 0)
++               l3_affinity_fini_registered = true;
++         }
++      } else {
++         memset(util_cpu_caps.cpu_to_L3, 0xff, sizeof(util_cpu_caps.cpu_to_L3));
++         util_cpu_caps.num_L3_caches = 1;
++      }
+ 
+       if (saved) {
+          if (debug_get_option_dump_cpu()) {
+@@ -698,6 +730,7 @@
+    int total_cpus = 0;
+    bool zen = false;
+ 
++   free_l3_affinity_masks();
+    memset(&util_cpu_caps, 0, sizeof util_cpu_caps);
+ 
+    /* Count the number of CPUs in system */
