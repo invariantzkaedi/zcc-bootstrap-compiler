@@ -157,7 +157,11 @@ def build_binaries(work_dir: Path) -> Dict[str, Path]:
 
 
 def extract_fail_lines(text: str) -> List[str]:
-    return [ln.strip() for ln in text.splitlines() if "FAIL[" in ln or "ERROR:" in ln or "DIFF21B_FAIL" in ln][:20]
+    return [
+        ln.strip()
+        for ln in text.splitlines()
+        if "FAIL[" in ln or "ERROR:" in ln or "DIFF21B_FAIL" in ln or "VK_UNEXPECTED_ERR" in ln
+    ][:20]
 
 
 def verify_target(

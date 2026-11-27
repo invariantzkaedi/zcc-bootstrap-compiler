@@ -845,6 +845,31 @@ zcc_status_t zcc_vulkan_ctx_get_caps(
     return ZCC_STATUS_OK;
 }
 
+static int validate_spv_framing(const uint32_t *words, size_t word_count, char *err_buf, size_t err_cap) {
+    if (!words || word_count < 5U) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "Invalid SPIR-V header (< 5 words)");
+        return -1;
+    }
+    if (words[0] != ZCC_SPIRV_MAGIC_NUMBER) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "Invalid SPIR-V magic word (0x%08x)", words[0]);
+        return -1;
+    }
+    if (words[1] < ZCC_SPIRV_VERSION_1_0 || words[3] == 0U || words[4] != 0U) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "Malformed SPIR-V header fields");
+        return -1;
+    }
+    size_t pos = 5U;
+    while (pos < word_count) {
+        uint32_t wc = words[pos] >> 16;
+        if (wc == 0U || pos + (size_t)wc > word_count) {
+            if (err_buf && err_cap) snprintf(err_buf, err_cap, "Malformed SPIR-V instruction word count at word %zu", pos);
+            return -1;
+        }
+        pos += (size_t)wc;
+    }
+    return 0;
+}
+
 static zcc_status_t vk_compile_shader_and_pipe(
     zcc_vulkan_ctx_t *ctx,
     const uint32_t *spv_words,
@@ -856,6 +881,10 @@ static zcc_status_t vk_compile_shader_and_pipe(
 ) {
     *out_smod = VK_NULL_HANDLE;
     *out_pipe = VK_NULL_HANDLE;
+
+    if (validate_spv_framing(spv_words, spv_word_count, err_buf, err_cap) != 0) {
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
 
     VkShaderModuleCreateInfo smci;
     memset(&smci, 0, sizeof(smci));

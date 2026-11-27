@@ -168,7 +168,7 @@ static void test_device_caps_and_negotiation(void) {
     st = zcc_compute_exec_v2(ZCC_OP_DOT_F32, ins, 2, &ddot, &opts, &rec);
     T_CHECK(st == ZCC_STATUS_ERR_UNSUPPORTED_HW, "FP64_REF rejected under EXACT_REQUIRED on VULKAN_SPV");
 
-    /* Corrupted SPIR-V override rejected cleanly without crash/leak */
+    /* Corrupted SPIR-V override rejected cleanly without crash/std::bad_alloc/leak */
     zcc_vulkan_exec_options_init(&opts);
     opts.base.requested_backend = ZCC_BACKEND_VULKAN_SPV;
     opts.base.selection_policy = ZCC_POLICY_EXACT_REQUIRED;
@@ -176,7 +176,13 @@ static void test_device_caps_and_negotiation(void) {
     opts.spirv_override_words = bad_spv;
     opts.spirv_override_word_count = 8U;
     st = zcc_compute_exec_v2(ZCC_OP_VEC_ADD_F32, ins, 2, &dout, &opts, &rec);
-    T_CHECK(st == ZCC_STATUS_ERR_BACKEND_RUNTIME, "Corrupted SPIR-V payload fails closed in vkCreateShaderModule");
+    T_CHECK(st == ZCC_STATUS_ERR_BACKEND_RUNTIME, "Corrupted SPIR-V magic payload fails closed cleanly");
+
+    uint32_t bad_spv_wc[8] = {ZCC_SPIRV_MAGIC_NUMBER, ZCC_SPIRV_VERSION_1_0, 0U, 10U, 0U, 0U, 0U, 0U};
+    opts.spirv_override_words = bad_spv_wc;
+    opts.spirv_override_word_count = 8U;
+    st = zcc_compute_exec_v2(ZCC_OP_VEC_ADD_F32, ins, 2, &dout, &opts, &rec);
+    T_CHECK(st == ZCC_STATUS_ERR_BACKEND_RUNTIME, "Zero-wordCount SPIR-V payload fails closed cleanly");
 }
 
 static zcc_status_t exec_maybe_ctx(
@@ -188,8 +194,15 @@ static zcc_status_t exec_maybe_ctx(
     const zcc_vulkan_exec_options_t *opt,
     zcc_compute_v2_receipt_t *rec
 ) {
-    return ctx ? zcc_vulkan_ctx_exec(ctx, op, inputs, num_inputs, output, opt, rec)
-               : zcc_compute_exec_v2(op, inputs, num_inputs, output, opt, rec);
+    zcc_status_t st = ctx ? zcc_vulkan_ctx_exec(ctx, op, inputs, num_inputs, output, opt, rec)
+                          : zcc_compute_exec_v2(op, inputs, num_inputs, output, opt, rec);
+    if (st != ZCC_STATUS_OK && st != ZCC_STATUS_ERR_OOM && st != ZCC_STATUS_ERR_ABI_MISMATCH) {
+        fprintf(stderr, "VK_UNEXPECTED_ERR op=%d ctx=%d st=%d val_errs=%u msg='%s'\n",
+                (int)op, ctx ? 1 : 0, (int)st,
+                rec ? rec->validation_error_count : 0U,
+                rec ? rec->base.error_message : "");
+    }
+    return st;
 }
 
 static void test_all_13_ops_and_replay(int run_ptx, int prefer_ctx) {
@@ -690,6 +703,8 @@ static int run_benchmarks(const char *out_path) {
 }
 
 int main(int argc, char **argv) {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
     int run_ptx = 1;
     int prefer_ctx = 0;
     const char *bench_out = NULL;
