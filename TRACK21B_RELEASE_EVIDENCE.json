@@ -1,11 +1,11 @@
 {
   "schema_version": "track21b.release_evidence.v1",
-  "generated_at_utc": "2026-11-27T07:00:49Z",
+  "generated_at_utc": "2026-11-27T12:50:47Z",
   "governing_rule_version": "ZCC-EF-7 v1.0.0 + ZCC-EF-0",
   "evidence_tier": "E3",
-  "git_head_sha": "d444f33bbe5bb6320c1348b4f6e2b73aee5a8dad",
-  "manifest_file_count": 28,
-  "canonical_manifest_sha256": "18aa8ce6a8205321ce2173ef39f3258c1772a579f8607d7c2275277a7831715c",
+  "git_head_sha": "b05c309203b4f2759acd91e681744b7afab7f228",
+  "manifest_file_count": 41,
+  "canonical_manifest_sha256": "bc6318226f1f4a48abf6f6fda7725272493ed10e246bbd229756cc19a5938edc",
   "vulkan_execution_oracle": {
     "vulkan_available": 1,
     "validation_layer_enabled": 1,
@@ -30,35 +30,48 @@
     }
   },
   "artifact_sha256": {
-    ".github/workflows/track21b-ci.yml": "bba2340deabceb6dfcd554b2dc7982165872b0876e3d95afc62ae7d568ac1f2e",
-    ".gitignore": "b5e85bc227b2d8d541b93d814fcebe3d8c9c51f073a0186248fd4234ade1e66b",
+    ".github/workflows/track21b-ci.yml": "5dc99ea26e4ceed94896ca6792cb053b372183f7eb9b8e14ae6e5260c12618b0",
+    ".gitignore": "b8b20a059f528e43c30b3aed203adc0bde5c84cdcf9e7a168c66ac43ed581aa8",
     "Makefile": "e7fc11aec6e9fa55f66e2bfd132027793e085a6d275c03d1b10411f7fd22d89d",
     "TRACK21B_COMPUTE_CONTRACT.md": "8b9902e7257be4da663d16b411bb62f797a60b94dd68c871ae29e60db183611d",
-    "TRACK21B_DIFFERENTIAL_REPORT.json": "223fa0d8851f38d1ed8b64b621b4acd82b2552a492fa18a205fbceb988fa0520",
-    "TRACK21B_HW_VULKAN_REPORT.json": "d0c1c42377a64c91bfe6e6aad2f45285516683d3b996e5b9092ffb95f0a28c56",
+    "TRACK21B_DIFFERENTIAL_REPORT.json": "1a48d16c123054e20b2d6dddb20546362b92ec90bee9516275a19f72311ed4b5",
+    "TRACK21B_HW_VULKAN_REPORT.json": "ceee1e3d886a136fa59e1ec185b4cc276f80ea9b1a66048d86c8eefa7fdf5386",
     "TRACK21B_IMPLEMENTATION_PLAN.md": "8cec33275d2cc152d320bdc42acffa207a6e452c363cbcfb7a019f55f8d8a98d",
-    "TRACK21B_INVARIANT_REGISTRY.json": "d6c38e32a6b103992c202d0c792db2119e653305d6182bc4019a734f02223e49",
-    "TRACK21B_MUTATION_REPORT.json": "3f020b08dc03a643f4f4d38864340de9ab37a2372166ed1b20d1e006f9e01dc7",
-    "TRACK21B_PERFORMANCE_REPORT.json": "89e65e168f7677962586ae5b367deabd6b07f3799aa350add28c4dccbf1a29f7",
+    "TRACK21B_INVARIANT_REGISTRY.json": "cbad6d9fd56b58ddc72a62bd439d2ba8e7396dbd294ac19236612a68e378b651",
+    "TRACK21B_MUTATION_REPORT.json": "06713c636e600b5e26e9e79be0c58fff4480e66263b00a99b4b3794ad7ab4cfd",
+    "TRACK21B_PERFORMANCE_REPORT.json": "4e4594241029bbe5e6f3f30f1eabb80d292cad4ca150de946aad60ac38b13c4c",
     "TRACK21B_REPO_AUDIT.json": "0353b73df4953b261abe2a4be30aa17dedf878a5b546be7aff7449262801a34f",
+    "TRACK21B_TRANSITIVE_MUTATION_REPORT.json": "8222c1df68b561c46674f431d373f709e5b7ade45dd584c286845a55fddee936",
     "docs/TRACK21B_REPRODUCTION_AND_MIGRATION.md": "957f91ec9e82a38a34de44f5aea448dabda62e9833ee53bab6dacb5de30596de",
+    "docs/track21b/DISPATCH_INIT_OPTIMIZATION.md": "23a3c1f93a61cd25f55eabbac1ae47220adf69aa895d42c808d0e55c8f463baf",
+    "docs/track21b/MESA_UPSTREAM_ISSUE_REPORT.md": "62cd1ca7557343034d439dfe4160dececaea007ab336e4b05aff75dcf9c71f09",
+    "docs/track21b/forensics/FORENSIC_MANIFEST.json": "ba501a73d45a93b23dd2b4624e1635ffb8d8ea4a6e33ba17750a4938fff77560",
+    "docs/track21b/forensics/MESA_LVP_128B_FORENSICS.md": "58f97d55e055c3a8e7d4fbe474689e91f15ff4a589e65b8c2d309ea5ede400d8",
+    "docs/track21b/forensics/SHA256SUMS": "2006fdc8dd2901e20f0d7586d6eff38626ece294832384eecd78e8baf87be666",
     "include/zcc_spirv.h": "bbb2ef658eb561d3fa51a8b21a7226db372491516e09cb74af0cfc36e2a9587f",
     "include/zcc_vulkan_compute.h": "f0a4d70cc295580aa4a3779c5cd3230eaeed14a9a12e6b45feff7e2c47bc0c60",
-    "runtime/compute_dispatch_v2.c": "9d3950c64584279ef222733768bfcf8c1cbf3778db1f349473e732f5565ee92e",
+    "patches/mesa-25.2.8-u_cpu_detect-l3-teardown.patch": "65a58ad9d9bad78aeee362304235cb30e80b65d45a0ae6b7571f9debcfea1ac6",
+    "runtime/compute_dispatch_v2.c": "5e38d2b4a90a163a35c1e447567fbcf8cafa450b808a1a3a06d9a3ba2586c765",
     "runtime/compute_vulkan.c": "ef755dc77d18580a10be3173b338b77704f49b11d189f504a91648a3e1f4ec8b",
     "sdk/zcc_vulkan_compute.mjs": "a50e2753222297c1ea1733c030947e6eb276304be8ceded576585a87d5cde740",
     "sdk/zcc_vulkan_compute.py": "d18b3f0ed11be008cd0ce979c73a67c2dd415b52823e1528b4c20028809286b4",
     "src/part6_spirv.c": "8d655481c307fac645e1749e7a9dbb4fbbbe5dfdb6b8b7949baba66800bb5075",
+    "tests/track21b/build_clean_mesa_lvp.sh": "9f1920e02de4e5152d85fce0036d80fb43aee188bf6b12348f09ca2c8caafcf4",
     "tests/track21b/build_runtime.sh": "343e4c08892501201d42e1052a4bd2463f0dce1eccb687b71ff8bef7deca6aa9",
     "tests/track21b/differential_oracle_21b.py": "c4a1116de96010378b01a8f97b27d4a9808cbb1a80c995f3e2520f8f7596165d",
+    "tests/track21b/forensics/zero_zcc_vulkan_repro.c": "82c87945f3a7664223750b665982c42884220d35c7a30d964ffe81c4ec159781",
     "tests/track21b/mutation_observatory_21b.py": "4d67ef8942c8fc77e36da8edbcb8def31400ccd2bd9b4f9fee563590f0964350",
+    "tests/track21b/run_ci_lane.sh": "c483c0bdce5529484c5c50ebaa30ca3f027bb216126bc5d69ebfa2cd095e43c4",
     "tests/track21b/run_vulkan_suite.sh": "d7c1fdd4d2e999c55ee9e7b847dbc919ba00c0993d5f2f17e277d4e4f3b0163b",
     "tests/track21b/test_sdk_v2_mjs.mjs": "97c355420d710263869d75c654fbc0456eaf6ffbd7fcda7aaf4ef8c657a3ee86",
     "tests/track21b/test_track21b_vulkan.c": "d3fb1193285f04e8706fb3701cc356005edcf31d5a43b0633bb227b3bffdc8ad",
+    "tests/track21b/transitive_alloc_auditor.c": "956d8b4a07b82e3347dbcdd537c2e5843e27527bc7e5532468d07537759549a9",
+    "tests/track21b/transitive_mutation_controls.py": "b28a04668916bc1012466705a733b3279ac7031bf84dd3012b03b959286aeb01",
     "tests/track21b/verify_hw_vulkan_dzn.py": "fbffe14194d2c761bc869af32fcc3ab51d97aa3201ab5828636cfe5d93936fab",
-    "tools/verify_track21b_release.py": "b9e637db3c28fcd3a4298e86d5c60b259b80762fdfa56c8055f9190e469c2a13",
+    "tools/track21b_transitive_verifier.py": "6b5ce1b44253ece8ce6d91d1188e5c5a01001e715f23bcccfdeb29c6da1203f1",
+    "tools/verify_track21b_release.py": "54a267d2c67efeeebf8d35e19e3e075ae4f814498ae974c2f15390f311269905",
     "tools/zcc_spirv_cli.c": "7a08e239ababbd04c56601e73c04fd5eb9185c09eebb85b6b874652d315764ef",
-    "/tmp/libzcc_compute_v2.so": "76f08f16e2f914353f9c669cb4e642b3300cbd756a593939b7394bb42ac9b3ec",
+    "/tmp/libzcc_compute_v2.so": "04ba4ecf1a3c2534481be5f672707f827f677964885fb18455eb9174e6e8a6dc",
     "/tmp/zcc-spirv": "08f6ba3ce60b53f2c281adcf60dfee03435c5a0cf38e0fb8a05e7e19db21855f"
   },
   "gates": {
@@ -241,6 +254,13 @@
           "status": "PASS"
         }
       ]
+    },
+    "T21B-TRANSITIVE": {
+      "status": "PASS",
+      "evidence": {
+        "transitive_mutation_controls": "9/9 KILLED",
+        "dependency_verdict": null
+      }
     },
     "T21B-G10": {
       "status": "PASS",

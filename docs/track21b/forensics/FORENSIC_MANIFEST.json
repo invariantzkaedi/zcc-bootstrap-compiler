@@ -1,0 +1,112 @@
+{
+  "schema_version": "track21b.forensic_manifest.v1",
+  "incident_id": "T21B-CI-45961958699-MESA-LVP-L3-AFFINITY",
+  "commit_reproduced": "3d2fce68b13870bcc0e7811ecf40100ed9a834b3",
+  "ci_evidence": {
+    "failing_workflow": "ZCC Track 21B — SPIR-V & Vulkan Compute CI",
+    "failing_run_id": 45961958699,
+    "failing_job_id": 140381630793,
+    "failing_step": "Step 6",
+    "exit_code": 2,
+    "lsan_summary": "SUMMARY: AddressSanitizer: 9856 byte(s) leaked in 77 allocation(s).",
+    "zcc_callsite_distribution": {
+      "compute_vulkan_c_868_vkCreateInstance": 46,
+      "compute_vulkan_c_398_vkCreateInstance": 31,
+      "total_objects": 77,
+      "object_size_bytes": 128,
+      "non_128b_objects": 0
+    },
+    "prior_green_run_id": 45945768235,
+    "sku_divergence_mechanism": "Prior Intel Xeon runner SKU yielded x86_cpu_type < 0x17 (zen=false in Mesa u_cpu_detect.c), skipping get_cpu_topology(zen) L3_affinity_masks realloc; AMD EPYC Zen runner SKU yielded x86_cpu_type >= 0x17 (zen=true), executing L3_affinity_masks allocation without teardown across 77 vkCreateInstance/vkDestroyInstance unload cycles."
+  },
+  "reproduction_environments": {
+    "ubuntu_24_04_noble_bwrap": {
+      "cpu_vendor": "AuthenticAMD",
+      "cpu_model": "AMD Ryzen AI 7 350 w/ Radeon 860M",
+      "x86_family_model_stepping": "Family 26 / Model 96 / Stepping 0 (Zen, zen=true)",
+      "l3_cache_instances": 1,
+      "packages": {
+        "gcc": "13.3.0-6ubuntu2~24.04.1",
+        "libc6": "2.39-0ubuntu8.12",
+        "libasan8": "14.2.0-4ubuntu2~24.04.1",
+        "mesa-vulkan-drivers": "25.2.8-0ubuntu0.24.04.5",
+        "libvulkan1": "1.3.275.0-1build1",
+        "vulkan-validationlayers": "1.3.275.0-1"
+      },
+      "elf_build_ids": {
+        "libc.so.6": "8cebda42d140fc2b09639f8b13a5d5f2e617ef09",
+        "libasan.so.8": "0241d5a774aeb1d6babd9f68d743bdcf31b4a97d",
+        "libvulkan_lvp.so_stock": "8494c48f5f2c2e0ff01872de64b5f9b40867e7a0",
+        "libvulkan.so.1": "32e77fd13d177aaa6ceeba4862c3407d9246e422",
+        "libVkLayer_khronos_validation.so": "62c351be72273187a6bfad702dd668de3a89e4e7"
+      },
+      "stock_libvulkan_lvp_sha256": "bd9a708b927aff0b327725af4816c54c53107017e443c72de26e65c310ec67ca",
+      "full_zcc_suite_repro": {
+        "pass": 262,
+        "fail": 0,
+        "live_total": 0,
+        "seq_violations": 0,
+        "teardown_mask": "0x7ffe",
+        "lsan_bytes_leaked": 9856,
+        "lsan_allocations_leaked": 77
+      }
+    },
+    "ubuntu_26_04_host_reference": {
+      "libvulkan_lvp_build_id": "1dab537bd9d19186a0a1e8aef43781f0fa90dbb6",
+      "libvulkan_lvp_sha256": "d9a8bc5d4b3ec0e065562d362541c2a4cb3f3d6208ac715f7ff1dcf01289d164",
+      "unload_behavior": "Remains mapped (NODELETE) across dlclose in tested host toolchain; pre-dlclose auditor catches unfreed 128B L3_affinity_masks allocation while LSan treats .bss pointer as still reachable."
+    }
+  },
+  "upstream_defect": {
+    "project": "Mesa 3D",
+    "source_tarball": "mesa_25.2.8.orig.tar.xz",
+    "source_tarball_sha256": "097842f3e49d996868b38688db87b006f7d4541e93ce86d2f341d8b3e7be7c93",
+    "debian_overlay": "mesa_25.2.8-0ubuntu0.24.04.5.debian.tar.xz",
+    "debian_overlay_sha256": "edda95cf4f8cf4378a0e6cefc4a62b9db811e2e0d94cb498ea077357dda41ed5",
+    "source_file": "src/util/u_cpu_detect.c",
+    "function": "get_cpu_topology(bool zen)",
+    "allocation_formula_bytes": "sizeof(util_affinity_mask) * num_L3_caches",
+    "size_on_tested_architecture": 128,
+    "allocation_size_note": "On x86_64 Zen, sizeof(util_affinity_mask) = UTIL_MAX_CPUS / 8 = 1024 / 8 = 128 bytes per L3 domain, scaling as 128 * K for K > 1 L3 complexes (non-universal across CPU SKUs).",
+    "binary_callsite_stock": {
+      "pre_dlclose_stack": "libvulkan_lvp.so+0x150de4 <- libvulkan_lvp.so+0x1512b7 <- libc.so.6+0xa1f93 <- libvulkan_lvp.so+0x38ce33 <- libvulkan_lvp.so+0x61160 <- libvulkan_lvp.so+0x10c1dd",
+      "disasm_realloc_call": "0x150ddf: call 5d770 <realloc@plt>",
+      "disasm_store_ptr": "0x150de4: mov %rax,-0x2188(%rbp)",
+      "disasm_stride_shift": "0x150e02: shl $0x7,%rdx",
+      "disasm_memset_size": "0x150e16: mov $0x80,%edx",
+      "disasm_caps_copy": "0x1512cb: mov $0x106,%ecx (rep movsq 2096B -> _util_cpu_caps_state.caps at .bss 0xb61ea8)"
+    },
+    "orphan_mechanism": "get_cpu_topology(true) assigns realloc'd L3_affinity_masks to util_cpu_caps.L3_affinity_mask (copied to _util_cpu_caps_state.caps) with zero atexit/destructor teardown. When Vulkan Loader dlcloses libvulkan_lvp.so during vkDestroyInstance on Noble glibc 2.39, the DSO unmaps (lvp_mapped=0) and orphans L3_affinity_masks."
+  },
+  "zero_zcc_control_matrix": {
+    "dlopen_only_10": {"iters": 10, "lsan_rc": 0, "leaked_bytes": 0, "leaked_allocs": 0, "lvp_mapped_end": 0},
+    "val_off_no_phys_10": {"iters": 10, "lsan_rc": 0, "leaked_bytes": 0, "leaked_allocs": 0, "lvp_mapped_end": 0},
+    "val_off_with_phys_10": {"iters": 10, "lsan_rc": 1, "leaked_bytes": 1280, "leaked_allocs": 10, "lvp_mapped_end": 0},
+    "val_on_no_phys_10": {"iters": 10, "lsan_rc": 1, "leaked_bytes": 1280, "leaked_allocs": 10, "lvp_mapped_end": 0},
+    "val_on_with_phys_10": {"iters": 10, "lsan_rc": 1, "leaked_bytes": 1280, "leaked_allocs": 10, "lvp_mapped_end": 0},
+    "reuse_so_10": {"iters": 10, "lsan_rc": 1, "leaked_bytes": 1280, "leaked_allocs": 10, "lvp_mapped_mid": 0, "lvp_mapped_end": 0},
+    "nodelete_icd_10": {"iters": 10, "lsan_rc": 0, "leaked_bytes": 0, "leaked_allocs": 0, "lvp_mapped_mid": 1, "lvp_mapped_end": 1, "note": "masking via DSO pinning"}
+  },
+  "zero_zcc_scaling_matrix": {
+    "iters_1": {"leaked_bytes": 128, "leaked_allocs": 1, "bytes_per_cycle": 128.0},
+    "iters_10": {"leaked_bytes": 1280, "leaked_allocs": 10, "bytes_per_cycle": 128.0},
+    "iters_100": {"leaked_bytes": 12800, "leaked_allocs": 100, "bytes_per_cycle": 128.0}
+  },
+  "patched_dependency_verification": {
+    "patch_file": "patches/mesa-25.2.8-u_cpu_detect-l3-teardown.patch",
+    "patch_sha256": "65a58ad9d9bad78aeee362304235cb30e80b65d45a0ae6b7571f9debcfea1ac6",
+    "clean_libvulkan_lvp_build_id": "43bcde5d84463035cd4a0eb0cf66dfa9ffb2947c",
+    "clean_libvulkan_lvp_sha256": "3c0c98b5464c4d615ec455249e2f0ef0b88ec95d29b653b517c1a876a33b798a",
+    "isolated_100_iter_asan_lsan_rc": 0,
+    "isolated_100_iter_lvp_mapped_end": 0,
+    "full_zcc_262_tests_patched_asan_ubsan_lsan_rc": 0,
+    "auditor_10_iter_clean_probe": {
+      "orphaned_on_dlclose_count": 0,
+      "orphaned_on_dlclose_bytes": 0,
+      "zcc_owned_live_bytes": 0,
+      "target_dso_live_bytes": 0,
+      "unmapped_target_events": 10,
+      "final_target_mapped": 0
+    }
+  }
+}

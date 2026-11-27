@@ -1,0 +1,65 @@
+{
+  "schema_version": "track21b.transitive_mutation_report.v1",
+  "generated_at_utc": "2026-11-27T12:50:45Z",
+  "total_controls": 9,
+  "killed": 9,
+  "survived": 0,
+  "false_positives_on_clean_control": 0,
+  "verdict": "PASS",
+  "controls": [
+    {
+      "control_id": "TMC_01_ZCC_HEAP_LEAK",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rc=42 zcc_live=256"
+    },
+    {
+      "control_id": "TMC_02_VULKAN_RESOURCE_LEAK",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "vk_api=VERIFIED_FAIL"
+    },
+    {
+      "control_id": "TMC_03_SAME_SIZED_UNRELATED_128B",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rc=42 zcc_live=1280"
+    },
+    {
+      "control_id": "TMC_04_WRONG_MESA_BUILD_ID",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected wrong ELF Build ID"
+    },
+    {
+      "control_id": "TMC_05_UNEXPECTED_ALLOC_COUNT",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "expected 77 != observed 10 rejected"
+    },
+    {
+      "control_id": "TMC_06_NONLINEAR_LEAK_GROWTH",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected 1/10/100 nonlinear stride"
+    },
+    {
+      "control_id": "TMC_07_FORGED_EVIDENCE_SELF_CERT",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "self_cert=VERIFIED_FAIL & lattice/reconciliation tamper rejected"
+    },
+    {
+      "control_id": "TMC_08_MISSING_MANDATORY_GATE",
+      "killed": true,
+      "verdict": "INSUFFICIENT_EVIDENCE",
+      "detail": "fail-closed INSUFFICIENT_EVIDENCE"
+    },
+    {
+      "control_id": "TMC_09_CONCURRENT_NODELETE_PINNING",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "final_mapped=1 unmapped_ev=0"
+    }
+  ]
+}

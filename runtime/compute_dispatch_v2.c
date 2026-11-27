@@ -382,7 +382,7 @@ int zcc_receipt_v2_to_json(const zcc_compute_v2_receipt_t *r, char *buf, size_t 
     );
 }
 
-zcc_status_t zcc_compute_exec_v2_with_ctx(
+static zcc_status_t compute_exec_v2_with_ctx_inner(
     zcc_op_t op,
     const zcc_tensor_desc_t *inputs,
     uint32_t num_inputs,
@@ -574,6 +574,42 @@ zcc_status_t zcc_compute_exec_v2_with_ctx(
     if (opts->base.emit_receipt) {
         zcc_receipt_seal(&rec->base, opts->base.hmac_key, opts->base.hmac_key_len);
         zcc_receipt_v2_seal(rec, opts->base.hmac_key, opts->base.hmac_key_len);
+    }
+    return st;
+}
+
+zcc_status_t zcc_compute_exec_v2_with_ctx(
+    zcc_op_t op,
+    const zcc_tensor_desc_t *inputs,
+    uint32_t num_inputs,
+    zcc_tensor_desc_t *output,
+    const zcc_vulkan_exec_options_t *opts,
+    const zcc_cpu_caps_t *restricted_cpu_caps,
+    const zcc_vulkan_caps_t *restricted_vk_caps,
+    zcc_vulkan_ctx_t *ctx,
+    zcc_compute_v2_receipt_t *out_receipt
+) {
+    /* Single-context optimization for stateless Vulkan dispatches (ctx == NULL &&
+       restricted_vk_caps == NULL): reuse one VkInstance/device across capability
+       negotiation and execution instead of tearing down an extra probe instance.
+       Note: runtime init/latency optimization only, not an upstream Mesa fix. */
+    zcc_vulkan_ctx_t *owned_tmp_ctx = NULL;
+    if (ctx == NULL && restricted_vk_caps == NULL &&
+        inputs != NULL && output != NULL && opts != NULL && out_receipt != NULL &&
+        opts->abi_v2_version == ZCC_COMPUTE_V2_ABI_VERSION &&
+        opts->struct_size == sizeof(*opts) &&
+        opts->base.requested_backend > ZCC_BACKEND_PTX_SM120) {
+        int want_val = (opts->require_validation_layer != 0U) ? 1 : 0;
+        if (zcc_vulkan_ctx_create(want_val, 0U, &owned_tmp_ctx) == ZCC_STATUS_OK && owned_tmp_ctx != NULL) {
+            ctx = owned_tmp_ctx;
+        }
+    }
+    zcc_status_t st = compute_exec_v2_with_ctx_inner(
+        op, inputs, num_inputs, output, opts,
+        restricted_cpu_caps, restricted_vk_caps, ctx, out_receipt
+    );
+    if (owned_tmp_ctx != NULL) {
+        zcc_vulkan_ctx_destroy(owned_tmp_ctx);
     }
     return st;
 }
