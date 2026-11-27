@@ -781,6 +781,61 @@ def main() -> int:
                 "status": "PASS" if p_ok else "FAIL",
             })
 
+            from sdk.zcc_compute import ZccComputeRuntime
+            miss_v1 = False
+            miss_v2 = False
+            closed_ctx_err = False
+            try:
+                ZccComputeRuntime("/tmp/__zcc_no_such_v1__.so")
+            except FileNotFoundError:
+                miss_v1 = True
+            try:
+                ZccVulkanComputeRuntime("/tmp/__zcc_no_such_v2__.so")
+            except FileNotFoundError:
+                miss_v2 = True
+
+            so_path = str(getattr(rt.lib, "_name", "/tmp/libzcc_compute_v2.so"))
+            rt_v1 = ZccComputeRuntime(so_path)
+            _cpu_c, _ptx_c = rt_v1.probe_caps()
+            sa_sdk, _sa_buf = make_f32_desc([1.0, 2.0, 3.0, 4.0], (4,))
+            sb_sdk, _sb_buf = make_f32_desc([10.0, 20.0, 30.0, 40.0], (4,))
+            so_sdk, _so_buf = make_f32_desc([0.0, 0.0, 0.0, 0.0], (4,))
+            sdk_key = b"t21b-sdk-cov"
+            with rt.create_context(enable_validation_layer=True, require_hardware_gpu=False) as wctx:
+                wcaps = wctx.caps()
+                rc_w, d_w, r_w = wctx.exec_v2(
+                    OP_VEC_ADD_F32, [sa_sdk, sb_sdk], so_sdk,
+                    backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED,
+                    require_validation_layer=True, hmac_key=sdk_key,
+                )
+            try:
+                wctx.caps()
+            except RuntimeError:
+                closed_ctx_err = True
+            wctx.close()
+            d_w1 = rt_v1.receipt_dict(r_w.base)
+            v_w1 = rt_v1.verify_receipt(r_w.base, hmac_key=sdk_key)
+            rt_v1.shutdown()
+            wctx_gc = rt.create_context(enable_validation_layer=False, require_hardware_gpu=False)
+            del wctx_gc
+            sdk_ok = (
+                miss_v1 and miss_v2 and closed_ctx_err and wcaps.vulkan_available == 1
+                and rc_w == 0 and v_w1 == 0
+                and d_w.get("v2_schema_version") == "track21b.receipt.v1"
+                and d_w.get("backend_executed") == "VULKAN_SPV"
+                and d_w1.get("schema_version") == "track21a.receipt.v1"
+                and d_w1.get("op_name") == "VEC_ADD_F32"
+            )
+            edge_checks.append({
+                "check": "sdk_v1_and_v2_wrapper_contracts",
+                "miss_v1": miss_v1,
+                "miss_v2": miss_v2,
+                "closed_ctx_err": closed_ctx_err,
+                "rc_w": rc_w,
+                "v_w1": v_w1,
+                "status": "PASS" if sdk_ok else "FAIL",
+            })
+
         all_checks = cases + replay_checks + edge_checks
         failed = [c for c in all_checks if c["status"] != "PASS"]
         verdict = "PASS" if (not failed and len(replay_checks) == 13) else "FAIL"

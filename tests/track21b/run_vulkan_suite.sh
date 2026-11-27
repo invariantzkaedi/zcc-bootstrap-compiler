@@ -15,6 +15,15 @@ if ! command -v spirv-val >/dev/null 2>&1; then
     echo "BLOCKED: independent external spirv-val tool is missing" >&2
     exit 3
 fi
+! /tmp/zcc-spirv >/dev/null 2>&1
+/tmp/zcc-spirv --self-check
+/tmp/zcc-spirv --emit-op GEMM_F32 -o /tmp/t21b_spv/single_gemm.spv
+/tmp/zcc-spirv --emit-op 1 -o /tmp/t21b_spv/single_vec_add.spv
+spirv-val --target-env vulkan1.0 /tmp/t21b_spv/single_gemm.spv
+spirv-val --target-env vulkan1.0 /tmp/t21b_spv/single_vec_add.spv
+! /tmp/zcc-spirv --emit-op NO_SUCH_OP -o /tmp/t21b_spv/bad.spv >/dev/null 2>&1
+! /tmp/zcc-spirv --unknown-flag >/dev/null 2>&1
+rm -f /tmp/t21b_spv/single_gemm.spv /tmp/t21b_spv/single_vec_add.spv
 /tmp/zcc-spirv --emit-all /tmp/t21b_spv
 mkdir -p /tmp/t21b_spv_2
 rm -f /tmp/t21b_spv_2/*.spv
