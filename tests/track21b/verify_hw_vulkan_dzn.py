@@ -179,7 +179,7 @@ def verify_target(
     print(f"[hw-dzn] {spec['key']} ({spec['vendor_id']}) running UBSan...", flush=True)
     p_ub = subprocess.run([str(bins["ubsan"])], cwd=str(REPO_ROOT), env=env, capture_output=True, text=True)
     ub_p, ub_f = parse_c_counts(p_ub.stdout + "\n" + p_ub.stderr)
-    time.sleep(1.0)
+    time.sleep(5.0)
 
     # Proprietary WSL2 D3D12 UMDs retain process-lifetime globals after dlclose; verify ASan memory safety via persistent Vulkan ctx + detect_leaks=0
     print(f"[hw-dzn] {spec['key']} ({spec['vendor_id']}) running ASan...", flush=True)
@@ -191,17 +191,20 @@ def verify_target(
         text=True,
     )
     as_p, as_f = parse_c_counts(p_as.stdout + "\n" + p_as.stderr)
-    time.sleep(1.0)
+    time.sleep(5.0)
 
     print(f"[hw-dzn] {spec['key']} ({spec['vendor_id']}) running O2 + bench...", flush=True)
     p_o2 = subprocess.run([str(bins["o2"])], cwd=str(REPO_ROOT), env=env, capture_output=True, text=True)
     o2_p, o2_f = parse_c_counts(p_o2.stdout + "\n" + p_o2.stderr)
-    time.sleep(1.0)
+    # Allow WSL2 /dev/dxg WDDM D3D12 KMD device teardown to drain after high-churn O2 fault/churn tests.
+    time.sleep(5.0)
 
     bench_path = work_dir / f"{spec['key']}_bench.json"
     p_bench = subprocess.run([str(bins["o2"]), "--bench", str(bench_path)], cwd=str(REPO_ROOT), env=env, capture_output=True, text=True)
-    bench_data = json.loads(bench_path.read_text(encoding="utf-8")) if bench_path.is_file() else {}
-    time.sleep(1.0)
+    bench_data = {}
+    if p_bench.returncode == 0 and bench_path.is_file():
+        bench_data = json.loads(bench_path.read_text(encoding="utf-8"))
+    time.sleep(5.0)
 
     print(f"[hw-dzn] {spec['key']} ({spec['vendor_id']}) running differential oracle...", flush=True)
     diff_path = work_dir / f"{spec['key']}_diff.json"
@@ -246,6 +249,8 @@ def verify_target(
         extract_fail_lines(p_ub.stdout + "\n" + p_ub.stderr)
         + extract_fail_lines(p_as.stdout + "\n" + p_as.stderr)
         + extract_fail_lines(p_o2.stdout + "\n" + p_o2.stderr)
+        + ([f"bench_rc={p_bench.returncode}"] + extract_fail_lines(p_bench.stdout + "\n" + p_bench.stderr)
+           if p_bench.returncode != 0 else [])
         + extract_fail_lines(p_diff.stdout + "\n" + p_diff.stderr)
     )
 

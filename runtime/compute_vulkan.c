@@ -58,26 +58,127 @@ typedef struct vk_lib_s {
     PFN_vkCreateDevice create_device;
 } vk_lib_t;
 
-static int load_vk_lib(vk_lib_t *vk) {
-    memset(vk, 0, sizeof(*vk));
-    vk->so = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
-    if (!vk->so) return -1;
-    /* ISO C forbids direct void* -> fn ptr cast; memcpy avoids -Wpedantic warnings cleanly */
-    void *sym = dlsym(vk->so, "vkGetInstanceProcAddr");
-    if (!sym) { dlclose(vk->so); vk->so = NULL; return -1; }
-    memcpy(&vk->gipa, &sym, sizeof(sym));
-    vk->enum_layers    = (PFN_vkEnumerateInstanceLayerProperties)vk->gipa(VK_NULL_HANDLE, "vkEnumerateInstanceLayerProperties");
-    vk->enum_inst_exts = (PFN_vkEnumerateInstanceExtensionProperties)vk->gipa(VK_NULL_HANDLE, "vkEnumerateInstanceExtensionProperties");
-    vk->create_instance = (PFN_vkCreateInstance)vk->gipa(VK_NULL_HANDLE, "vkCreateInstance");
-    if (!vk->create_instance) { dlclose(vk->so); vk->so = NULL; return -1; }
+typedef enum zcc_vk_fault_point_e {
+    ZCC_VK_FAULT_NONE = 0U,
+    ZCC_VK_FAULT_CTX_ALLOC = 1U,
+    ZCC_VK_FAULT_LOAD_LIB = 2U,
+    ZCC_VK_FAULT_LOAD_DLSYM = 3U,
+    ZCC_VK_FAULT_CREATE_INSTANCE = 4U,
+    ZCC_VK_FAULT_PICK_PHYS_DEV = 5U,
+    ZCC_VK_FAULT_CREATE_DEVICE = 6U,
+    ZCC_VK_FAULT_BIND_DEV_PROCS = 7U,
+    ZCC_VK_FAULT_CREATE_DSL = 8U,
+    ZCC_VK_FAULT_CREATE_PL = 9U,
+    ZCC_VK_FAULT_CREATE_DPOOL = 10U,
+    ZCC_VK_FAULT_ALLOC_DSETS = 11U,
+    ZCC_VK_FAULT_CREATE_CPOOL = 12U,
+    ZCC_VK_FAULT_ALLOC_CBUFS = 13U,
+    ZCC_VK_FAULT_CREATE_FENCE = 14U,
+    ZCC_VK_FAULT_INIT_DBG_ERROR = 15U,
+    ZCC_VK_FAULT_STAGE_CREATE_BUF = 16U,
+    ZCC_VK_FAULT_STAGE_ALLOC_MEM = 17U,
+    ZCC_VK_FAULT_STAGE_BIND_MEM = 18U,
+    ZCC_VK_FAULT_STAGE_MAP_MEM = 19U,
+    ZCC_VK_FAULT_CREATE_SMOD = 20U,
+    ZCC_VK_FAULT_CREATE_PIPE = 21U
+} zcc_vk_fault_point_t;
+
+typedef struct zcc_vk_lifetime_audit_s {
+    uint64_t ctx_acq, ctx_rel;
+    uint64_t lib_acq, lib_rel;
+    uint64_t inst_acq, inst_rel;
+    uint64_t dbg_acq, dbg_rel;
+    uint64_t dev_acq, dev_rel;
+    uint64_t dsl_acq, dsl_rel;
+    uint64_t pl_acq, pl_rel;
+    uint64_t dpool_acq, dpool_rel;
+    uint64_t cpool_acq, cpool_rel;
+    uint64_t fence_acq, fence_rel;
+    uint64_t buf_acq, buf_rel;
+    uint64_t mem_acq, mem_rel;
+    uint64_t map_acq, map_rel;
+    uint64_t smod_acq, smod_rel;
+    uint64_t pipe_acq, pipe_rel;
+    uint32_t last_teardown_mask;
+    uint32_t teardown_seq_violations;
+} zcc_vk_lifetime_audit_t;
+
+static zcc_vk_lifetime_audit_t g_vk_ledger = {0};
+static uint32_t g_vk_fault_point = ZCC_VK_FAULT_NONE;
+
+void zcc_vk_audit_reset(void);
+void zcc_vk_audit_snapshot(zcc_vk_lifetime_audit_t *out, uint64_t *out_live_total);
+void zcc_vk_audit_inject_fault(uint32_t fault_point);
+
+void zcc_vk_audit_reset(void) {
+    memset(&g_vk_ledger, 0, sizeof(g_vk_ledger));
+    g_vk_fault_point = ZCC_VK_FAULT_NONE;
+}
+
+void zcc_vk_audit_inject_fault(uint32_t fault_point) {
+    g_vk_fault_point = fault_point;
+}
+
+void zcc_vk_audit_snapshot(zcc_vk_lifetime_audit_t *out, uint64_t *out_live_total) {
+    if (out) *out = g_vk_ledger;
+    if (out_live_total) {
+        uint64_t live = 0ULL;
+        live += (g_vk_ledger.ctx_acq - g_vk_ledger.ctx_rel);
+        live += (g_vk_ledger.lib_acq - g_vk_ledger.lib_rel);
+        live += (g_vk_ledger.inst_acq - g_vk_ledger.inst_rel);
+        live += (g_vk_ledger.dbg_acq - g_vk_ledger.dbg_rel);
+        live += (g_vk_ledger.dev_acq - g_vk_ledger.dev_rel);
+        live += (g_vk_ledger.dsl_acq - g_vk_ledger.dsl_rel);
+        live += (g_vk_ledger.pl_acq - g_vk_ledger.pl_rel);
+        live += (g_vk_ledger.dpool_acq - g_vk_ledger.dpool_rel);
+        live += (g_vk_ledger.cpool_acq - g_vk_ledger.cpool_rel);
+        live += (g_vk_ledger.fence_acq - g_vk_ledger.fence_rel);
+        live += (g_vk_ledger.buf_acq - g_vk_ledger.buf_rel);
+        live += (g_vk_ledger.mem_acq - g_vk_ledger.mem_rel);
+        live += (g_vk_ledger.map_acq - g_vk_ledger.map_rel);
+        live += (g_vk_ledger.smod_acq - g_vk_ledger.smod_rel);
+        live += (g_vk_ledger.pipe_acq - g_vk_ledger.pipe_rel);
+        *out_live_total = live;
+    }
+}
+
+static int vk_consume_fault(uint32_t fp) {
+    if (g_vk_fault_point != ZCC_VK_FAULT_NONE && g_vk_fault_point == fp) {
+        g_vk_fault_point = ZCC_VK_FAULT_NONE;
+        return 1;
+    }
     return 0;
+}
+
+static void vk_note_teardown_stage(uint32_t *prev_stage, uint32_t stage) {
+    if (*prev_stage >= stage) g_vk_ledger.teardown_seq_violations++;
+    *prev_stage = stage;
+    if (stage < 32U) g_vk_ledger.last_teardown_mask |= (1U << stage);
 }
 
 static void unload_vk_lib(vk_lib_t *vk) {
     if (vk && vk->so) {
         dlclose(vk->so);
         vk->so = NULL;
+        g_vk_ledger.lib_rel++;
     }
+}
+
+static int load_vk_lib(vk_lib_t *vk) {
+    memset(vk, 0, sizeof(*vk));
+    if (vk_consume_fault(ZCC_VK_FAULT_LOAD_LIB)) return -1;
+    vk->so = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+    if (!vk->so) return -1;
+    g_vk_ledger.lib_acq++;
+    /* ISO C forbids direct void* -> fn ptr cast; memcpy avoids -Wpedantic warnings cleanly */
+    void *sym = vk_consume_fault(ZCC_VK_FAULT_LOAD_DLSYM) ? NULL : dlsym(vk->so, "vkGetInstanceProcAddr");
+    if (!sym) { unload_vk_lib(vk); return -1; }
+    memcpy(&vk->gipa, &sym, sizeof(sym));
+    vk->enum_layers    = (PFN_vkEnumerateInstanceLayerProperties)vk->gipa(VK_NULL_HANDLE, "vkEnumerateInstanceLayerProperties");
+    vk->enum_inst_exts = (PFN_vkEnumerateInstanceExtensionProperties)vk->gipa(VK_NULL_HANDLE, "vkEnumerateInstanceExtensionProperties");
+    vk->create_instance = (PFN_vkCreateInstance)vk->gipa(VK_NULL_HANDLE, "vkCreateInstance");
+    if (!vk->create_instance) { unload_vk_lib(vk); return -1; }
+    return 0;
 }
 
 static void bind_instance_procs(vk_lib_t *vk, VkInstance inst) {
@@ -589,12 +690,18 @@ static void vk_free_buf(VkDevice dev, const vk_dev_procs_t *dp, vk_buf_alloc_t *
     if (dev && dp) {
         if (b->mapped && b->mem && dp->pUnmapMemory) {
             dp->pUnmapMemory(dev, b->mem);
+            b->mapped = NULL;
+            g_vk_ledger.map_rel++;
         }
         if (b->buf && dp->pDestroyBuffer) {
             dp->pDestroyBuffer(dev, b->buf, NULL);
+            b->buf = VK_NULL_HANDLE;
+            g_vk_ledger.buf_rel++;
         }
         if (b->mem && dp->pFreeMemory) {
             dp->pFreeMemory(dev, b->mem, NULL);
+            b->mem = VK_NULL_HANDLE;
+            g_vk_ledger.mem_rel++;
         }
     }
     memset(b, 0, sizeof(*b));
@@ -602,31 +709,90 @@ static void vk_free_buf(VkDevice dev, const vk_dev_procs_t *dp, vk_buf_alloc_t *
 
 void zcc_vulkan_ctx_destroy(zcc_vulkan_ctx_t *ctx) {
     if (!ctx) return;
+    uint32_t prev_stage = 0U;
+    g_vk_ledger.last_teardown_mask = 0U;
     if (ctx->dev) {
-        if (ctx->dp.pDeviceWaitIdle) ctx->dp.pDeviceWaitIdle(ctx->dev);
-        if (ctx->fence && ctx->dp.pDestroyFence) ctx->dp.pDestroyFence(ctx->dev, ctx->fence, NULL);
-        if (ctx->cpool && ctx->dp.pDestroyCPool) ctx->dp.pDestroyCPool(ctx->dev, ctx->cpool, NULL);
-        if (ctx->dpool && ctx->dp.pDestroyDPool) ctx->dp.pDestroyDPool(ctx->dev, ctx->dpool, NULL);
+        if (ctx->dp.pDeviceWaitIdle) {
+            vk_note_teardown_stage(&prev_stage, 1U);
+            ctx->dp.pDeviceWaitIdle(ctx->dev);
+        }
+        if (ctx->fence && ctx->dp.pDestroyFence) {
+            vk_note_teardown_stage(&prev_stage, 2U);
+            ctx->dp.pDestroyFence(ctx->dev, ctx->fence, NULL);
+            ctx->fence = VK_NULL_HANDLE;
+            g_vk_ledger.fence_rel++;
+        }
+        if (ctx->cpool && ctx->dp.pDestroyCPool) {
+            vk_note_teardown_stage(&prev_stage, 3U);
+            ctx->dp.pDestroyCPool(ctx->dev, ctx->cpool, NULL);
+            ctx->cpool = VK_NULL_HANDLE;
+            g_vk_ledger.cpool_rel++;
+        }
+        if (ctx->dpool && ctx->dp.pDestroyDPool) {
+            vk_note_teardown_stage(&prev_stage, 4U);
+            ctx->dp.pDestroyDPool(ctx->dev, ctx->dpool, NULL);
+            ctx->dpool = VK_NULL_HANDLE;
+            g_vk_ledger.dpool_rel++;
+        }
         for (uint32_t i = 0U; i < ZCC_VK_MAX_CACHED_OPS; i++) {
             if (ctx->cached_pipes[i] && ctx->dp.pDestroyPipe) {
+                if (prev_stage < 5U) vk_note_teardown_stage(&prev_stage, 5U);
                 ctx->dp.pDestroyPipe(ctx->dev, ctx->cached_pipes[i], NULL);
-            }
-            if (ctx->cached_smods[i] && ctx->dp.pDestroyShaderModule) {
-                ctx->dp.pDestroyShaderModule(ctx->dev, ctx->cached_smods[i], NULL);
+                ctx->cached_pipes[i] = VK_NULL_HANDLE;
+                g_vk_ledger.pipe_rel++;
             }
         }
-        if (ctx->pl && ctx->dp.pDestroyPL) ctx->dp.pDestroyPL(ctx->dev, ctx->pl, NULL);
-        if (ctx->dsl && ctx->dp.pDestroyDSL) ctx->dp.pDestroyDSL(ctx->dev, ctx->dsl, NULL);
+        for (uint32_t i = 0U; i < ZCC_VK_MAX_CACHED_OPS; i++) {
+            if (ctx->cached_smods[i] && ctx->dp.pDestroyShaderModule) {
+                if (prev_stage < 6U) vk_note_teardown_stage(&prev_stage, 6U);
+                ctx->dp.pDestroyShaderModule(ctx->dev, ctx->cached_smods[i], NULL);
+                ctx->cached_smods[i] = VK_NULL_HANDLE;
+                g_vk_ledger.smod_rel++;
+            }
+        }
+        if (ctx->pl && ctx->dp.pDestroyPL) {
+            vk_note_teardown_stage(&prev_stage, 7U);
+            ctx->dp.pDestroyPL(ctx->dev, ctx->pl, NULL);
+            ctx->pl = VK_NULL_HANDLE;
+            g_vk_ledger.pl_rel++;
+        }
+        if (ctx->dsl && ctx->dp.pDestroyDSL) {
+            vk_note_teardown_stage(&prev_stage, 8U);
+            ctx->dp.pDestroyDSL(ctx->dev, ctx->dsl, NULL);
+            ctx->dsl = VK_NULL_HANDLE;
+            g_vk_ledger.dsl_rel++;
+        }
+        vk_note_teardown_stage(&prev_stage, 9U);
         for (uint32_t bi = 0U; bi < 4U; bi++) {
             vk_free_buf(ctx->dev, &ctx->dp, &ctx->bufs[bi]);
         }
-        if (ctx->dp.pDestroyDevice) ctx->dp.pDestroyDevice(ctx->dev, NULL);
+        if (ctx->dp.pDestroyDevice) {
+            vk_note_teardown_stage(&prev_stage, 10U);
+            ctx->dp.pDestroyDevice(ctx->dev, NULL);
+            ctx->dev = VK_NULL_HANDLE;
+            g_vk_ledger.dev_rel++;
+        }
     }
-    if (ctx->dbg_msgr && ctx->destroy_dbg) ctx->destroy_dbg(ctx->inst, ctx->dbg_msgr, NULL);
-    if (ctx->inst && ctx->vk.destroy_instance) ctx->vk.destroy_instance(ctx->inst, NULL);
-    unload_vk_lib(&ctx->vk);
+    if (ctx->dbg_msgr && ctx->destroy_dbg) {
+        vk_note_teardown_stage(&prev_stage, 11U);
+        ctx->destroy_dbg(ctx->inst, ctx->dbg_msgr, NULL);
+        ctx->dbg_msgr = VK_NULL_HANDLE;
+        g_vk_ledger.dbg_rel++;
+    }
+    if (ctx->inst && ctx->vk.destroy_instance) {
+        vk_note_teardown_stage(&prev_stage, 12U);
+        ctx->vk.destroy_instance(ctx->inst, NULL);
+        ctx->inst = VK_NULL_HANDLE;
+        g_vk_ledger.inst_rel++;
+    }
+    if (ctx->vk.so) {
+        vk_note_teardown_stage(&prev_stage, 13U);
+        unload_vk_lib(&ctx->vk);
+    }
+    vk_note_teardown_stage(&prev_stage, 14U);
     memset(ctx, 0, sizeof(*ctx));
     free(ctx);
+    g_vk_ledger.ctx_rel++;
 }
 
 zcc_status_t zcc_vulkan_ctx_create(
@@ -637,8 +803,11 @@ zcc_status_t zcc_vulkan_ctx_create(
     if (!out_ctx) return ZCC_STATUS_ERR_NULL_PTR;
     *out_ctx = NULL;
 
-    zcc_vulkan_ctx_t *ctx = (zcc_vulkan_ctx_t *)calloc(1U, sizeof(*ctx));
+    zcc_vulkan_ctx_t *ctx = vk_consume_fault(ZCC_VK_FAULT_CTX_ALLOC)
+                                ? NULL
+                                : (zcc_vulkan_ctx_t *)calloc(1U, sizeof(*ctx));
     if (!ctx) return ZCC_STATUS_ERR_OOM;
+    g_vk_ledger.ctx_acq++;
     ctx->magic = ZCC_VULKAN_CTX_MAGIC;
     ctx->abi_version = ZCC_COMPUTE_V2_ABI_VERSION;
     ctx->require_hardware_gpu = require_hardware_gpu ? 1U : 0U;
@@ -646,7 +815,9 @@ zcc_status_t zcc_vulkan_ctx_create(
     snprintf(ctx->caps.device_type_str, sizeof(ctx->caps.device_type_str), "NONE");
 
     if (load_vk_lib(&ctx->vk) != 0) {
+        memset(ctx, 0, sizeof(*ctx));
         free(ctx);
+        g_vk_ledger.ctx_rel++;
         return ZCC_STATUS_ERR_BACKEND_UNAVAILABLE;
     }
 
@@ -693,19 +864,27 @@ zcc_status_t zcc_vulkan_ctx_create(
         ici.pNext = &dbg_ci;
     }
 
-    if (ctx->vk.create_instance(&ici, NULL, &ctx->inst) != VK_SUCCESS || !ctx->inst) {
+    if (vk_consume_fault(ZCC_VK_FAULT_CREATE_INSTANCE) ||
+        ctx->vk.create_instance(&ici, NULL, &ctx->inst) != VK_SUCCESS || !ctx->inst) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_BACKEND_UNAVAILABLE;
     }
+    g_vk_ledger.inst_acq++;
     bind_instance_procs(&ctx->vk, ctx->inst);
     if (use_dbg) {
         PFN_vkCreateDebugUtilsMessengerEXT create_dbg =
             (PFN_vkCreateDebugUtilsMessengerEXT)ctx->vk.gipa(ctx->inst, "vkCreateDebugUtilsMessengerEXT");
         ctx->destroy_dbg =
             (PFN_vkDestroyDebugUtilsMessengerEXT)ctx->vk.gipa(ctx->inst, "vkDestroyDebugUtilsMessengerEXT");
-        if (create_dbg) create_dbg(ctx->inst, &dbg_ci, NULL, &ctx->dbg_msgr);
+        if (create_dbg && create_dbg(ctx->inst, &dbg_ci, NULL, &ctx->dbg_msgr) == VK_SUCCESS && ctx->dbg_msgr) {
+            g_vk_ledger.dbg_acq++;
+        }
     }
 
+    if (vk_consume_fault(ZCC_VK_FAULT_PICK_PHYS_DEV)) {
+        zcc_vulkan_ctx_destroy(ctx);
+        return ZCC_STATUS_ERR_UNSUPPORTED_HW;
+    }
     if (pick_physical_device(&ctx->vk, ctx->inst, ctx->require_hardware_gpu, &ctx->phys, &ctx->qfam, &ctx->caps) != 0) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_UNSUPPORTED_HW;
@@ -728,11 +907,14 @@ zcc_status_t zcc_vulkan_ctx_create(
     dci.queueCreateInfoCount = 1U;
     dci.pQueueCreateInfos = &dqci;
 
-    if (ctx->vk.create_device(ctx->phys, &dci, NULL, &ctx->dev) != VK_SUCCESS || !ctx->dev) {
+    if (vk_consume_fault(ZCC_VK_FAULT_CREATE_DEVICE) ||
+        ctx->vk.create_device(ctx->phys, &dci, NULL, &ctx->dev) != VK_SUCCESS || !ctx->dev) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
     }
-    if (bind_device_procs(&ctx->vk, ctx->dev, &ctx->dp) != 0) {
+    g_vk_ledger.dev_acq++;
+    if (bind_device_procs(&ctx->vk, ctx->dev, &ctx->dp) != 0 ||
+        vk_consume_fault(ZCC_VK_FAULT_BIND_DEV_PROCS)) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
     }
@@ -751,10 +933,12 @@ zcc_status_t zcc_vulkan_ctx_create(
     dslci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     dslci.bindingCount = 4U;
     dslci.pBindings = bindings;
-    if (ctx->dp.pCreateDSL(ctx->dev, &dslci, NULL, &ctx->dsl) != VK_SUCCESS) {
+    if (vk_consume_fault(ZCC_VK_FAULT_CREATE_DSL) ||
+        ctx->dp.pCreateDSL(ctx->dev, &dslci, NULL, &ctx->dsl) != VK_SUCCESS) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
     }
+    g_vk_ledger.dsl_acq++;
 
     VkPushConstantRange pcr;
     memset(&pcr, 0, sizeof(pcr));
@@ -769,10 +953,12 @@ zcc_status_t zcc_vulkan_ctx_create(
     plci.pSetLayouts = &ctx->dsl;
     plci.pushConstantRangeCount = 1U;
     plci.pPushConstantRanges = &pcr;
-    if (ctx->dp.pCreatePL(ctx->dev, &plci, NULL, &ctx->pl) != VK_SUCCESS) {
+    if (vk_consume_fault(ZCC_VK_FAULT_CREATE_PL) ||
+        ctx->dp.pCreatePL(ctx->dev, &plci, NULL, &ctx->pl) != VK_SUCCESS) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
     }
+    g_vk_ledger.pl_acq++;
 
     VkDescriptorPoolSize dps = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4U };
     VkDescriptorPoolCreateInfo dpci;
@@ -781,10 +967,12 @@ zcc_status_t zcc_vulkan_ctx_create(
     dpci.maxSets = 1U;
     dpci.poolSizeCount = 1U;
     dpci.pPoolSizes = &dps;
-    if (ctx->dp.pCreateDPool(ctx->dev, &dpci, NULL, &ctx->dpool) != VK_SUCCESS) {
+    if (vk_consume_fault(ZCC_VK_FAULT_CREATE_DPOOL) ||
+        ctx->dp.pCreateDPool(ctx->dev, &dpci, NULL, &ctx->dpool) != VK_SUCCESS) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
     }
+    g_vk_ledger.dpool_acq++;
 
     VkDescriptorSetAllocateInfo dsai;
     memset(&dsai, 0, sizeof(dsai));
@@ -792,7 +980,8 @@ zcc_status_t zcc_vulkan_ctx_create(
     dsai.descriptorPool = ctx->dpool;
     dsai.descriptorSetCount = 1U;
     dsai.pSetLayouts = &ctx->dsl;
-    if (ctx->dp.pAllocDSets(ctx->dev, &dsai, &ctx->dset) != VK_SUCCESS) {
+    if (vk_consume_fault(ZCC_VK_FAULT_ALLOC_DSETS) ||
+        ctx->dp.pAllocDSets(ctx->dev, &dsai, &ctx->dset) != VK_SUCCESS) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
     }
@@ -802,10 +991,12 @@ zcc_status_t zcc_vulkan_ctx_create(
     cmdpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cmdpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     cmdpci.queueFamilyIndex = ctx->qfam;
-    if (ctx->dp.pCreateCPool(ctx->dev, &cmdpci, NULL, &ctx->cpool) != VK_SUCCESS) {
+    if (vk_consume_fault(ZCC_VK_FAULT_CREATE_CPOOL) ||
+        ctx->dp.pCreateCPool(ctx->dev, &cmdpci, NULL, &ctx->cpool) != VK_SUCCESS) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
     }
+    g_vk_ledger.cpool_acq++;
 
     VkCommandBufferAllocateInfo cbai;
     memset(&cbai, 0, sizeof(cbai));
@@ -813,7 +1004,8 @@ zcc_status_t zcc_vulkan_ctx_create(
     cbai.commandPool = ctx->cpool;
     cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cbai.commandBufferCount = 1U;
-    if (ctx->dp.pAllocCBufs(ctx->dev, &cbai, &ctx->cbuf) != VK_SUCCESS) {
+    if (vk_consume_fault(ZCC_VK_FAULT_ALLOC_CBUFS) ||
+        ctx->dp.pAllocCBufs(ctx->dev, &cbai, &ctx->cbuf) != VK_SUCCESS) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
     }
@@ -821,11 +1013,16 @@ zcc_status_t zcc_vulkan_ctx_create(
     VkFenceCreateInfo fci;
     memset(&fci, 0, sizeof(fci));
     fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    if (ctx->dp.pCreateFence(ctx->dev, &fci, NULL, &ctx->fence) != VK_SUCCESS) {
+    if (vk_consume_fault(ZCC_VK_FAULT_CREATE_FENCE) ||
+        ctx->dp.pCreateFence(ctx->dev, &fci, NULL, &ctx->fence) != VK_SUCCESS) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
     }
+    g_vk_ledger.fence_acq++;
 
+    if (vk_consume_fault(ZCC_VK_FAULT_INIT_DBG_ERROR)) {
+        ctx->dbg.error_count++;
+    }
     if (ctx->dbg.error_count > 0U) {
         zcc_vulkan_ctx_destroy(ctx);
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
@@ -858,14 +1055,63 @@ static int validate_spv_framing(const uint32_t *words, size_t word_count, char *
         if (err_buf && err_cap) snprintf(err_buf, err_cap, "Malformed SPIR-V header fields");
         return -1;
     }
+    int has_shader_cap = 0;
+    int has_logical_mem = 0;
+    int has_compute_main = 0;
+    int in_fn = 0;
+    uint32_t fn_count = 0U;
     size_t pos = 5U;
     while (pos < word_count) {
-        uint32_t wc = words[pos] >> 16;
+        uint32_t word = words[pos];
+        uint32_t wc = word >> 16;
+        uint32_t op = word & 0xFFFFU;
         if (wc == 0U || pos + (size_t)wc > word_count) {
             if (err_buf && err_cap) snprintf(err_buf, err_cap, "Malformed SPIR-V instruction word count at word %zu", pos);
             return -1;
         }
+        if (op == 17U && wc >= 2U && words[pos + 1U] == 1U) {
+            has_shader_cap = 1;
+        } else if (op == 14U && wc >= 3U && words[pos + 1U] == 0U) {
+            has_logical_mem = 1;
+        } else if (op == 15U && wc >= 5U && words[pos + 1U] == 5U &&
+                   words[pos + 2U] != 0U && words[pos + 2U] < words[3] &&
+                   words[pos + 3U] == 0x6E69616DU && words[pos + 4U] == 0U) {
+            has_compute_main = 1;
+        } else if (op == 54U) {
+            if (wc < 5U || in_fn) {
+                if (err_buf && err_cap) snprintf(err_buf, err_cap, "Malformed or nested OpFunction at word %zu", pos);
+                return -1;
+            }
+            in_fn = 1;
+        } else if (op == 56U) {
+            if (wc != 1U || !in_fn) {
+                if (err_buf && err_cap) snprintf(err_buf, err_cap, "Unmatched OpFunctionEnd at word %zu", pos);
+                return -1;
+            }
+            in_fn = 0;
+            fn_count++;
+        }
         pos += (size_t)wc;
+    }
+    if (in_fn) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "Unterminated SPIR-V OpFunction missing OpFunctionEnd");
+        return -1;
+    }
+    if (!has_shader_cap) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "SPIR-V module missing required OpCapability Shader");
+        return -1;
+    }
+    if (!has_logical_mem) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "SPIR-V module missing required OpMemoryModel Logical");
+        return -1;
+    }
+    if (!has_compute_main) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "SPIR-V module missing OpEntryPoint GLCompute \"main\"");
+        return -1;
+    }
+    if (fn_count == 0U) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "SPIR-V module missing OpFunction body");
+        return -1;
     }
     return 0;
 }
@@ -891,9 +1137,27 @@ static zcc_status_t vk_compile_shader_and_pipe(
     smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     smci.codeSize = spv_word_count * sizeof(uint32_t);
     smci.pCode = spv_words;
-    if (ctx->dp.pCreateShaderModule(ctx->dev, &smci, NULL, out_smod) != VK_SUCCESS || ctx->dbg.error_count > 0U) {
+    if (vk_consume_fault(ZCC_VK_FAULT_CREATE_SMOD)) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateShaderModule fault-injected failure");
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+    VkResult sm_rc = ctx->dp.pCreateShaderModule(ctx->dev, &smci, NULL, out_smod);
+    if (*out_smod != VK_NULL_HANDLE) g_vk_ledger.smod_acq++;
+    if (sm_rc != VK_SUCCESS || ctx->dbg.error_count > 0U) {
         if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateShaderModule failed/validation error: %s", ctx->dbg.first_msg);
-        if (*out_smod) { ctx->dp.pDestroyShaderModule(ctx->dev, *out_smod, NULL); *out_smod = VK_NULL_HANDLE; }
+        if (*out_smod != VK_NULL_HANDLE) {
+            ctx->dp.pDestroyShaderModule(ctx->dev, *out_smod, NULL);
+            *out_smod = VK_NULL_HANDLE;
+            g_vk_ledger.smod_rel++;
+        }
+        return ZCC_STATUS_ERR_BACKEND_RUNTIME;
+    }
+
+    if (vk_consume_fault(ZCC_VK_FAULT_CREATE_PIPE)) {
+        if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateComputePipelines fault-injected failure");
+        ctx->dp.pDestroyShaderModule(ctx->dev, *out_smod, NULL);
+        *out_smod = VK_NULL_HANDLE;
+        g_vk_ledger.smod_rel++;
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
     }
 
@@ -905,11 +1169,20 @@ static zcc_status_t vk_compile_shader_and_pipe(
     cpci.stage.module = *out_smod;
     cpci.stage.pName = "main";
     cpci.layout = ctx->pl;
-    if (ctx->dp.pCreateComputePipes(ctx->dev, VK_NULL_HANDLE, 1U, &cpci, NULL, out_pipe) != VK_SUCCESS || ctx->dbg.error_count > 0U) {
+    VkResult cp_rc = ctx->dp.pCreateComputePipes(ctx->dev, VK_NULL_HANDLE, 1U, &cpci, NULL, out_pipe);
+    if (*out_pipe != VK_NULL_HANDLE) g_vk_ledger.pipe_acq++;
+    if (cp_rc != VK_SUCCESS || ctx->dbg.error_count > 0U) {
         if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateComputePipelines failed: %s", ctx->dbg.first_msg);
-        if (*out_pipe) { ctx->dp.pDestroyPipe(ctx->dev, *out_pipe, NULL); *out_pipe = VK_NULL_HANDLE; }
-        ctx->dp.pDestroyShaderModule(ctx->dev, *out_smod, NULL);
-        *out_smod = VK_NULL_HANDLE;
+        if (*out_pipe != VK_NULL_HANDLE) {
+            ctx->dp.pDestroyPipe(ctx->dev, *out_pipe, NULL);
+            *out_pipe = VK_NULL_HANDLE;
+            g_vk_ledger.pipe_rel++;
+        }
+        if (*out_smod != VK_NULL_HANDLE) {
+            ctx->dp.pDestroyShaderModule(ctx->dev, *out_smod, NULL);
+            *out_smod = VK_NULL_HANDLE;
+            g_vk_ledger.smod_rel++;
+        }
         return ZCC_STATUS_ERR_BACKEND_RUNTIME;
     }
     return ZCC_STATUS_OK;
@@ -944,10 +1217,13 @@ static zcc_status_t vk_ensure_staging_buf(
         bci.size = target_cap;
         bci.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        if (ctx->dp.pCreateBuffer(ctx->dev, &bci, NULL, &b->buf) != VK_SUCCESS) {
+        if (vk_consume_fault(ZCC_VK_FAULT_STAGE_CREATE_BUF) ||
+            ctx->dp.pCreateBuffer(ctx->dev, &bci, NULL, &b->buf) != VK_SUCCESS || !b->buf) {
+            b->buf = VK_NULL_HANDLE;
             if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkCreateBuffer failed");
             return ZCC_STATUS_ERR_BACKEND_RUNTIME;
         }
+        g_vk_ledger.buf_acq++;
 
         VkMemoryRequirements mr;
         ctx->dp.pGetBufMemReq(ctx->dev, b->buf, &mr);
@@ -965,19 +1241,26 @@ static zcc_status_t vk_ensure_staging_buf(
         mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         mai.allocationSize = b->alloc_size;
         mai.memoryTypeIndex = mtype;
-        if (ctx->dp.pAllocateMemory(ctx->dev, &mai, NULL, &b->mem) != VK_SUCCESS) {
+        if (vk_consume_fault(ZCC_VK_FAULT_STAGE_ALLOC_MEM) ||
+            ctx->dp.pAllocateMemory(ctx->dev, &mai, NULL, &b->mem) != VK_SUCCESS || !b->mem) {
+            b->mem = VK_NULL_HANDLE;
             vk_free_buf(ctx->dev, &ctx->dp, b);
             if (err_buf && err_cap) snprintf(err_buf, err_cap, "vkAllocateMemory failed");
             return ZCC_STATUS_ERR_OOM;
         }
-        if (ctx->dp.pBindBufferMemory(ctx->dev, b->buf, b->mem, 0ULL) != VK_SUCCESS) {
+        g_vk_ledger.mem_acq++;
+        if (vk_consume_fault(ZCC_VK_FAULT_STAGE_BIND_MEM) ||
+            ctx->dp.pBindBufferMemory(ctx->dev, b->buf, b->mem, 0ULL) != VK_SUCCESS) {
             vk_free_buf(ctx->dev, &ctx->dp, b);
             return ZCC_STATUS_ERR_BACKEND_RUNTIME;
         }
-        if (ctx->dp.pMapMemory(ctx->dev, b->mem, 0ULL, b->alloc_size, 0U, &b->mapped) != VK_SUCCESS || !b->mapped) {
+        if (vk_consume_fault(ZCC_VK_FAULT_STAGE_MAP_MEM) ||
+            ctx->dp.pMapMemory(ctx->dev, b->mem, 0ULL, b->alloc_size, 0U, &b->mapped) != VK_SUCCESS || !b->mapped) {
+            b->mapped = NULL;
             vk_free_buf(ctx->dev, &ctx->dp, b);
             return ZCC_STATUS_ERR_BACKEND_RUNTIME;
         }
+        g_vk_ledger.map_acq++;
         *out_rebound = 1;
     }
 
@@ -1193,8 +1476,8 @@ static zcc_status_t vk_dispatch_on_ctx(
     ret = ZCC_STATUS_OK;
 
 out:
-    if (tmp_pipe) ctx->dp.pDestroyPipe(ctx->dev, tmp_pipe, NULL);
-    if (tmp_smod) ctx->dp.pDestroyShaderModule(ctx->dev, tmp_smod, NULL);
+    if (tmp_pipe) { ctx->dp.pDestroyPipe(ctx->dev, tmp_pipe, NULL); tmp_pipe = VK_NULL_HANDLE; g_vk_ledger.pipe_rel++; }
+    if (tmp_smod) { ctx->dp.pDestroyShaderModule(ctx->dev, tmp_smod, NULL); tmp_smod = VK_NULL_HANDLE; g_vk_ledger.smod_rel++; }
     if (out_barriers) *out_barriers = barrier_cnt;
     if (out_flushes) *out_flushes = flush_cnt;
     if (out_invalidates) *out_invalidates = inv_cnt;

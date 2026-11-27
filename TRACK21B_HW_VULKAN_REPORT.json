@@ -1,8 +1,8 @@
 {
   "schema_version": "track21b.hw_vulkan_report.v1",
-  "generated_at_utc": "2026-11-27T04:23:22Z",
+  "generated_at_utc": "2026-11-27T06:58:54Z",
   "governing_rule_version": "ZCC-EF-7 v1.0.0 + ZCC-EF-0",
-  "git_head_sha": "9acbe63d8523794d376cb4810c0a554134b2d2e3",
+  "git_head_sha": "d444f33bbe5bb6320c1348b4f6e2b73aee5a8dad",
   "bridge_icd_path": "/tmp/dzn_build/build/src/microsoft/vulkan/dzn_devenv_icd.x86_64.json",
   "bridge_icd_sha256": "5e458a2c57e9afb542931ea5a067a1547051841572db6955cf47298518725218",
   "cross_gpu_gemm_sha256_parity": true,
@@ -29,17 +29,17 @@
       },
       "ubsan": {
         "rc": 0,
-        "pass": 177,
+        "pass": 267,
         "fail": 0
       },
       "asan_no_lsan_external_umd": {
         "rc": 0,
-        "pass": 177,
+        "pass": 267,
         "fail": 0
       },
       "o2": {
         "rc": 0,
-        "pass": 177,
+        "pass": 267,
         "fail": 0
       },
       "fail_lines": [],
@@ -53,47 +53,47 @@
       },
       "benchmark_highlights": {
         "SCALAR_C99:GEMM_F32_128x512x128": {
-          "avg_us": 13152.23,
+          "avg_us": 12534.89,
           "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
         },
         "AVX2_FMA:GEMM_F32_128x512x128": {
-          "avg_us": 2487.87,
+          "avg_us": 2470.89,
           "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
         },
         "PTX_SM120:GEMM_F32_128x512x128": {
-          "avg_us": 3447.19,
+          "avg_us": 3026.93,
           "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
         },
         "VULKAN_SPV:GEMM_F32_128x512x128": {
-          "avg_us": 951956.19,
+          "avg_us": 929628.96,
           "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
         },
         "VULKAN_SPV:RMSNORM_F32_128x512": {
-          "avg_us": 1038875.52,
+          "avg_us": 937952.93,
           "sha256": "a9d7673d99f2a5ed138f7bce222ecac5832c00a6c95390228bf53fc8d1c41b6a"
         },
         "VULKAN_SPV:SOFTMAX_F32_128x512": {
-          "avg_us": 1071767.58,
+          "avg_us": 1008577.87,
           "sha256": "4b358481b59be810a7c9409f93e50d1b2b656fb8096ddef82d1df4d2c08def32"
         },
         "VULKAN_SPV:MATVEC_Q4_K_128x512": {
-          "avg_us": 1002691.91,
+          "avg_us": 963365.91,
           "sha256": "b9201f3a51bc4186dceadfc5e1d90d5c41a65ff92a79c7a475d830b6b01ef54a"
         },
         "VULKAN_SPV_CTX:GEMM_F32_128x512x128": {
-          "avg_us": 3152.33,
+          "avg_us": 3341.03,
           "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
         },
         "VULKAN_SPV_CTX:RMSNORM_F32_128x512": {
-          "avg_us": 3495.63,
+          "avg_us": 3461.44,
           "sha256": "a9d7673d99f2a5ed138f7bce222ecac5832c00a6c95390228bf53fc8d1c41b6a"
         },
         "VULKAN_SPV_CTX:SOFTMAX_F32_128x512": {
-          "avg_us": 3746.28,
+          "avg_us": 3488.22,
           "sha256": "4b358481b59be810a7c9409f93e50d1b2b656fb8096ddef82d1df4d2c08def32"
         },
         "VULKAN_SPV_CTX:MATVEC_Q4_K_128x512": {
-          "avg_us": 536.28,
+          "avg_us": 581.1,
           "sha256": "b9201f3a51bc4186dceadfc5e1d90d5c41a65ff92a79c7a475d830b6b01ef54a"
         }
       }
@@ -119,17 +119,17 @@
       },
       "ubsan": {
         "rc": 0,
-        "pass": 177,
+        "pass": 267,
         "fail": 0
       },
       "asan_no_lsan_external_umd": {
         "rc": 0,
-        "pass": 177,
+        "pass": 267,
         "fail": 0
       },
       "o2": {
         "rc": 0,
-        "pass": 177,
+        "pass": 267,
         "fail": 0
       },
       "fail_lines": [],
@@ -143,47 +143,47 @@
       },
       "benchmark_highlights": {
         "SCALAR_C99:GEMM_F32_128x512x128": {
-          "avg_us": 13188.82,
+          "avg_us": 13185.02,
           "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
         },
         "AVX2_FMA:GEMM_F32_128x512x128": {
-          "avg_us": 2449.35,
+          "avg_us": 2405.57,
           "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
         },
         "PTX_SM120:GEMM_F32_128x512x128": {
-          "avg_us": 3468.12,
+          "avg_us": 3869.93,
           "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
         },
         "VULKAN_SPV:GEMM_F32_128x512x128": {
-          "avg_us": 659150.5,
+          "avg_us": 657766.54,
           "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
         },
         "VULKAN_SPV:RMSNORM_F32_128x512": {
-          "avg_us": 646958.94,
+          "avg_us": 684236.93,
           "sha256": "3245149a26ed0327eed1d701c4517f29371175541423f1c0d11d751a4c95b19a"
         },
         "VULKAN_SPV:SOFTMAX_F32_128x512": {
-          "avg_us": 639807.57,
+          "avg_us": 641240.34,
           "sha256": "10317e74128815c57ae72f7cae6f193993fc25242dabb2443c8cbc231e102448"
         },
         "VULKAN_SPV:MATVEC_Q4_K_128x512": {
-          "avg_us": 649991.11,
+          "avg_us": 667851.9,
           "sha256": "b9201f3a51bc4186dceadfc5e1d90d5c41a65ff92a79c7a475d830b6b01ef54a"
         },
         "VULKAN_SPV_CTX:GEMM_F32_128x512x128": {
-          "avg_us": 2775.02,
+          "avg_us": 3004.6,
           "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
         },
         "VULKAN_SPV_CTX:RMSNORM_F32_128x512": {
-          "avg_us": 3611.16,
+          "avg_us": 3629.51,
           "sha256": "3245149a26ed0327eed1d701c4517f29371175541423f1c0d11d751a4c95b19a"
         },
         "VULKAN_SPV_CTX:SOFTMAX_F32_128x512": {
-          "avg_us": 3597.65,
+          "avg_us": 3685.58,
           "sha256": "10317e74128815c57ae72f7cae6f193993fc25242dabb2443c8cbc231e102448"
         },
         "VULKAN_SPV_CTX:MATVEC_Q4_K_128x512": {
-          "avg_us": 444.54,
+          "avg_us": 389.57,
           "sha256": "b9201f3a51bc4186dceadfc5e1d90d5c41a65ff92a79c7a475d830b6b01ef54a"
         }
       }

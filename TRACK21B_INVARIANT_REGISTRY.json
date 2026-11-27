@@ -115,6 +115,14 @@
       "proposition": "Independent release verifier enforces external spirv-val + VK_LAYER_KHRONOS_validation presence, canonical staged manifest closure, protected baseline/Track21A immutability (S_before==S_after), and clean Track 21A + selfhost non-regression.",
       "fail_closed_condition": "Missing external oracle reports PASS; baseline or historical Track 21A evidence mutated.",
       "verification_method": "tools/verify_track21b_release.py (--self-test, --verify-staged, isolated checkout)."
+    },
+    {
+      "id": "INV-T21B-011",
+      "gate": "T21B-G06",
+      "title": "Vulkan Resource Ownership & Init-Boundary Fault-Injection Non-Leak Invariants (ZIG-VK-LIFETIME-001..008)",
+      "proposition": "Every Vulkan handle/allocation (ctx, dlopen lib, VkInstance, VkDebugUtilsMessengerEXT, VkDevice, VkDescriptorSetLayout, VkPipelineLayout, VkDescriptorPool, VkCommandPool, VkFence, staging buffers/memory/maps, VkShaderModule, VkPipeline) enforces R_live = R_acquired - R_released = 0, strict reverse DAG teardown order, pre-pipeline structural SPIR-V 1.0 GLCompute validation (OpCapability Shader + OpMemoryModel Logical + OpEntryPoint GLCompute \"main\" + balanced OpFunction..OpFunctionEnd), null-safe idempotent teardown, atomic staging-buffer replacement rollback, cached shader/pipeline fault rollback, 21-point boundary fault non-leak equivalence, and >=10x churn recovery.",
+      "fail_closed_condition": "R_live != 0, teardown_seq_violations != 0, LSan leak detected under Lavapipe 25.2.8/26.0.8, entryless SPIR-V reaches vkCreateComputePipelines, or any fault boundary leaks or breaks subsequent recovery.",
+      "verification_method": "tests/track21b/test_track21b_vulkan.c (test_vulkan_lifetime_and_fault_injection + Noble 25.2.8-.2/.5 + Host 26.0.8 + DZN) under UBSan, ASan+LSan, and O2."
     }
   ]
 }

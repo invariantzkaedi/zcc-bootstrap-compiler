@@ -11,6 +11,55 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
+typedef enum zcc_vk_fault_point_e {
+    ZCC_VK_FAULT_NONE = 0U,
+    ZCC_VK_FAULT_CTX_ALLOC = 1U,
+    ZCC_VK_FAULT_LOAD_LIB = 2U,
+    ZCC_VK_FAULT_LOAD_DLSYM = 3U,
+    ZCC_VK_FAULT_CREATE_INSTANCE = 4U,
+    ZCC_VK_FAULT_PICK_PHYS_DEV = 5U,
+    ZCC_VK_FAULT_CREATE_DEVICE = 6U,
+    ZCC_VK_FAULT_BIND_DEV_PROCS = 7U,
+    ZCC_VK_FAULT_CREATE_DSL = 8U,
+    ZCC_VK_FAULT_CREATE_PL = 9U,
+    ZCC_VK_FAULT_CREATE_DPOOL = 10U,
+    ZCC_VK_FAULT_ALLOC_DSETS = 11U,
+    ZCC_VK_FAULT_CREATE_CPOOL = 12U,
+    ZCC_VK_FAULT_ALLOC_CBUFS = 13U,
+    ZCC_VK_FAULT_CREATE_FENCE = 14U,
+    ZCC_VK_FAULT_INIT_DBG_ERROR = 15U,
+    ZCC_VK_FAULT_STAGE_CREATE_BUF = 16U,
+    ZCC_VK_FAULT_STAGE_ALLOC_MEM = 17U,
+    ZCC_VK_FAULT_STAGE_BIND_MEM = 18U,
+    ZCC_VK_FAULT_STAGE_MAP_MEM = 19U,
+    ZCC_VK_FAULT_CREATE_SMOD = 20U,
+    ZCC_VK_FAULT_CREATE_PIPE = 21U
+} zcc_vk_fault_point_t;
+
+typedef struct zcc_vk_lifetime_audit_s {
+    uint64_t ctx_acq, ctx_rel;
+    uint64_t lib_acq, lib_rel;
+    uint64_t inst_acq, inst_rel;
+    uint64_t dbg_acq, dbg_rel;
+    uint64_t dev_acq, dev_rel;
+    uint64_t dsl_acq, dsl_rel;
+    uint64_t pl_acq, pl_rel;
+    uint64_t dpool_acq, dpool_rel;
+    uint64_t cpool_acq, cpool_rel;
+    uint64_t fence_acq, fence_rel;
+    uint64_t buf_acq, buf_rel;
+    uint64_t mem_acq, mem_rel;
+    uint64_t map_acq, map_rel;
+    uint64_t smod_acq, smod_rel;
+    uint64_t pipe_acq, pipe_rel;
+    uint32_t last_teardown_mask;
+    uint32_t teardown_seq_violations;
+} zcc_vk_lifetime_audit_t;
+
+extern void zcc_vk_audit_reset(void);
+extern void zcc_vk_audit_snapshot(zcc_vk_lifetime_audit_t *out, uint64_t *out_live_total);
+extern void zcc_vk_audit_inject_fault(uint32_t fault_point);
+
 #define T_CHECK(cond, msg) do { \
     if (cond) { g_pass++; } \
     else { g_fail++; fprintf(stderr, "FAIL[line %d]: %s\n", __LINE__, (msg)); } \
@@ -894,16 +943,103 @@ static void test_coverage_and_edge_contracts(void) {
     T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins, 2U, &dout, &spv_opt, &rec) ==
             ZCC_STATUS_ERR_BACKEND_RUNTIME, "truncated SPIR-V instruction rejected");
 
-    /* Valid-framed OpCapability Linkage (id=5) triggers VVL vk_dbg_cb & vkCreateShaderModule rejection */
-    uint32_t bad_vvl_spv[7] = {
+    /* Structural SPIR-V 1.0 GLCompute pre-pipeline contract checks (no Vulkan calls leaked) */
+    uint32_t entryless_linkage_spv[7] = {
         ZCC_SPIRV_MAGIC_NUMBER, ZCC_SPIRV_VERSION_1_0, ZCC_SPIRV_GENERATOR_ID, 2U, 0U, (2U << 16) | 17U, 5U
     };
-    spv_opt.spirv_override_words = bad_vvl_spv;
+    spv_opt.spirv_override_words = entryless_linkage_spv;
     spv_opt.spirv_override_word_count = 7U;
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins, 2U, &dout, &spv_opt, &rec) ==
+            ZCC_STATUS_ERR_BACKEND_RUNTIME && rec.validation_error_count == 0U,
+            "entryless OpCapability Linkage rejected deterministically before vkCreateComputePipelines");
+
+    uint32_t no_mem_spv[7] = {
+        ZCC_SPIRV_MAGIC_NUMBER, ZCC_SPIRV_VERSION_1_0, ZCC_SPIRV_GENERATOR_ID, 2U, 0U, (2U << 16) | 17U, 1U
+    };
+    spv_opt.spirv_override_words = no_mem_spv;
+    spv_opt.spirv_override_word_count = 7U;
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins, 2U, &dout, &spv_opt, &rec) ==
+            ZCC_STATUS_ERR_BACKEND_RUNTIME, "SPIR-V without OpMemoryModel rejected pre-pipeline");
+
+    uint32_t no_entry_spv[10] = {
+        ZCC_SPIRV_MAGIC_NUMBER, ZCC_SPIRV_VERSION_1_0, ZCC_SPIRV_GENERATOR_ID, 2U, 0U,
+        (2U << 16) | 17U, 1U,
+        (3U << 16) | 14U, 0U, 1U
+    };
+    spv_opt.spirv_override_words = no_entry_spv;
+    spv_opt.spirv_override_word_count = 10U;
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins, 2U, &dout, &spv_opt, &rec) ==
+            ZCC_STATUS_ERR_BACKEND_RUNTIME, "SPIR-V without OpEntryPoint GLCompute main rejected pre-pipeline");
+
+    uint32_t no_fn_spv[15] = {
+        ZCC_SPIRV_MAGIC_NUMBER, ZCC_SPIRV_VERSION_1_0, ZCC_SPIRV_GENERATOR_ID, 5U, 0U,
+        (2U << 16) | 17U, 1U,
+        (3U << 16) | 14U, 0U, 1U,
+        (5U << 16) | 15U, 5U, 4U, 0x6E69616DU, 0U
+    };
+    spv_opt.spirv_override_words = no_fn_spv;
+    spv_opt.spirv_override_word_count = 15U;
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins, 2U, &dout, &spv_opt, &rec) ==
+            ZCC_STATUS_ERR_BACKEND_RUNTIME, "SPIR-V without OpFunction body rejected pre-pipeline");
+
+    uint32_t unclosed_fn_spv[20] = {
+        ZCC_SPIRV_MAGIC_NUMBER, ZCC_SPIRV_VERSION_1_0, ZCC_SPIRV_GENERATOR_ID, 5U, 0U,
+        (2U << 16) | 17U, 1U,
+        (3U << 16) | 14U, 0U, 1U,
+        (5U << 16) | 15U, 5U, 4U, 0x6E69616DU, 0U,
+        (5U << 16) | 54U, 1U, 4U, 0U, 2U
+    };
+    spv_opt.spirv_override_words = unclosed_fn_spv;
+    spv_opt.spirv_override_word_count = 20U;
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins, 2U, &dout, &spv_opt, &rec) ==
+            ZCC_STATUS_ERR_BACKEND_RUNTIME, "SPIR-V unterminated OpFunction rejected pre-pipeline");
+
+    uint32_t nested_fn_spv[25] = {
+        ZCC_SPIRV_MAGIC_NUMBER, ZCC_SPIRV_VERSION_1_0, ZCC_SPIRV_GENERATOR_ID, 5U, 0U,
+        (2U << 16) | 17U, 1U,
+        (3U << 16) | 14U, 0U, 1U,
+        (5U << 16) | 15U, 5U, 4U, 0x6E69616DU, 0U,
+        (5U << 16) | 54U, 1U, 4U, 0U, 2U,
+        (5U << 16) | 54U, 1U, 4U, 0U, 2U
+    };
+    spv_opt.spirv_override_words = nested_fn_spv;
+    spv_opt.spirv_override_word_count = 25U;
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins, 2U, &dout, &spv_opt, &rec) ==
+            ZCC_STATUS_ERR_BACKEND_RUNTIME, "SPIR-V nested OpFunction rejected pre-pipeline");
+
+    uint32_t unmatched_end_spv[16] = {
+        ZCC_SPIRV_MAGIC_NUMBER, ZCC_SPIRV_VERSION_1_0, ZCC_SPIRV_GENERATOR_ID, 5U, 0U,
+        (2U << 16) | 17U, 1U,
+        (3U << 16) | 14U, 0U, 1U,
+        (5U << 16) | 15U, 5U, 4U, 0x6E69616DU, 0U,
+        (1U << 16) | 56U
+    };
+    spv_opt.spirv_override_words = unmatched_end_spv;
+    spv_opt.spirv_override_word_count = 16U;
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins, 2U, &dout, &spv_opt, &rec) ==
+            ZCC_STATUS_ERR_BACKEND_RUNTIME, "SPIR-V unmatched OpFunctionEnd rejected pre-pipeline");
+
+    /* Structurally valid SPIR-V 1.0 compute shader + OpCapability Linkage triggers vk_dbg_cb with 0 driver leaks */
+    static const uint32_t full_linkage_spv[] = {
+        ZCC_SPIRV_MAGIC_NUMBER, ZCC_SPIRV_VERSION_1_0, ZCC_SPIRV_GENERATOR_ID, 6U, 0U,
+        (2U << 16) | 17U, 1U,                         /* OpCapability Shader */
+        (2U << 16) | 17U, 5U,                         /* OpCapability Linkage */
+        (3U << 16) | 14U, 0U, 1U,                     /* OpMemoryModel Logical GLSL450 */
+        (5U << 16) | 15U, 5U, 4U, 0x6E69616DU, 0U,    /* OpEntryPoint GLCompute %4 "main" */
+        (6U << 16) | 16U, 4U, 17U, 1U, 1U, 1U,        /* OpExecutionMode %4 LocalSize 1 1 1 */
+        (2U << 16) | 19U, 1U,                         /* %1 = OpTypeVoid */
+        (3U << 16) | 33U, 2U, 1U,                     /* %2 = OpTypeFunction %1 */
+        (5U << 16) | 54U, 1U, 4U, 0U, 2U,             /* %4 = OpFunction %1 None %2 */
+        (2U << 16) | 248U, 5U,                        /* %5 = OpLabel */
+        (1U << 16) | 253U,                            /* OpReturn */
+        (1U << 16) | 56U                              /* OpFunctionEnd */
+    };
+    spv_opt.spirv_override_words = full_linkage_spv;
+    spv_opt.spirv_override_word_count = sizeof(full_linkage_spv) / sizeof(full_linkage_spv[0]);
     zcc_status_t vvl_st = zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins, 2U, &dout, &spv_opt, &rec);
-    T_CHECK(vvl_st == ZCC_STATUS_ERR_BACKEND_RUNTIME, "OpCapability Linkage rejected via vkCreateShaderModule/VVL");
+    T_CHECK(vvl_st == ZCC_STATUS_ERR_BACKEND_RUNTIME, "Full GLCompute + OpCapability Linkage rejected via vk_dbg_cb");
     if (cc.validation_layer_enabled) {
-        T_CHECK(rec.validation_error_count > 0U, "OpCapability Linkage triggers vk_dbg_cb validation error count > 0");
+        T_CHECK(rec.validation_error_count > 0U, "Full GLCompute + OpCapability Linkage triggers vk_dbg_cb error count > 0");
     }
 
     /* Strided 2D VEC_ADD_F32 fails closed on Vulkan (non-contiguous rank > 1) */
@@ -1010,6 +1146,166 @@ static void test_coverage_and_edge_contracts(void) {
     zcc_vulkan_ctx_destroy(ctx);
 }
 
+static void test_vulkan_lifetime_and_fault_injection(void) {
+    zcc_vk_lifetime_audit_t au;
+    uint64_t live = 999ULL;
+    zcc_vk_audit_snapshot(&au, &live);
+    T_CHECK(live == 0ULL && au.teardown_seq_violations == 0U,
+            "ZIG-VK-LIFETIME-001/002: zero live resources & zero teardown violations across normal suite");
+    T_CHECK(au.ctx_acq == au.ctx_rel && au.lib_acq == au.lib_rel && au.inst_acq == au.inst_rel &&
+            au.dbg_acq == au.dbg_rel && au.dev_acq == au.dev_rel && au.dsl_acq == au.dsl_rel &&
+            au.pl_acq == au.pl_rel && au.dpool_acq == au.dpool_rel && au.cpool_acq == au.cpool_rel &&
+            au.fence_acq == au.fence_rel && au.buf_acq == au.buf_rel && au.mem_acq == au.mem_rel &&
+            au.map_acq == au.map_rel && au.smod_acq == au.smod_rel && au.pipe_acq == au.pipe_rel,
+            "ZIG-VK-LIFETIME-001: all 15 resource classes balanced 1:1 prior to fault injection");
+
+    /* ZIG-VK-LIFETIME-004: NULL destroy is safe no-op */
+    zcc_vulkan_ctx_destroy(NULL);
+    zcc_vk_audit_snapshot(&au, &live);
+    T_CHECK(live == 0ULL, "ZIG-VK-LIFETIME-004: zcc_vulkan_ctx_destroy(NULL) idempotent");
+
+    /* ZIG-VK-LIFETIME-007: fault injection at every initialization boundary 1..15 */
+    zcc_vk_audit_reset();
+    for (uint32_t fp = ZCC_VK_FAULT_CTX_ALLOC; fp <= ZCC_VK_FAULT_INIT_DBG_ERROR; fp++) {
+        zcc_vulkan_ctx_t *fctx = NULL;
+        zcc_vk_audit_inject_fault(fp);
+        zcc_status_t fst = zcc_vulkan_ctx_create(1, 0U, &fctx);
+        zcc_vk_audit_inject_fault(ZCC_VK_FAULT_NONE);
+        zcc_vk_audit_snapshot(&au, &live);
+        T_CHECK(fst != ZCC_STATUS_OK && fctx == NULL && live == 0ULL && au.teardown_seq_violations == 0U,
+                "ZIG-VK-LIFETIME-007: init-boundary fault fails closed with R_live == 0");
+    }
+    T_CHECK(au.ctx_acq == 14ULL && au.ctx_rel == 14ULL && au.lib_acq == 13ULL && au.lib_rel == 13ULL,
+            "ZIG-VK-LIFETIME-007: init-boundary fault ledger exact acquisition counts verified");
+
+    /* ZIG-VK-LIFETIME-005/006: staging-buffer faults, resize replacement, shader/pipe faults & post-fault recovery */
+    zcc_vk_audit_reset();
+    zcc_vulkan_ctx_t *ctx = NULL;
+    T_CHECK(zcc_vulkan_ctx_create(1, 0U, &ctx) == ZCC_STATUS_OK && ctx != NULL,
+            "ZIG-VK-LIFETIME-005: create ctx for staging/shader fault injection");
+
+    float a4[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+    float b4[4] = {10.0f, 20.0f, 30.0f, 40.0f};
+    float o4[4] = {0};
+    zcc_tensor_desc_t da4, db4, do4;
+    zcc_tensor_desc_init_1d(&da4, ZCC_DTYPE_F32, 4, a4, sizeof(a4), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&db4, ZCC_DTYPE_F32, 4, b4, sizeof(b4), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&do4, ZCC_DTYPE_F32, 4, o4, sizeof(o4), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_t ins4[2] = {da4, db4};
+
+    zcc_vulkan_exec_options_t opt;
+    zcc_vulkan_exec_options_init(&opt);
+    opt.base.requested_backend = ZCC_BACKEND_VULKAN_SPV;
+    opt.base.selection_policy = ZCC_POLICY_EXACT_REQUIRED;
+    opt.require_validation_layer = 1U;
+    zcc_compute_v2_receipt_t rec;
+
+    for (uint32_t sfp = ZCC_VK_FAULT_STAGE_CREATE_BUF; sfp <= ZCC_VK_FAULT_STAGE_MAP_MEM; sfp++) {
+        zcc_vk_audit_inject_fault(sfp);
+        zcc_status_t sst = zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins4, 2U, &do4, &opt, &rec);
+        zcc_vk_audit_inject_fault(ZCC_VK_FAULT_NONE);
+        zcc_vk_audit_snapshot(&au, &live);
+        T_CHECK(sst != ZCC_STATUS_OK &&
+                au.buf_acq == au.buf_rel && au.mem_acq == au.mem_rel && au.map_acq == au.map_rel,
+                "ZIG-VK-LIFETIME-005: staging-buffer fault atomically rolls back buffer/mem/map handles");
+    }
+
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins4, 2U, &do4, &opt, &rec) == ZCC_STATUS_OK &&
+            fabsf(o4[3] - 44.0f) < 1e-5f,
+            "ZIG-VK-LIFETIME-005: recovery exec after staging faults succeeds");
+
+    float a128[128], b128[128], o128[128];
+    for (int i = 0; i < 128; i++) { a128[i] = (float)i; b128[i] = 2.0f; o128[i] = 0.0f; }
+    zcc_tensor_desc_t da128, db128, do128;
+    zcc_tensor_desc_init_1d(&da128, ZCC_DTYPE_F32, 128, a128, sizeof(a128), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&db128, ZCC_DTYPE_F32, 128, b128, sizeof(b128), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_init_1d(&do128, ZCC_DTYPE_F32, 128, o128, sizeof(o128), 1, ZCC_OWNER_BORROWED_HOST);
+    zcc_tensor_desc_t ins128[2] = {da128, db128};
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins128, 2U, &do128, &opt, &rec) == ZCC_STATUS_OK &&
+            fabsf(o128[127] - 129.0f) < 1e-5f,
+            "ZIG-VK-LIFETIME-005: staging resize frees previous allocations cleanly and computes accurately");
+    zcc_vk_audit_snapshot(&au, &live);
+    T_CHECK(au.buf_rel >= 3ULL && (au.buf_acq - au.buf_rel) == 4ULL &&
+            (au.mem_acq - au.mem_rel) == 4ULL && (au.map_acq - au.map_rel) == 4ULL,
+            "ZIG-VK-LIFETIME-005: growth replacement frees old allocations and retains exact 4 active bindings");
+
+    uint64_t live_smod_pre = au.smod_acq - au.smod_rel;
+    uint64_t live_pipe_pre = au.pipe_acq - au.pipe_rel;
+    for (uint32_t pfp = ZCC_VK_FAULT_CREATE_SMOD; pfp <= ZCC_VK_FAULT_CREATE_PIPE; pfp++) {
+        zcc_vk_audit_inject_fault(pfp);
+        zcc_status_t pst = zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_MUL_F32, ins4, 2U, &do4, &opt, &rec);
+        zcc_vk_audit_inject_fault(ZCC_VK_FAULT_NONE);
+        zcc_vk_audit_snapshot(&au, &live);
+        T_CHECK(pst == ZCC_STATUS_ERR_BACKEND_RUNTIME &&
+                (au.smod_acq - au.smod_rel) == live_smod_pre &&
+                (au.pipe_acq - au.pipe_rel) == live_pipe_pre,
+                "ZIG-VK-LIFETIME-006: shader/pipeline compile fault leaves 0 leaked VkShaderModule/VkPipeline handles");
+    }
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_MUL_F32, ins4, 2U, &do4, &opt, &rec) == ZCC_STATUS_OK &&
+            fabsf(o4[3] - 160.0f) < 1e-5f,
+            "ZIG-VK-LIFETIME-006: post-compile-fault VEC_MUL_F32 succeeds");
+
+    /* Cover remaining validate_spv_framing malformed-header branches before destroy */
+    zcc_vulkan_exec_options_t spv_opt = opt;
+    uint32_t bad_magic_spv[6] = {0xDEADBEEFU, ZCC_SPIRV_VERSION_1_0, 0U, 2U, 0U, (2U << 16) | 17U};
+    spv_opt.spirv_override_words = bad_magic_spv;
+    spv_opt.spirv_override_word_count = 6U;
+    T_CHECK(zcc_vulkan_ctx_exec(ctx, ZCC_OP_VEC_ADD_F32, ins4, 2U, &do4, &spv_opt, &rec) == ZCC_STATUS_ERR_BACKEND_RUNTIME,
+            "ZIG-VK-LIFETIME-003: bad SPIR-V magic word rejected");
+
+    zcc_vulkan_ctx_destroy(ctx);
+    zcc_vk_audit_snapshot(&au, &live);
+    T_CHECK(live == 0ULL && au.teardown_seq_violations == 0U && (au.last_teardown_mask & 0x7FFEU) == 0x7FFEU,
+            "ZIG-VK-LIFETIME-002: full ctx destroy runs stages 1..14 in strict reverse DAG order with R_live == 0");
+
+    /* ZIG-VK-LIFETIME-008: 10x repeated create -> valid + full_linkage_spv VVL + entryless -> destroy churn */
+    static const uint32_t full_link_churn[] = {
+        ZCC_SPIRV_MAGIC_NUMBER, ZCC_SPIRV_VERSION_1_0, ZCC_SPIRV_GENERATOR_ID, 6U, 0U,
+        (2U << 16) | 17U, 1U, (2U << 16) | 17U, 5U, (3U << 16) | 14U, 0U, 1U,
+        (5U << 16) | 15U, 5U, 4U, 0x6E69616DU, 0U,
+        (6U << 16) | 16U, 4U, 17U, 1U, 1U, 1U,
+        (2U << 16) | 19U, 1U, (3U << 16) | 33U, 2U, 1U,
+        (5U << 16) | 54U, 1U, 4U, 0U, 2U, (2U << 16) | 248U, 5U, (1U << 16) | 253U, (1U << 16) | 56U
+    };
+    uint32_t entryless_churn[7] = {
+        ZCC_SPIRV_MAGIC_NUMBER, ZCC_SPIRV_VERSION_1_0, ZCC_SPIRV_GENERATOR_ID, 2U, 0U, (2U << 16) | 17U, 5U
+    };
+    zcc_vk_audit_reset();
+    for (int cyc = 0; cyc < 10; cyc++) {
+        zcc_vulkan_ctx_t *lctx = NULL;
+        T_CHECK(zcc_vulkan_ctx_create(1, 0U, &lctx) == ZCC_STATUS_OK && lctx != NULL,
+                "ZIG-VK-LIFETIME-008: churn cycle ctx create");
+        T_CHECK(zcc_vulkan_ctx_exec(lctx, ZCC_OP_VEC_ADD_F32, ins4, 2U, &do4, &opt, &rec) == ZCC_STATUS_OK &&
+                fabsf(o4[2] - 33.0f) < 1e-5f,
+                "ZIG-VK-LIFETIME-008: churn cycle valid VEC_ADD_F32");
+        spv_opt.spirv_override_words = full_link_churn;
+        spv_opt.spirv_override_word_count = sizeof(full_link_churn) / sizeof(full_link_churn[0]);
+        T_CHECK(zcc_vulkan_ctx_exec(lctx, ZCC_OP_VEC_ADD_F32, ins4, 2U, &do4, &spv_opt, &rec) ==
+                ZCC_STATUS_ERR_BACKEND_RUNTIME && rec.validation_error_count > 0U,
+                "ZIG-VK-LIFETIME-008: churn cycle VVL negative SPIR-V caught cleanly");
+        spv_opt.spirv_override_words = entryless_churn;
+        spv_opt.spirv_override_word_count = 7U;
+        T_CHECK(zcc_vulkan_ctx_exec(lctx, ZCC_OP_VEC_ADD_F32, ins4, 2U, &do4, &spv_opt, &rec) ==
+                ZCC_STATUS_ERR_BACKEND_RUNTIME && rec.validation_error_count == 0U,
+                "ZIG-VK-LIFETIME-008: churn cycle entryless SPIR-V blocked pre-pipeline");
+        T_CHECK(zcc_vulkan_ctx_exec(lctx, ZCC_OP_VEC_MUL_F32, ins4, 2U, &do4, &opt, &rec) == ZCC_STATUS_OK &&
+                fabsf(o4[1] - 40.0f) < 1e-5f,
+                "ZIG-VK-LIFETIME-008: churn cycle post-error recovery VEC_MUL_F32");
+        zcc_vulkan_ctx_destroy(lctx);
+    }
+    zcc_vk_audit_snapshot(&au, &live);
+    T_CHECK(live == 0ULL && au.teardown_seq_violations == 0U &&
+            au.ctx_acq == 10ULL && au.ctx_rel == 10ULL &&
+            au.inst_acq == 10ULL && au.inst_rel == 10ULL &&
+            au.dev_acq == 10ULL && au.dev_rel == 10ULL &&
+            au.dsl_acq == 10ULL && au.dsl_rel == 10ULL &&
+            au.pl_acq == 10ULL && au.pl_rel == 10ULL,
+            "ZIG-VK-LIFETIME-008: 10x churn + VVL negative controls balanced with R_live == 0");
+
+    printf("TRACK21B_VK_LIFETIME_AUDIT cycles=10 faults_injected=21 live_total=%llu seq_violations=%u teardown_mask=0x%x\n",
+           (unsigned long long)live, au.teardown_seq_violations, au.last_teardown_mask);
+}
+
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
@@ -1027,6 +1323,7 @@ int main(int argc, char **argv) {
     test_all_13_ops_and_replay(run_ptx, prefer_ctx);
     test_persistent_vulkan_context();
     test_coverage_and_edge_contracts();
+    test_vulkan_lifetime_and_fault_injection();
     printf("TRACK21B_C_TESTS pass=%d fail=%d\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;
 }
