@@ -81,7 +81,7 @@ zcc_status_t zcc_negotiate_backend_v2_with_caps(
             if (reason_buf && reason_cap) snprintf(reason_buf, reason_cap, "explicit_vulkan_hardware_gpu_verified");
             return ZCC_STATUS_OK;
         }
-        if (selection_policy == ZCC_POLICY_AUTO_FALLBACK) {
+        if (selection_policy == ZCC_POLICY_AUTO_FALLBACK && !require_hardware_gpu) {
             *out_fallback_occurred = 1U;
             if (vk_caps_spv_ready(vk_caps, 0U)) {
                 *out_selected_backend = ZCC_BACKEND_VULKAN_SPV;
@@ -97,7 +97,11 @@ zcc_status_t zcc_negotiate_backend_v2_with_caps(
             if (reason_buf && reason_cap) snprintf(reason_buf, reason_cap, "fallback_scalar_no_vulkan_gpu");
             return ZCC_STATUS_OK;
         }
-        if (reason_buf && reason_cap) snprintf(reason_buf, reason_cap, "rejected_vulkan_gpu_only_cpu_or_unavailable");
+        if (reason_buf && reason_cap) {
+            snprintf(reason_buf, reason_cap,
+                     require_hardware_gpu ? "rejected_vulkan_gpu_require_hw_forbids_cpu_fallback"
+                                          : "rejected_vulkan_gpu_only_cpu_or_unavailable");
+        }
         return (vk_caps && vk_caps->vulkan_available) ? ZCC_STATUS_ERR_UNSUPPORTED_HW : ZCC_STATUS_ERR_BACKEND_UNAVAILABLE;
     }
 
@@ -110,7 +114,7 @@ zcc_status_t zcc_negotiate_backend_v2_with_caps(
             }
             return ZCC_STATUS_OK;
         }
-        if (selection_policy == ZCC_POLICY_AUTO_FALLBACK) {
+        if (selection_policy == ZCC_POLICY_AUTO_FALLBACK && !require_hardware_gpu) {
             *out_fallback_occurred = 1U;
             if (avx2_ok) {
                 *out_selected_backend = ZCC_BACKEND_AVX2_FMA;

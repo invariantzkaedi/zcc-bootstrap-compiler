@@ -1,0 +1,210 @@
+{
+  "schema_version": "track21b.hw_vulkan_report.v1",
+  "generated_at_utc": "2026-11-26T23:38:32Z",
+  "governing_rule_version": "ZCC-EF-7 v1.0.0 + ZCC-EF-0",
+  "git_head_sha": "44750df38567b277aba6327e021efd50627ac3c2",
+  "bridge_icd_path": "/tmp/dzn_build/build/src/microsoft/vulkan/dzn_devenv_icd.x86_64.json",
+  "bridge_icd_sha256": "5e458a2c57e9afb542931ea5a067a1547051841572db6955cf47298518725218",
+  "cross_gpu_gemm_sha256_parity": true,
+  "gemm_f32_canonical_sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6",
+  "devices": {
+    "nvidia_rtx5070": {
+      "gate_id": "T21B-GPU-NV-DZN",
+      "target_key": "nvidia_rtx5070",
+      "status": "PASS",
+      "driver_bridge": "Mesa Dozen (dzn) SPIR-V->DXIL->D3D12 over /dev/dxg",
+      "conformance_version": "0.0.0.0 (non-conformant Dozen testing ICD)",
+      "hardware": {
+        "cpu_avx2": 1,
+        "cpu_fma": 1,
+        "ptx_available": 1,
+        "ptx_device": "NVIDIA GeForce RTX 5070 Laptop GPU",
+        "vulkan_available": 1,
+        "vulkan_device_name": "Microsoft Direct3D12 (NVIDIA GeForce RTX 5070 Laptop GPU)",
+        "vulkan_device_type": "DISCRETE_GPU",
+        "vulkan_physical_device_type": 2,
+        "vulkan_vendor_id": "0x10de",
+        "vulkan_api_version": 4202831,
+        "vulkan_validation_enabled": 1
+      },
+      "ubsan": {
+        "rc": 0,
+        "pass": 102,
+        "fail": 0
+      },
+      "asan_no_lsan_external_umd": {
+        "rc": 0,
+        "pass": 102,
+        "fail": 0
+      },
+      "o2": {
+        "rc": 0,
+        "pass": 102,
+        "fail": 0
+      },
+      "fail_lines": [],
+      "differential": {
+        "rc": 0,
+        "verdict": "PASS",
+        "total_checks": 208,
+        "passed": 208,
+        "failed": 0,
+        "replay_13_ops_count": 13
+      },
+      "benchmark_highlights": {
+        "SCALAR_C99:GEMM_F32_128x512x128": {
+          "avg_us": 13107.58,
+          "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
+        },
+        "AVX2_FMA:GEMM_F32_128x512x128": {
+          "avg_us": 2416.01,
+          "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
+        },
+        "PTX_SM120:GEMM_F32_128x512x128": {
+          "avg_us": 4021.63,
+          "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
+        },
+        "VULKAN_SPV:GEMM_F32_128x512x128": {
+          "avg_us": 1295724.48,
+          "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
+        },
+        "VULKAN_SPV:RMSNORM_F32_128x512": {
+          "avg_us": 1306046.48,
+          "sha256": "a9d7673d99f2a5ed138f7bce222ecac5832c00a6c95390228bf53fc8d1c41b6a"
+        },
+        "VULKAN_SPV:SOFTMAX_F32_128x512": {
+          "avg_us": 1265647.42,
+          "sha256": "4b358481b59be810a7c9409f93e50d1b2b656fb8096ddef82d1df4d2c08def32"
+        },
+        "VULKAN_SPV:MATVEC_Q4_K_128x512": {
+          "avg_us": 1131682.31,
+          "sha256": "b9201f3a51bc4186dceadfc5e1d90d5c41a65ff92a79c7a475d830b6b01ef54a"
+        },
+        "VULKAN_SPV_CTX:GEMM_F32_128x512x128": {
+          "avg_us": 3627.76,
+          "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
+        },
+        "VULKAN_SPV_CTX:RMSNORM_F32_128x512": {
+          "avg_us": 3513.21,
+          "sha256": "a9d7673d99f2a5ed138f7bce222ecac5832c00a6c95390228bf53fc8d1c41b6a"
+        },
+        "VULKAN_SPV_CTX:SOFTMAX_F32_128x512": {
+          "avg_us": 3662.12,
+          "sha256": "4b358481b59be810a7c9409f93e50d1b2b656fb8096ddef82d1df4d2c08def32"
+        },
+        "VULKAN_SPV_CTX:MATVEC_Q4_K_128x512": {
+          "avg_us": 622.59,
+          "sha256": "b9201f3a51bc4186dceadfc5e1d90d5c41a65ff92a79c7a475d830b6b01ef54a"
+        }
+      }
+    },
+    "amd_radeon": {
+      "gate_id": "T21B-GPU-AMD-DZN",
+      "target_key": "amd_radeon",
+      "status": "PASS",
+      "driver_bridge": "Mesa Dozen (dzn) SPIR-V->DXIL->D3D12 over /dev/dxg",
+      "conformance_version": "0.0.0.0 (non-conformant Dozen testing ICD)",
+      "hardware": {
+        "cpu_avx2": 1,
+        "cpu_fma": 1,
+        "ptx_available": 1,
+        "ptx_device": "NVIDIA GeForce RTX 5070 Laptop GPU",
+        "vulkan_available": 1,
+        "vulkan_device_name": "Microsoft Direct3D12 (AMD Radeon(TM) Graphics)",
+        "vulkan_device_type": "INTEGRATED_GPU",
+        "vulkan_physical_device_type": 1,
+        "vulkan_vendor_id": "0x1002",
+        "vulkan_api_version": 4202831,
+        "vulkan_validation_enabled": 1
+      },
+      "ubsan": {
+        "rc": 0,
+        "pass": 102,
+        "fail": 0
+      },
+      "asan_no_lsan_external_umd": {
+        "rc": 0,
+        "pass": 102,
+        "fail": 0
+      },
+      "o2": {
+        "rc": 0,
+        "pass": 102,
+        "fail": 0
+      },
+      "fail_lines": [],
+      "differential": {
+        "rc": 0,
+        "verdict": "PASS",
+        "total_checks": 208,
+        "passed": 208,
+        "failed": 0,
+        "replay_13_ops_count": 13
+      },
+      "benchmark_highlights": {
+        "SCALAR_C99:GEMM_F32_128x512x128": {
+          "avg_us": 14774.88,
+          "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
+        },
+        "AVX2_FMA:GEMM_F32_128x512x128": {
+          "avg_us": 2402.05,
+          "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
+        },
+        "PTX_SM120:GEMM_F32_128x512x128": {
+          "avg_us": 4315.43,
+          "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
+        },
+        "VULKAN_SPV:GEMM_F32_128x512x128": {
+          "avg_us": 975543.55,
+          "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
+        },
+        "VULKAN_SPV:RMSNORM_F32_128x512": {
+          "avg_us": 980768.47,
+          "sha256": "3245149a26ed0327eed1d701c4517f29371175541423f1c0d11d751a4c95b19a"
+        },
+        "VULKAN_SPV:SOFTMAX_F32_128x512": {
+          "avg_us": 870773.75,
+          "sha256": "10317e74128815c57ae72f7cae6f193993fc25242dabb2443c8cbc231e102448"
+        },
+        "VULKAN_SPV:MATVEC_Q4_K_128x512": {
+          "avg_us": 874530.9,
+          "sha256": "b9201f3a51bc4186dceadfc5e1d90d5c41a65ff92a79c7a475d830b6b01ef54a"
+        },
+        "VULKAN_SPV_CTX:GEMM_F32_128x512x128": {
+          "avg_us": 2781.07,
+          "sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6"
+        },
+        "VULKAN_SPV_CTX:RMSNORM_F32_128x512": {
+          "avg_us": 3473.64,
+          "sha256": "3245149a26ed0327eed1d701c4517f29371175541423f1c0d11d751a4c95b19a"
+        },
+        "VULKAN_SPV_CTX:SOFTMAX_F32_128x512": {
+          "avg_us": 3705.61,
+          "sha256": "10317e74128815c57ae72f7cae6f193993fc25242dabb2443c8cbc231e102448"
+        },
+        "VULKAN_SPV_CTX:MATVEC_Q4_K_128x512": {
+          "avg_us": 507.64,
+          "sha256": "b9201f3a51bc4186dceadfc5e1d90d5c41a65ff92a79c7a475d830b6b01ef54a"
+        }
+      }
+    }
+  },
+  "native_windows_gates": {
+    "T21B-GPU-NV-NATIVE": {
+      "status": "DEFERRED",
+      "target": "Native Win64 NVIDIA RTX 5070 Vulkan ICD 1.4.303 (0x10de)",
+      "reason": "Unsigned native Win64 binaries are blocked by enforced Windows Smart App Control (VerifiedAndReputablePolicyState=1)."
+    },
+    "T21B-GPU-AMD-NATIVE": {
+      "status": "DEFERRED",
+      "target": "Native Win64 AMD Radeon Vulkan ICD 1.4.329 (0x1002)",
+      "reason": "Unsigned native Win64 binaries are blocked by enforced Windows Smart App Control (VerifiedAndReputablePolicyState=1)."
+    }
+  },
+  "limitations": [
+    "Mesa Dozen (`dzn`) translates Vulkan SPIR-V 1.0 to DXIL over D3D12 (`/dev/dxg`) and self-reports conformanceVersion 0.0.0.0 (non-conformant testing ICD).",
+    "ASan memory-safety execution against D3D12 UMDs (`libd3d12core.so`) uses ASAN_OPTIONS=detect_leaks=0 because Microsoft/IHV D3D12 user-mode drivers retain global driver allocations across dlclose; strict LSan leak checks execute on Mesa llvmpipe.",
+    "Direct Win64 proprietary ICD execution remains DEFERRED until binaries carry an Authenticode signature or Smart App Control policy permits native execution."
+  ],
+  "verdict": "PASS"
+}

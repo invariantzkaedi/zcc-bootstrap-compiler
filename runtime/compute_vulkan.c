@@ -159,9 +159,22 @@ static int pick_physical_device(
     VkPhysicalDeviceProperties best_props;
     memset(&best_props, 0, sizeof(best_props));
 
+    const char *vendor_env = getenv("ZCC_VK_VENDOR_ID");
+    uint32_t filter_vendor = 0U;
+    if (vendor_env && vendor_env[0] != '\0') {
+        char *endp = NULL;
+        unsigned long parsed = strtoul(vendor_env, &endp, 0);
+        if (endp && endp != vendor_env && *endp == '\0' && parsed > 0UL && parsed <= 0xffffffffUL) {
+            filter_vendor = (uint32_t)parsed;
+        }
+    }
+
     for (uint32_t i = 0; i < dc; i++) {
         VkPhysicalDeviceProperties props;
         vk->get_phys_props(devs[i], &props);
+        if (filter_vendor != 0U && props.vendorID != filter_vendor) {
+            continue;
+        }
         if (require_hw_gpu &&
             props.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
             props.deviceType != VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {

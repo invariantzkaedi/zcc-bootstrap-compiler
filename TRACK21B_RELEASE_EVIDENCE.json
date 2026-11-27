@@ -1,11 +1,11 @@
 {
   "schema_version": "track21b.release_evidence.v1",
-  "generated_at_utc": "2026-11-26T19:54:36Z",
+  "generated_at_utc": "2026-11-26T23:54:30Z",
   "governing_rule_version": "ZCC-EF-7 v1.0.0 + ZCC-EF-0",
   "evidence_tier": "E3",
-  "git_head_sha": "0b0a16b6f1d578da1877c00e84aee28ff9a2badc",
-  "manifest_file_count": 25,
-  "canonical_manifest_sha256": "5e61d91a96ff4243fadc9f1222e374d97e39875c552f7d19bc9f5b51f7848d6a",
+  "git_head_sha": "44750df38567b277aba6327e021efd50627ac3c2",
+  "manifest_file_count": 28,
+  "canonical_manifest_sha256": "c0e966466c2aee2acce5258917401a00b8fb7a34ba6ff43f84f937d54da86e3f",
   "vulkan_execution_oracle": {
     "vulkan_available": 1,
     "validation_layer_enabled": 1,
@@ -30,33 +30,36 @@
     }
   },
   "artifact_sha256": {
-    ".gitignore": "2963f5739aca855409cd0a4099f59754f933d58bf75941f079fd87724c004a8a",
-    "Makefile": "963e1b85ff10abadfcf15b70fb5baa14addd97ee10d6baefb38b5696a4e82b26",
-    "TRACK21B_COMPUTE_CONTRACT.md": "cb8e159033151056b16ce4d34397f8262d4a0520886980a6c617d581ea284e8e",
-    "TRACK21B_DIFFERENTIAL_REPORT.json": "58b0097676ad54d8c96b94a6247639758b867ef10d246ee9af8aab79c8f63f1e",
-    "TRACK21B_IMPLEMENTATION_PLAN.md": "06972818ce367c40dd83ca14008549497d5011c040394274fceb73d70f2de3d8",
-    "TRACK21B_INVARIANT_REGISTRY.json": "38253231408a2f3517bb9a9d23febf36da1d6d520da251d70a530c13a4cd0334",
-    "TRACK21B_MUTATION_REPORT.json": "bcbe6a7b16ef3e46cd897b5e685a697458239970dc31407b7629fc04391ef498",
-    "TRACK21B_PERFORMANCE_REPORT.json": "7aa9178c54e1dc68a0ae0d99d04cf234f9d4379904bc65d7c26b9e3db8718bc4",
+    ".github/workflows/track21b-ci.yml": "bba2340deabceb6dfcd554b2dc7982165872b0876e3d95afc62ae7d568ac1f2e",
+    ".gitignore": "b5e85bc227b2d8d541b93d814fcebe3d8c9c51f073a0186248fd4234ade1e66b",
+    "Makefile": "e7fc11aec6e9fa55f66e2bfd132027793e085a6d275c03d1b10411f7fd22d89d",
+    "TRACK21B_COMPUTE_CONTRACT.md": "8b9902e7257be4da663d16b411bb62f797a60b94dd68c871ae29e60db183611d",
+    "TRACK21B_DIFFERENTIAL_REPORT.json": "6a59d06e12ac23a4e575c021bdc72e89c74a4e4b955ca30a7615bb11f722f1b0",
+    "TRACK21B_HW_VULKAN_REPORT.json": "ec086e3e4b5bd5650ff23916914e016c79c77cfb6973b8b2131176885ba5bd14",
+    "TRACK21B_IMPLEMENTATION_PLAN.md": "8cec33275d2cc152d320bdc42acffa207a6e452c363cbcfb7a019f55f8d8a98d",
+    "TRACK21B_INVARIANT_REGISTRY.json": "ad9ee4a2c1cce9879d7bd08a0fe7da31e609c7bee92b810f3ff41435338bea7d",
+    "TRACK21B_MUTATION_REPORT.json": "5df148ce6c93411c1d1b29f96a03e3cfd1db3b7f7c2d4ae54067ceaf25511811",
+    "TRACK21B_PERFORMANCE_REPORT.json": "3a832ea682c1de94dd76ae7c8c3dbb6ba3aeb023237d2974e9c25ee469577805",
     "TRACK21B_REPO_AUDIT.json": "0353b73df4953b261abe2a4be30aa17dedf878a5b546be7aff7449262801a34f",
-    "docs/TRACK21B_REPRODUCTION_AND_MIGRATION.md": "46a5480394e17b8bbb6fc729bfa43467826340c53530ebf1662f84b91f49f261",
+    "docs/TRACK21B_REPRODUCTION_AND_MIGRATION.md": "957f91ec9e82a38a34de44f5aea448dabda62e9833ee53bab6dacb5de30596de",
     "include/zcc_spirv.h": "bbb2ef658eb561d3fa51a8b21a7226db372491516e09cb74af0cfc36e2a9587f",
     "include/zcc_vulkan_compute.h": "f0a4d70cc295580aa4a3779c5cd3230eaeed14a9a12e6b45feff7e2c47bc0c60",
-    "runtime/compute_dispatch_v2.c": "344a6c3fd4f19434e78ce756ccaf958afdfd80d5f9b47f1952cf710fd174786a",
-    "runtime/compute_vulkan.c": "b0ad7db07bb1c013d10c583f23d50cb0bcc1dd743eaafc29f1e737ca4d779881",
+    "runtime/compute_dispatch_v2.c": "9d3950c64584279ef222733768bfcf8c1cbf3778db1f349473e732f5565ee92e",
+    "runtime/compute_vulkan.c": "2a45666d7699a31478e91316b7c11df39d4bab2ef416c39bd202e847abf979a1",
     "sdk/zcc_vulkan_compute.mjs": "a50e2753222297c1ea1733c030947e6eb276304be8ceded576585a87d5cde740",
     "sdk/zcc_vulkan_compute.py": "d18b3f0ed11be008cd0ce979c73a67c2dd415b52823e1528b4c20028809286b4",
     "src/part6_spirv.c": "8d655481c307fac645e1749e7a9dbb4fbbbe5dfdb6b8b7949baba66800bb5075",
     "tests/track21b/build_runtime.sh": "343e4c08892501201d42e1052a4bd2463f0dce1eccb687b71ff8bef7deca6aa9",
-    "tests/track21b/differential_oracle_21b.py": "aed0958876149c23ac44d4a55e26fbe5862b7d5aa0e4cf6911391b0a33da08ad",
+    "tests/track21b/differential_oracle_21b.py": "4929c4116e231a26fc0985e00041cc73e7da60a50e41b61483fb1adcf243a941",
     "tests/track21b/mutation_observatory_21b.py": "4d67ef8942c8fc77e36da8edbcb8def31400ccd2bd9b4f9fee563590f0964350",
     "tests/track21b/run_vulkan_suite.sh": "22631d54e693e0a20acdbb753877c8a078b379b7e9bf4b745be63cf4e88c30ad",
     "tests/track21b/test_sdk_v2_mjs.mjs": "97c355420d710263869d75c654fbc0456eaf6ffbd7fcda7aaf4ef8c657a3ee86",
-    "tests/track21b/test_track21b_vulkan.c": "3a2a8e51691ce02336f48e0738703039eca99a915f8c9bc03691b87e17a8f007",
-    "tools/verify_track21b_release.py": "ccc65375d0ff83fb14aa6a3c14c9552ea3a0282827232f7c02e178d2b282f766",
-    "tools/zcc_spirv_cli.c": "29af8fc3880f89134aea2aa021a5eda4f5d6b4bdf278740e41e5eb93a0071a26",
-    "/tmp/libzcc_compute_v2.so": "3284543b54c1fcfc178b713bb24c4eee2b9934f39aede1a506bacebff86c0130",
-    "/tmp/zcc-spirv": "948cbcde812f281cad7bb5164424cd8479bffe4787a5635093052c2980b80cb1"
+    "tests/track21b/test_track21b_vulkan.c": "ffaf63fa2c7374fbf6e523278f38a66741cca3783db3fa415ce4626cb3b7226f",
+    "tests/track21b/verify_hw_vulkan_dzn.py": "0a986087294572e777db87d42dfec25924365f2691fd7e230b90837084114bc8",
+    "tools/verify_track21b_release.py": "b9e637db3c28fcd3a4298e86d5c60b259b80762fdfa56c8055f9190e469c2a13",
+    "tools/zcc_spirv_cli.c": "7a08e239ababbd04c56601e73c04fd5eb9185c09eebb85b6b874652d315764ef",
+    "/tmp/libzcc_compute_v2.so": "276a0261ff7149f680aa8ea19e59981e9890c105cd1331ad26dc7aa09987021a",
+    "/tmp/zcc-spirv": "08f6ba3ce60b53f2c281adcf60dfee03435c5a0cf38e0fb8a05e7e19db21855f"
   },
   "gates": {
     "T21-G01": {
@@ -94,15 +97,49 @@
         "identity_check": "ok"
       }
     },
-    "T21B-GPU-NV": {
-      "status": "DEFERRED",
-      "target": "Native NVIDIA GeForce RTX 5070 Vulkan ICD (0x10de)",
-      "reason": "WSL2 exposes llvmpipe CPU ICD only; unsigned Windows native executables blocked by Windows Smart App Control."
+    "T21B-GPU-NV-DZN": {
+      "status": "NOT_RUN",
+      "target": "NVIDIA GeForce RTX 5070 Laptop GPU via Mesa Dozen (dzn) D3D12 bridge (0x10de)",
+      "evidence_class": "REPORTED",
+      "executed_in_this_run": false,
+      "recorded_workstation_status": "PASS",
+      "recorded_report": "TRACK21B_HW_VULKAN_REPORT.json",
+      "validation_msg": "ok",
+      "differential": {
+        "rc": 0,
+        "verdict": "PASS",
+        "total_checks": 208,
+        "passed": 208,
+        "failed": 0,
+        "replay_13_ops_count": 13
+      }
     },
-    "T21B-GPU-AMD": {
+    "T21B-GPU-AMD-DZN": {
+      "status": "NOT_RUN",
+      "target": "AMD Radeon(TM) Graphics via Mesa Dozen (dzn) D3D12 bridge (0x1002)",
+      "evidence_class": "REPORTED",
+      "executed_in_this_run": false,
+      "recorded_workstation_status": "PASS",
+      "recorded_report": "TRACK21B_HW_VULKAN_REPORT.json",
+      "validation_msg": "ok",
+      "differential": {
+        "rc": 0,
+        "verdict": "PASS",
+        "total_checks": 208,
+        "passed": 208,
+        "failed": 0,
+        "replay_13_ops_count": 13
+      }
+    },
+    "T21B-GPU-NV-NATIVE": {
       "status": "DEFERRED",
-      "target": "Native AMD Radeon Graphics Vulkan ICD (0x1002)",
-      "reason": "WSL2 exposes llvmpipe CPU ICD only; unsigned Windows native executables blocked by Windows Smart App Control."
+      "target": "Native Win64 NVIDIA GeForce RTX 5070 Vulkan ICD 1.4.303 (0x10de)",
+      "reason": "Unsigned native Windows executables blocked by Windows Smart App Control (VerifiedAndReputablePolicyState=1)."
+    },
+    "T21B-GPU-AMD-NATIVE": {
+      "status": "DEFERRED",
+      "target": "Native Win64 AMD Radeon Graphics Vulkan ICD 1.4.329 (0x1002)",
+      "reason": "Unsigned native Windows executables blocked by Windows Smart App Control (VerifiedAndReputablePolicyState=1)."
     },
     "T21B-G03": {
       "status": "PASS",
@@ -224,12 +261,12 @@
     }
   },
   "host_limitations": [
-    "WSL2 Vulkan ICD exposes Mesa llvmpipe (VK_PHYSICAL_DEVICE_TYPE_CPU, vendor 0x10005) only.",
-    "Hardware Vulkan GPU gates T21B-GPU-NV (0x10de RTX 5070) and T21B-GPU-AMD (0x1002 Radeon) are explicitly DEFERRED because unsigned native Win64 binaries are blocked by Windows Smart App Control.",
-    "NVIDIA proprietary WSL2 driver triggers an internal ASan double-free inside cuInit(0), so PTX_SM120 runs under full UBSan and O2 differential verification while ASan+LSan+UBSan verifies Scalar, AVX2, SPIR-V generator, and live Vulkan llvmpipe + Khronos validation layer."
+    "Default WSL2/Ubuntu CI Vulkan ICD exposes Mesa llvmpipe (VK_PHYSICAL_DEVICE_TYPE_CPU, vendor 0x10005); hardware GPUs (0x10de RTX 5070, 0x1002 AMD Radeon) are verified separately over Mesa Dozen (dzn) D3D12 (/dev/dxg) in TRACK21B_HW_VULKAN_REPORT.json.",
+    "Native Win64 proprietary Vulkan ICD execution gates T21B-GPU-NV-NATIVE (0x10de) and T21B-GPU-AMD-NATIVE (0x1002) remain DEFERRED because unsigned native Win64 binaries are blocked by enforced Windows Smart App Control.",
+    "NVIDIA proprietary WSL2 libcuda.so.1 triggers an internal ASan double-free inside cuInit(0), and WSL2 D3D12 UMDs (libd3d12core.so) retain global allocations across dlclose; strict LSan leak checks execute cleanly against Mesa llvmpipe."
   ],
   "ef7_adjudication": {
-    "claim": "ZCC Track 21B Verified SPIR-V and Software Vulkan Compute (llvmpipe) satisfies T21-G01, T21-G02-CPU, and T21B-G03..G10 while preserving Track 21A and core bootstrap baselines, with T21B-GPU-NV and T21B-GPU-AMD explicitly DEFERRED.",
+    "claim": "ZCC Track 21B Verified SPIR-V and Vulkan Compute satisfies T21-G01, T21-G02-CPU, and T21B-G03..G10 while preserving Track 21A and core bootstrap baselines; hardware GPU Dozen D3D12 evidence (0x10de RTX 5070 & 0x1002 AMD Radeon) is tracked in TRACK21B_HW_VULKAN_REPORT.json, and direct unsigned Win64 native ICD gates remain DEFERRED.",
     "evidence_class": "OBSERVED",
     "evidence_tier": "E3",
     "verdict": "PASS"

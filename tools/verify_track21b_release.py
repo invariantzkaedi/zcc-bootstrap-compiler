@@ -43,9 +43,11 @@ from sdk.zcc_vulkan_compute import (  # noqa: E402
     ZccVulkanExecOptions,
 )
 from tests.track21a.differential_oracle import make_f32_desc  # noqa: E402
+from tests.track21b.verify_hw_vulkan_dzn import validate_existing_report  # noqa: E402
 from tools.verify_track21a_release import canonical_core_from_json  # noqa: E402
 
 TRACK21B_MANIFEST_FILES = [
+    ".github/workflows/track21b-ci.yml",
     ".gitignore",
     "Makefile",
     "TRACK21B_REPO_AUDIT.json",
@@ -55,6 +57,7 @@ TRACK21B_MANIFEST_FILES = [
     "TRACK21B_DIFFERENTIAL_REPORT.json",
     "TRACK21B_MUTATION_REPORT.json",
     "TRACK21B_PERFORMANCE_REPORT.json",
+    "TRACK21B_HW_VULKAN_REPORT.json",
     "docs/TRACK21B_REPRODUCTION_AND_MIGRATION.md",
     "include/zcc_spirv.h",
     "include/zcc_vulkan_compute.h",
@@ -70,6 +73,7 @@ TRACK21B_MANIFEST_FILES = [
     "tests/track21b/test_sdk_v2_mjs.mjs",
     "tests/track21b/differential_oracle_21b.py",
     "tests/track21b/mutation_observatory_21b.py",
+    "tests/track21b/verify_hw_vulkan_dzn.py",
     "tools/verify_track21b_release.py",
 ]
 
@@ -291,7 +295,9 @@ def check_manifest_closure(repo_root: Path, staged_only: bool = False) -> Tuple[
     if staged_only:
         staged_raw = subprocess.check_output(["git", "diff", "--cached", "--name-only"], cwd=str(repo_root), text=True)
         actual_staged = sorted([line.strip() for line in staged_raw.splitlines() if line.strip()])
-        staged_info["missing_staged"] = sorted(set(expected_staged) - set(actual_staged))
+        tracked_in_index_raw = subprocess.check_output(["git", "ls-files", "--cached", "--", *expected_staged], cwd=str(repo_root), text=True)
+        tracked_in_index = sorted([line.strip() for line in tracked_in_index_raw.splitlines() if line.strip()])
+        staged_info["missing_staged"] = sorted(set(expected_staged) - set(tracked_in_index))
         staged_info["unexpected_staged"] = sorted(set(actual_staged) - set(expected_staged))
 
         ev_path = repo_root / "TRACK21B_RELEASE_EVIDENCE.json"
@@ -539,7 +545,7 @@ def verify_staged_tree(repo_root: Path) -> int:
     return 0
 
 
-def verify_release(evidence_dir: Path, run_fresh: bool = True, write_evidence: bool = True) -> int:
+def verify_release(evidence_dir: Path, run_fresh: bool = True, write_evidence: bool = True, run_hw_dzn: bool = False) -> int:
     # Rule #2 & #10: Missing external spirv-val / glslangValidator MUST return BLOCKED (exit 3), never PASS
     if not shutil.which("spirv-val") or not shutil.which("glslangValidator"):
         print("RELEASE_BLOCKED: missing external oracle spirv-val or glslangValidator on PATH", file=sys.stderr)
@@ -647,6 +653,23 @@ def verify_release(evidence_dir: Path, run_fresh: bool = True, write_evidence: b
     )
     perf_ok = len(perf_rep.get("results", [])) >= 12
     c_ok = (c_suite_ran and c_suite_rc == 0) if run_fresh else True
+
+    hw_live_ran = False
+    if run_hw_dzn and evidence_dir.resolve() == REPO_ROOT.resolve():
+        hw_rc = subprocess.run([sys.executable, "tests/track21b/verify_hw_vulkan_dzn.py"], cwd=str(REPO_ROOT)).returncode
+        if hw_rc == 3:
+            print("RELEASE_BLOCKED: --hw-dzn requested but Dozen /dev/dxg hardware ICD unavailable", file=sys.stderr)
+            return 3
+        if hw_rc != 0:
+            print(f"RELEASE_FAILED: verify_hw_vulkan_dzn failed rc={hw_rc}", file=sys.stderr)
+            return 5
+        hw_live_ran = True
+
+    hw_rep_path = REPO_ROOT / "TRACK21B_HW_VULKAN_REPORT.json"
+    hw_ok, hw_msg = validate_existing_report(hw_rep_path) if hw_rep_path.is_file() else (False, "missing_hw_report")
+    hw_rep = json.loads(hw_rep_path.read_text(encoding="utf-8")) if hw_rep_path.is_file() else {}
+    hw_devs = hw_rep.get("devices", {}) if isinstance(hw_rep, dict) else {}
+
     closure_ok, closure_info = check_manifest_closure(REPO_ROOT, staged_only=False)
 
     after_snap = snapshot_files(REPO_ROOT, PROTECTED_CORE_AND_T21A_FILES + UNRELATED_WORKSPACE_FILES)
@@ -655,6 +678,25 @@ def verify_release(evidence_dir: Path, run_fresh: bool = True, write_evidence: b
     if not purity_ok:
         print(f"RELEASE_BLOCKED: INV-VERIFIER-PURITY violated on: {purity_drifts}", file=sys.stderr)
         return 6
+
+    ptx_active = bool(diff_rep.get("hardware", {}).get("ptx_available", 0))
+    ptx_tag = "PTX_SM120" if ptx_active else "PTX_SM120(skipped:cuda_available=0)"
+    nv_dzn = hw_devs.get("nvidia_rtx5070", {})
+    amd_dzn = hw_devs.get("amd_radeon", {})
+
+    def _hw_dzn_gate(entry: Dict[str, Any], vendor_hex: str, label: str) -> Dict[str, Any]:
+        live_here = hw_live_ran or (str(vk_probe_dict.get("vendor_id", "")).lower() == vendor_hex)
+        rec_status = entry.get("status", "NOT_RUN") if hw_ok else "NOT_RUN"
+        return {
+            "status": "PASS" if (live_here and rec_status == "PASS") else ("NOT_RUN" if rec_status == "PASS" else rec_status),
+            "target": f"{label} via Mesa Dozen (dzn) D3D12 bridge ({vendor_hex})",
+            "evidence_class": "OBSERVED" if live_here else ("REPORTED" if hw_ok else "UNVERIFIED"),
+            "executed_in_this_run": live_here,
+            "recorded_workstation_status": rec_status,
+            "recorded_report": "TRACK21B_HW_VULKAN_REPORT.json" if hw_rep_path.is_file() else None,
+            "validation_msg": hw_msg,
+            "differential": entry.get("differential", {}),
+        }
 
     gates = {
         "T21-G01": {
@@ -670,7 +712,11 @@ def verify_release(evidence_dir: Path, run_fresh: bool = True, write_evidence: b
         "T21-G02-CPU": {
             "status": "PASS" if (c_ok and diff_ok and id_ok) else "FAIL",
             "evidence": {
-                "oracle_type": "Software Vulkan CPU Execution Oracle (Mesa llvmpipe)",
+                "oracle_type": (
+                    "Software Vulkan CPU Execution Oracle (Mesa llvmpipe)"
+                    if vk_probe_dict["device_type"] == "CPU"
+                    else f"Active Vulkan ICD ({vk_probe_dict['device_type']})"
+                ),
                 "physical_device_type": vk_probe_dict["device_type"],
                 "device_name": vk_probe_dict["device_name"],
                 "vendor_id": vk_probe_dict["vendor_id"],
@@ -678,20 +724,22 @@ def verify_release(evidence_dir: Path, run_fresh: bool = True, write_evidence: b
                 "identity_check": id_msg,
             },
         },
-        "T21B-GPU-NV": {
+        "T21B-GPU-NV-DZN": _hw_dzn_gate(nv_dzn, "0x10de", "NVIDIA GeForce RTX 5070 Laptop GPU"),
+        "T21B-GPU-AMD-DZN": _hw_dzn_gate(amd_dzn, "0x1002", "AMD Radeon(TM) Graphics"),
+        "T21B-GPU-NV-NATIVE": {
             "status": "DEFERRED",
-            "target": "Native NVIDIA GeForce RTX 5070 Vulkan ICD (0x10de)",
-            "reason": "WSL2 exposes llvmpipe CPU ICD only; unsigned Windows native executables blocked by Windows Smart App Control.",
+            "target": "Native Win64 NVIDIA GeForce RTX 5070 Vulkan ICD 1.4.303 (0x10de)",
+            "reason": "Unsigned native Windows executables blocked by Windows Smart App Control (VerifiedAndReputablePolicyState=1).",
         },
-        "T21B-GPU-AMD": {
+        "T21B-GPU-AMD-NATIVE": {
             "status": "DEFERRED",
-            "target": "Native AMD Radeon Graphics Vulkan ICD (0x1002)",
-            "reason": "WSL2 exposes llvmpipe CPU ICD only; unsigned Windows native executables blocked by Windows Smart App Control.",
+            "target": "Native Win64 AMD Radeon Graphics Vulkan ICD 1.4.329 (0x1002)",
+            "reason": "Unsigned native Windows executables blocked by Windows Smart App Control (VerifiedAndReputablePolicyState=1).",
         },
         "T21B-G03": {"status": "PASS" if (isa_ok and diff_ok) else "FAIL", "evidence": {"portable_avx_opcode_counts": isa_counts}},
-        "T21B-G04": {"status": "PASS" if (c_ok and diff_ok) else "FAIL", "evidence": "Scalar C99, AVX2_FMA, PTX_SM120, and VULKAN_SPV verified cleanly"},
-        "T21B-G05": {"status": "PASS" if diff_ok else "FAIL", "evidence": f"{diff_rep.get('passed')}/{diff_rep.get('total_checks')} PASS across Scalar/AVX2/PTX/Vulkan SPIR-V"},
-        "T21B-G06": {"status": "PASS" if c_ok else "FAIL", "evidence": "Full UBSan (CPU+PTX+Vulkan) + ASan+LSan+UBSan (CPU+Vulkan+Validation Layer) 0 errors"},
+        "T21B-G04": {"status": "PASS" if (c_ok and diff_ok) else "FAIL", "evidence": f"Scalar C99, AVX2_FMA, {ptx_tag}, and VULKAN_SPV verified cleanly"},
+        "T21B-G05": {"status": "PASS" if diff_ok else "FAIL", "evidence": f"{diff_rep.get('passed')}/{diff_rep.get('total_checks')} PASS across Scalar/AVX2/{'PTX/' if ptx_active else ''}Vulkan SPIR-V"},
+        "T21B-G06": {"status": "PASS" if c_ok else "FAIL", "evidence": f"Full UBSan ({'CPU+PTX+Vulkan' if ptx_active else 'CPU+Vulkan'}) + ASan+LSan+UBSan (CPU+Vulkan+Validation Layer) 0 errors"},
         "T21B-G07": {"status": "PASS" if mut_ok else "FAIL", "evidence": f"{mut_rep.get('killed')}/{mut_rep.get('total_mutants')} controlled mutants killed; false_pos=0; unknown preserved"},
         "T21B-G08": {"status": "PASS" if diff_ok else "FAIL", "evidence": "13/13 operations deterministic 3x replay on VULKAN_SPV"},
         "T21B-G09": {"status": "PASS" if tamper_ok else "FAIL", "evidence": tamper_controls},
@@ -702,6 +750,8 @@ def verify_release(evidence_dir: Path, run_fresh: bool = True, write_evidence: b
     }
 
     active_keys = ["T21-G01", "T21-G02-CPU", "T21B-G03", "T21B-G04", "T21B-G05", "T21B-G06", "T21B-G07", "T21B-G08", "T21B-G09", "T21B-G10"]
+    if run_hw_dzn:
+        active_keys.extend(["T21B-GPU-NV-DZN", "T21B-GPU-AMD-DZN"])
     active_pass = sum(1 for k in active_keys if gates[k]["status"] == "PASS")
     verdict = "PASS" if active_pass == len(active_keys) else "FAIL"
 
@@ -730,12 +780,12 @@ def verify_release(evidence_dir: Path, run_fresh: bool = True, write_evidence: b
         "artifact_sha256": artifact_hashes,
         "gates": gates,
         "host_limitations": [
-            "WSL2 Vulkan ICD exposes Mesa llvmpipe (VK_PHYSICAL_DEVICE_TYPE_CPU, vendor 0x10005) only.",
-            "Hardware Vulkan GPU gates T21B-GPU-NV (0x10de RTX 5070) and T21B-GPU-AMD (0x1002 Radeon) are explicitly DEFERRED because unsigned native Win64 binaries are blocked by Windows Smart App Control.",
-            "NVIDIA proprietary WSL2 driver triggers an internal ASan double-free inside cuInit(0), so PTX_SM120 runs under full UBSan and O2 differential verification while ASan+LSan+UBSan verifies Scalar, AVX2, SPIR-V generator, and live Vulkan llvmpipe + Khronos validation layer.",
+            "Default WSL2/Ubuntu CI Vulkan ICD exposes Mesa llvmpipe (VK_PHYSICAL_DEVICE_TYPE_CPU, vendor 0x10005); hardware GPUs (0x10de RTX 5070, 0x1002 AMD Radeon) are verified separately over Mesa Dozen (dzn) D3D12 (/dev/dxg) in TRACK21B_HW_VULKAN_REPORT.json.",
+            "Native Win64 proprietary Vulkan ICD execution gates T21B-GPU-NV-NATIVE (0x10de) and T21B-GPU-AMD-NATIVE (0x1002) remain DEFERRED because unsigned native Win64 binaries are blocked by enforced Windows Smart App Control.",
+            "NVIDIA proprietary WSL2 libcuda.so.1 triggers an internal ASan double-free inside cuInit(0), and WSL2 D3D12 UMDs (libd3d12core.so) retain global allocations across dlclose; strict LSan leak checks execute cleanly against Mesa llvmpipe.",
         ],
         "ef7_adjudication": {
-            "claim": "ZCC Track 21B Verified SPIR-V and Software Vulkan Compute (llvmpipe) satisfies T21-G01, T21-G02-CPU, and T21B-G03..G10 while preserving Track 21A and core bootstrap baselines, with T21B-GPU-NV and T21B-GPU-AMD explicitly DEFERRED.",
+            "claim": "ZCC Track 21B Verified SPIR-V and Vulkan Compute satisfies T21-G01, T21-G02-CPU, and T21B-G03..G10 while preserving Track 21A and core bootstrap baselines; hardware GPU Dozen D3D12 evidence (0x10de RTX 5070 & 0x1002 AMD Radeon) is tracked in TRACK21B_HW_VULKAN_REPORT.json, and direct unsigned Win64 native ICD gates remain DEFERRED.",
             "evidence_class": "OBSERVED",
             "evidence_tier": "E3" if run_fresh else "E2",
             "verdict": verdict,
@@ -747,8 +797,8 @@ def verify_release(evidence_dir: Path, run_fresh: bool = True, write_evidence: b
 
     print(
         f"TRACK21B_RELEASE_VERIFIER verdict={verdict} active_gates={active_pass}/{len(active_keys)} "
-        f"deferred=T21B-GPU-NV,T21B-GPU-AMD vk_dev={vk_probe_dict['device_type']} "
-        f"manifest_sha256={canonical_manifest_sha[:16]}"
+        f"hw_dzn_report={'PASS' if hw_ok else 'UNVERIFIED'} deferred=T21B-GPU-NV-NATIVE,T21B-GPU-AMD-NATIVE "
+        f"vk_dev={vk_probe_dict['device_type']} manifest_sha256={canonical_manifest_sha[:16]}"
     )
     return 0 if verdict == "PASS" else 5
 
@@ -758,6 +808,7 @@ def main() -> int:
     parser.add_argument("--self-test", action="store_true", help="Run ZCC-EF-0 negative self-tests")
     parser.add_argument("--no-rerun", action="store_true", help="Verify existing artifacts without re-running suites")
     parser.add_argument("--verify-staged", action="store_true", help="Verify exact staged closure and index SHA-256 bindings")
+    parser.add_argument("--hw-dzn", action="store_true", help="Also execute live Mesa Dozen D3D12 hardware GPU verification")
     parser.add_argument("--verify-dir", default=str(REPO_ROOT), help="Directory containing Track 21B deliverables")
     args = parser.parse_args()
 
@@ -769,6 +820,7 @@ def main() -> int:
         Path(args.verify_dir),
         run_fresh=not args.no_rerun,
         write_evidence=(not args.no_rerun and Path(args.verify_dir).resolve() == REPO_ROOT.resolve()),
+        run_hw_dzn=args.hw_dzn,
     )
 
 

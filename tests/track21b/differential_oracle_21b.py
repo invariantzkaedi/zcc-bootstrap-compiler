@@ -188,10 +188,11 @@ def write_blocked_report(out_path: Path, reason: str, details: Dict[str, Any]) -
 def collect_performance_report(
     rt: ZccVulkanComputeRuntime,
     rng: random.Random,
+    cpu_avx2_ok: bool,
     ptx_available: bool,
     vk_caps: ZccVulkanCaps,
 ) -> Dict[str, Any]:
-    """Measure real execution latency across Scalar, AVX2, PTX, and Vulkan SPIR-V (llvmpipe)."""
+    """Measure real execution latency across Scalar, AVX2, PTX, and Vulkan SPIR-V."""
     m_g, k_g, n_g = 128, 512, 128
     a_g = round_f32([rng.uniform(-1.0, 1.0) for _ in range(m_g * k_g)])
     b_g = round_f32([rng.uniform(-1.0, 1.0) for _ in range(k_g * n_g)])
@@ -217,13 +218,15 @@ def collect_performance_report(
     ]
     bench_backends: List[Tuple[str, int, Any, bool]] = [
         ("SCALAR_C99", BACKEND_SCALAR_C99, None, False),
-        ("AVX2_FMA", BACKEND_AVX2_FMA, None, False),
     ]
+    if cpu_avx2_ok:
+        bench_backends.append(("AVX2_FMA", BACKEND_AVX2_FMA, None, False))
     if ptx_available:
         bench_backends.append(("PTX_SM120", BACKEND_PTX_SM120, None, False))
     ctx_val = rt.create_context(enable_validation_layer=True)
     ctx_fast = rt.create_context(enable_validation_layer=False)
-    bench_backends.append(("VULKAN_SPV_CPU", BACKEND_VULKAN_SPV, None, True))
+    vk_dev_label = vk_caps.device_type_str.decode()
+    bench_backends.append((f"VULKAN_SPV_{vk_dev_label}", BACKEND_VULKAN_SPV, None, True))
     bench_backends.append(("VULKAN_SPV_CTX_VAL", BACKEND_VULKAN_SPV, ctx_val, True))
     bench_backends.append(("VULKAN_SPV_CTX_FAST", BACKEND_VULKAN_SPV, ctx_fast, False))
 
@@ -276,6 +279,7 @@ def main() -> int:
     parser.add_argument("--lib-path", default="/tmp/libzcc_compute_v2.so")
     parser.add_argument("--cli-path", default="/tmp/zcc-spirv")
     parser.add_argument("--report-out", default=str(REPO_ROOT / "TRACK21B_DIFFERENTIAL_REPORT.json"))
+    parser.add_argument("--perf-out", default=str(REPO_ROOT / "TRACK21B_PERFORMANCE_REPORT.json"))
     args = parser.parse_args()
 
     out_path = Path(args.report_out)
@@ -321,13 +325,16 @@ def main() -> int:
             )
 
         rng = random.Random(21022)
+        vk_dev_type = vk_caps.device_type_str.decode()
         backends = [
             ("SCALAR_C99_FP64", BACKEND_SCALAR_C99, ACCUM_FP64_REF),
             ("SCALAR_C99_FMA", BACKEND_SCALAR_C99, ACCUM_FP32_FMA),
-            ("AVX2_FMA", BACKEND_AVX2_FMA, ACCUM_FP32_FMA),
-            ("PTX_SM120", BACKEND_PTX_SM120, ACCUM_FP32_FMA),
-            ("VULKAN_SPV_CPU", BACKEND_VULKAN_SPV, ACCUM_FP32_FMA),
         ]
+        if cpu_caps.has_avx2 and cpu_caps.has_fma:
+            backends.append(("AVX2_FMA", BACKEND_AVX2_FMA, ACCUM_FP32_FMA))
+        if ptx_caps.cuda_available == 1:
+            backends.append(("PTX_SM120", BACKEND_PTX_SM120, ACCUM_FP32_FMA))
+        backends.append((f"VULKAN_SPV_{vk_dev_type}", BACKEND_VULKAN_SPV, ACCUM_FP32_FMA))
 
         cases: List[Dict[str, Any]] = []
         replay_checks: List[Dict[str, Any]] = []
@@ -576,31 +583,73 @@ def main() -> int:
         run_one("dequant_q4_k_3x512", OP_DEQUANT_Q4_K, [make_quant_desc(q4k_raw, DTYPE_Q4_K, (3, 512))], (3, 512), None, 0, q4k_ref, 1e-5, 1e-5, skip_fp64=True, record_replay_vk=True)
         run_one("matvec_q4_k_3x512_unaligned1", OP_MATVEC_Q4_K, [make_quant_desc_offset(q4k_raw, DTYPE_Q4_K, (3, 512), 1), make_f32_desc(x_512, (512,))], (3,), None, 0, oracle_matvec_quant(q4k_ref, x_512, 3, 512), 5e-4, 5e-4, record_replay_vk=True)
 
-        # 8. Vulkan capability negotiation, honest CPU identity & negative limits
+        # 8. Vulkan capability negotiation, honest CPU vs HW GPU identity & negative limits
         d_ok1, _b1 = make_f32_desc([1.0, 2.0], (2,))
         d_ok2, _b2 = make_f32_desc([3.0, 4.0], (2,))
         d_oko, _bo = make_f32_desc([0.0, 0.0], (2,))
+        is_hw_gpu = vk_caps.physical_device_type in (1, 2)
 
-        rc_gpu, j_gpu, _ = rt.exec_v2(OP_VEC_ADD_F32, [d_ok1, d_ok2], d_oko, backend=BACKEND_VULKAN_GPU, policy=POLICY_EXACT_REQUIRED)
-        edge_checks.append(
-            {
-                "check": "vulkan_gpu_rejected_on_cpu_icd_exact",
-                "rc": rc_gpu,
-                "device_type": j_gpu["vulkan_caps"]["device_type"],
-                "status": "PASS" if (rc_gpu == -11 and j_gpu["vulkan_caps"]["device_type"] == "CPU") else "FAIL",
-            }
-        )
-
+        rc_gpu, j_gpu, r_gpu = rt.exec_v2(OP_VEC_ADD_F32, [d_ok1, d_ok2], d_oko, backend=BACKEND_VULKAN_GPU, policy=POLICY_EXACT_REQUIRED)
         rc_fb, j_fb, r_fb = rt.exec_v2(OP_VEC_ADD_F32, [d_ok1, d_ok2], d_oko, backend=BACKEND_VULKAN_GPU, policy=POLICY_AUTO_FALLBACK)
-        edge_checks.append(
-            {
-                "check": "vulkan_gpu_auto_fallback_to_vulkan_spv",
-                "rc": rc_fb,
-                "executed": j_fb["backend_executed"],
-                "fallback": r_fb.base.fallback_occurred,
-                "status": "PASS" if (rc_fb == 0 and r_fb.base.backend_executed == BACKEND_VULKAN_SPV and r_fb.base.fallback_occurred == 1) else "FAIL",
-            }
-        )
+        if is_hw_gpu:
+            edge_checks.append(
+                {
+                    "check": "vulkan_gpu_executes_on_hw_icd_exact",
+                    "rc": rc_gpu,
+                    "device_type": j_gpu["vulkan_caps"]["device_type"],
+                    "executed": j_gpu["backend_executed"],
+                    "fallback": r_gpu.base.fallback_occurred,
+                    "status": "PASS" if (
+                        rc_gpu == 0
+                        and r_gpu.base.backend_executed == BACKEND_VULKAN_GPU
+                        and r_gpu.base.fallback_occurred == 0
+                        and read_f32_desc(d_oko, _bo) == [4.0, 6.0]
+                    ) else "FAIL",
+                }
+            )
+            edge_checks.append(
+                {
+                    "check": "vulkan_gpu_auto_fallback_stays_gpu_on_hw_icd",
+                    "rc": rc_fb,
+                    "executed": j_fb["backend_executed"],
+                    "fallback": r_fb.base.fallback_occurred,
+                    "status": "PASS" if (rc_fb == 0 and r_fb.base.backend_executed == BACKEND_VULKAN_GPU and r_fb.base.fallback_occurred == 0) else "FAIL",
+                }
+            )
+            cpu_clamped = ZccVulkanCaps()
+            ctypes.memmove(ctypes.byref(cpu_clamped), ctypes.byref(vk_caps), ctypes.sizeof(ZccVulkanCaps))
+            cpu_clamped.physical_device_type = VK_DEVTYPE_CPU
+            cpu_clamped.device_type_str = b"CPU"
+            rc_c_gpu, j_c_gpu, _ = rt.exec_v2(
+                OP_VEC_ADD_F32, [d_ok1, d_ok2], d_oko, backend=BACKEND_VULKAN_GPU, policy=POLICY_EXACT_REQUIRED,
+                restricted_vk_caps=cpu_clamped,
+            )
+            edge_checks.append(
+                {
+                    "check": "vulkan_gpu_rejected_when_clamped_to_cpu_exact",
+                    "rc": rc_c_gpu,
+                    "device_type": j_c_gpu["vulkan_caps"]["device_type"],
+                    "status": "PASS" if (rc_c_gpu == -11 and j_c_gpu["vulkan_caps"]["device_type"] == "CPU") else "FAIL",
+                }
+            )
+        else:
+            edge_checks.append(
+                {
+                    "check": "vulkan_gpu_rejected_on_cpu_icd_exact",
+                    "rc": rc_gpu,
+                    "device_type": j_gpu["vulkan_caps"]["device_type"],
+                    "status": "PASS" if (rc_gpu == -11 and j_gpu["vulkan_caps"]["device_type"] == "CPU") else "FAIL",
+                }
+            )
+            edge_checks.append(
+                {
+                    "check": "vulkan_gpu_auto_fallback_to_vulkan_spv",
+                    "rc": rc_fb,
+                    "executed": j_fb["backend_executed"],
+                    "fallback": r_fb.base.fallback_occurred,
+                    "status": "PASS" if (rc_fb == 0 and r_fb.base.backend_executed == BACKEND_VULKAN_SPV and r_fb.base.fallback_occurred == 1) else "FAIL",
+                }
+            )
 
         rc_fp64, j_fp64, _ = rt.exec_v2(OP_DOT_F32, [d_ok1, d_ok2], make_f32_desc([0.0], (1,))[0], backend=BACKEND_VULKAN_SPV, policy=POLICY_EXACT_REQUIRED, accum=ACCUM_FP64_REF)
         edge_checks.append(
@@ -629,11 +678,22 @@ def main() -> int:
         )
         edge_checks.append({"check": "restricted_caps_missing_validation_rejected", "rc": rc_noval, "status": "PASS" if rc_noval == -11 else "FAIL"})
 
-        rc_strict_gpu, _, _ = rt.exec_v2(
-            OP_VEC_ADD_F32, [d_ok1, d_ok2], d_oko, backend=BACKEND_VULKAN_GPU, policy=POLICY_AUTO_FALLBACK,
-            require_hardware_gpu=True,
-        )
-        edge_checks.append({"check": "vulkan_gpu_require_hw_forbids_cpu_fallback", "rc": rc_strict_gpu, "status": "PASS" if rc_strict_gpu == -11 else "FAIL"})
+        if is_hw_gpu:
+            cpu_clamped2 = ZccVulkanCaps()
+            ctypes.memmove(ctypes.byref(cpu_clamped2), ctypes.byref(vk_caps), ctypes.sizeof(ZccVulkanCaps))
+            cpu_clamped2.physical_device_type = VK_DEVTYPE_CPU
+            cpu_clamped2.device_type_str = b"CPU"
+            rc_strict_gpu, _, _ = rt.exec_v2(
+                OP_VEC_ADD_F32, [d_ok1, d_ok2], d_oko, backend=BACKEND_VULKAN_GPU, policy=POLICY_AUTO_FALLBACK,
+                require_hardware_gpu=True, restricted_vk_caps=cpu_clamped2,
+            )
+            edge_checks.append({"check": "vulkan_gpu_require_hw_forbids_cpu_fallback", "rc": rc_strict_gpu, "status": "PASS" if rc_strict_gpu == -11 else "FAIL"})
+        else:
+            rc_strict_gpu, _, _ = rt.exec_v2(
+                OP_VEC_ADD_F32, [d_ok1, d_ok2], d_oko, backend=BACKEND_VULKAN_GPU, policy=POLICY_AUTO_FALLBACK,
+                require_hardware_gpu=True,
+            )
+            edge_checks.append({"check": "vulkan_gpu_require_hw_forbids_cpu_fallback", "rc": rc_strict_gpu, "status": "PASS" if rc_strict_gpu == -11 else "FAIL"})
 
         small_push = ZccVulkanCaps()
         ctypes.memmove(ctypes.byref(small_push), ctypes.byref(vk_caps), ctypes.sizeof(ZccVulkanCaps))
@@ -757,8 +817,14 @@ def main() -> int:
             "edge_checks": edge_checks,
         }
         out_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-        perf_rep = collect_performance_report(rt, rng, bool(ptx_caps.cuda_available), vk_caps)
-        (REPO_ROOT / "TRACK21B_PERFORMANCE_REPORT.json").write_text(
+        perf_rep = collect_performance_report(
+            rt,
+            rng,
+            bool(cpu_caps.has_avx2 and cpu_caps.has_fma),
+            bool(ptx_caps.cuda_available),
+            vk_caps,
+        )
+        Path(args.perf_out).write_text(
             json.dumps(perf_rep, indent=2) + "\n", encoding="utf-8"
         )
         print(

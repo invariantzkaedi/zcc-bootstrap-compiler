@@ -33,9 +33,37 @@ static const char *op_name(uint32_t op_id) {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--self-check") == 0) {
+        for (uint32_t op = ZCC_OP_VEC_ADD_F32; op <= ZCC_OP_MATVEC_Q4_K; op++) {
+            zcc_spv_module_t m1, m2;
+            if (zcc_spirv_emit_op_kernel(op, &m1) != 0) {
+                fprintf(stderr, "FAIL self-check emit1 op=%u (%s)\n", op, op_name(op));
+                return 1;
+            }
+            if (zcc_spirv_emit_op_kernel(op, &m2) != 0) {
+                zcc_spirv_module_free(&m1);
+                fprintf(stderr, "FAIL self-check emit2 op=%u (%s)\n", op, op_name(op));
+                return 1;
+            }
+            int header_ok = (m1.words && m1.word_count >= 5U && m1.words[0] == ZCC_SPIRV_MAGIC_NUMBER &&
+                             m1.words[1] == ZCC_SPIRV_VERSION_1_0);
+            int det_ok = (m1.word_count == m2.word_count && m1.byte_size == m2.byte_size &&
+                          memcmp(m1.words, m2.words, m1.byte_size) == 0);
+            zcc_spirv_module_free(&m1);
+            zcc_spirv_module_free(&m2);
+            if (!header_ok || !det_ok) {
+                fprintf(stderr, "FAIL self-check op=%u header_ok=%d det_ok=%d\n", op, header_ok, det_ok);
+                return 1;
+            }
+        }
+        printf("ZCC_SPIRV_SELF_CHECK_OK count=13 (header+2x_determinism)\n");
+        return 0;
+    }
+
     if (argc < 3) {
         fprintf(stderr, "Usage: zcc-spirv --emit-op <op> -o <out.spv>\n"
-                        "       zcc-spirv --emit-all <dir>\n");
+                        "       zcc-spirv --emit-all <dir>\n"
+                        "       zcc-spirv --self-check\n");
         return 2;
     }
 

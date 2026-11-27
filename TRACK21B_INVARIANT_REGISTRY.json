@@ -7,18 +7,32 @@
     "ZCC-EF-0",
     "ZCC-EF-7"
   ],
-  "hardware_deferred_gates": [
+  "hardware_gates": [
     {
-      "gate_id": "T21B-GPU-NV",
-      "name": "Native Hardware NVIDIA RTX 5070 Vulkan Execution (0x10de)",
-      "status": "DEFERRED",
-      "reason": "WSL2 exposes llvmpipe CPU ICD only; native Windows unsigned executables blocked by Windows Smart App Control."
+      "gate_id": "T21B-GPU-NV-DZN",
+      "name": "WSL2 Mesa Dozen (dzn) D3D12 Bridge NVIDIA RTX 5070 Vulkan Execution (0x10de)",
+      "status": "PASS_VIA_DZN_TESTING_ICD",
+      "driver_note": "Mesa Dozen 26.0.8 SPIR-V->DXIL->D3D12 over /dev/dxg (conformanceVersion 0.0.0.0; ASan run with detect_leaks=0 for Win32 D3D12 UMD globals).",
+      "reproducer": "python3 tests/track21b/verify_hw_vulkan_dzn.py"
     },
     {
-      "gate_id": "T21B-GPU-AMD",
-      "name": "Native Hardware AMD Radeon 860M Vulkan Execution (0x1002)",
+      "gate_id": "T21B-GPU-AMD-DZN",
+      "name": "WSL2 Mesa Dozen (dzn) D3D12 Bridge AMD Radeon Graphics Vulkan Execution (0x1002)",
+      "status": "PASS_VIA_DZN_TESTING_ICD",
+      "driver_note": "Mesa Dozen 26.0.8 SPIR-V->DXIL->D3D12 over /dev/dxg (conformanceVersion 0.0.0.0; ASan run with detect_leaks=0 for Win32 D3D12 UMD globals).",
+      "reproducer": "python3 tests/track21b/verify_hw_vulkan_dzn.py"
+    },
+    {
+      "gate_id": "T21B-GPU-NV-NATIVE",
+      "name": "Native Win64 NVIDIA RTX 5070 Proprietary Vulkan ICD 1.4.303 (0x10de)",
       "status": "DEFERRED",
-      "reason": "WSL2 exposes llvmpipe CPU ICD only; native Windows unsigned executables blocked by Windows Smart App Control."
+      "reason": "Unsigned native Windows executables blocked by enforced Windows Smart App Control (VerifiedAndReputablePolicyState=1)."
+    },
+    {
+      "gate_id": "T21B-GPU-AMD-NATIVE",
+      "name": "Native Win64 AMD Radeon Proprietary Vulkan ICD 1.4.329 (0x1002)",
+      "status": "DEFERRED",
+      "reason": "Unsigned native Windows executables blocked by enforced Windows Smart App Control (VerifiedAndReputablePolicyState=1)."
     }
   ],
   "invariants": [

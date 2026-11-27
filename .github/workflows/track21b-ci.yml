@@ -1,0 +1,66 @@
+name: ZCC Track 21B — SPIR-V & Vulkan Compute CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  track21b-cpu-oracle:
+    name: "SPIR-V spirv-val + Vulkan llvmpipe + UBSan/ASan/LSan + Mutation Observatory"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Python
+        uses: actions/setup-python@v5.4.0
+        with:
+          python-version: '3.11'
+
+      - name: Install Build Toolchain, Khronos SPIR-V Tools & Mesa Vulkan (llvmpipe)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            build-essential gcc make binutils nodejs \
+            spirv-tools glslang-tools vulkan-validationlayers \
+            vulkan-tools libvulkan-dev mesa-vulkan-drivers
+
+      - name: Inspect Independent External Oracles & Vulkan Device Identity
+        run: |
+          command -v spirv-val glslangValidator vulkaninfo node
+          vulkaninfo --summary
+
+      - name: Run Full Track 21B Verification Suite
+        run: |
+          make track21b-verify
+          make track21b-spirv
+          PYTHONDONTWRITEBYTECODE=1 python3 tests/track21b/verify_hw_vulkan_dzn.py --check-only
+
+      - name: Assert Verifier Purity on Core Compiler & Track 21A Freeze
+        run: |
+          git diff --exit-code -- \
+            part0_pp.c part1.c part2.c part3.c part4.c part5.c part6_ptx.c \
+            BOOTSTRAP_BASELINES.tsv TRACK21A_* include/zcc_compute.h
+
+      - name: Upload Track 21B Verification Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: track21b-ci-evidence
+          path: |
+            TRACK21B_DIFFERENTIAL_REPORT.json
+            TRACK21B_MUTATION_REPORT.json
+            TRACK21B_PERFORMANCE_REPORT.json
+            TRACK21B_RELEASE_EVIDENCE.json
+            TRACK21B_HW_VULKAN_REPORT.json

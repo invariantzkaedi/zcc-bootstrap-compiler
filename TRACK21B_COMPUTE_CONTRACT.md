@@ -15,11 +15,12 @@
    - `FAIL`: Predefined invariant or numerical bound violated.
    - `BLOCKED`: Required external independent oracle (`spirv-val`, `VK_LAYER_KHRONOS_validation`, or `libvulkan.so.1`) is missing or policy-blocked on the host. Missing external validator tools NEVER produce `PASS`.
    - `UNKNOWN`: Unregistered anomaly or novel fault signature preserved without guessing.
-   - `DEFERRED`: Explicitly out-of-scope or unverified hardware target (`T21B-GPU-NV`, `T21B-GPU-AMD`).
+   - `DEFERRED`: Explicitly out-of-scope or unverified native Windows target (`T21B-GPU-NV-NATIVE`, `T21B-GPU-AMD-NATIVE`) blocked by Smart App Control.
 2. **Physical Device Identity Honesty:**
    - Software/CPU Vulkan implementations such as Mesa `llvmpipe` (`VK_PHYSICAL_DEVICE_TYPE_CPU = 4`, `vendor_id = 0x10005`) MUST always be identified as `device_type = "CPU"`.
-   - Emulated or CPU-executed Vulkan runs (`llvmpipe`) MUST NEVER satisfy hardware-specific GPU gates (`T21B-GPU-NV`, `T21B-GPU-AMD`).
-   - Requesting `ZCC_BACKEND_VULKAN_GPU` (`5`) on a host with only `VK_PHYSICAL_DEVICE_TYPE_CPU` MUST fail closed with `ZCC_STATUS_ERR_UNSUPPORTED_HW` under `ZCC_POLICY_EXACT_REQUIRED`, and only fall back under `ZCC_POLICY_AUTO_FALLBACK` with `fallback_occurred = 1` and explicit `selection_reason`.
+   - Emulated or CPU-executed Vulkan runs (`llvmpipe`) MUST NEVER satisfy hardware-specific GPU gates (`T21B-GPU-NV-DZN`, `T21B-GPU-AMD-DZN`, `T21B-GPU-NV-NATIVE`, `T21B-GPU-AMD-NATIVE`).
+   - Hardware Vulkan verification over Mesa Dozen (`dzn`) -> D3D12 (`/dev/dxg`) MUST explicitly record the Dozen bridge identity, `conformanceVersion 0.0.0.0`, and never claim native proprietary Win64 ICD signoff.
+   - Requesting `ZCC_BACKEND_VULKAN_GPU` (`5`) on a host with only `VK_PHYSICAL_DEVICE_TYPE_CPU` MUST fail closed with `ZCC_STATUS_ERR_UNSUPPORTED_HW` under `ZCC_POLICY_EXACT_REQUIRED`, and only fall back under `ZCC_POLICY_AUTO_FALLBACK` with `fallback_occurred = 1` and explicit `selection_reason` (and NEVER fall back to CPU when `require_hardware_gpu = 1`).
 3. **Zero Core Bootstrap Drift:**
    - SPIR-V compiler emission (`src/part6_spirv.c`) integrates strictly via `PASSES` in `Makefile`, dedicated CLI (`zcc-spirv`), and shared compute runtime (`libzcc_compute_v2.so`). `PARTS` (`part0_pp.c..part6_ptx.c`) and `BOOTSTRAP_BASELINES.tsv` remain byte-for-byte unchanged.
 
@@ -60,4 +61,4 @@
 
 - All `13` compute operations share Track 21A's `(atol, rtol, max_ulp)` policy with `ZCC_ACCUM_FP32_FMA` / `ZCC_ACCUM_STRICT_FP32` semantics (explicit `FP64_REF` accumulation stays `SCALAR_C99`-exclusive because SPIR-V `1.0` baseline targets `Shader` without `Float64` capability — requesting `ZCC_ACCUM_FP64_REF` on `VULKAN_SPV` under `EXACT_REQUIRED` rejects with `ZCC_STATUS_ERR_UNSUPPORTED_HW`).
 - Non-contiguous strides, unaligned host buffers (`+1/+4/+8/+12`), prime/boundary shapes, extreme magnitudes, `NaN`/`+/-Inf` propagation (tested cleanly under IEEE `F32` SPIR-V semantics), invalid shapes/strides/ops/aliasing/`READONLY`, and OOM hooks fail identically to Track 21A.
-- Hardware-specific GPU Vulkan execution gates (`T21B-GPU-NV`, `T21B-GPU-AMD`) remain cleanly separated and `DEFERRED` on hosts where Smart App Control / absent WSL2 GPU Vulkan ICD blocks execution.
+- Hardware GPU Vulkan verification via WSL2 `/dev/dxg` + Mesa Dozen (`dzn`) (`0x10de` RTX 5070 `DISCRETE_GPU` and `0x1002` AMD Radeon `INTEGRATED_GPU`) is recorded in `TRACK21B_HW_VULKAN_REPORT.json`; direct unsigned Win64 native proprietary ICDs (`T21B-GPU-NV-NATIVE`, `T21B-GPU-AMD-NATIVE`) remain cleanly separated and `DEFERRED` under Smart App Control.

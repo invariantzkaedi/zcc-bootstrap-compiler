@@ -753,6 +753,7 @@ yul_*.json
 !/TRACK21B_DIFFERENTIAL_REPORT.json
 !/TRACK21B_MUTATION_REPORT.json
 !/TRACK21B_PERFORMANCE_REPORT.json
+!/TRACK21B_HW_VULKAN_REPORT.json
 /*.jsonl
 /*_results.tsv
 /*_ledger.tsv

@@ -2082,7 +2082,7 @@ track21a-verify: zcc
 	python3 tools/verify_track21a_release.py
 
 # ─── Track 21B — Portable Verified SPIR-V & Vulkan Compute Backend ──────────
-.PHONY: track21b-build track21b-spirv track21b-c-suite track21b-diff track21b-mutate track21b-verify
+.PHONY: track21b-build track21b-spirv track21b-c-suite track21b-diff track21b-mutate track21b-verify track21b-hw-dzn
 
 track21b-build:
 	bash tests/track21b/build_runtime.sh
@@ -2107,6 +2107,9 @@ track21b-mutate: zcc track21b-build
 track21b-verify: zcc track21b-build
 	PYTHONDONTWRITEBYTECODE=1 python3 tools/verify_track21b_release.py --self-test
 	PYTHONDONTWRITEBYTECODE=1 python3 tools/verify_track21b_release.py
+
+track21b-hw-dzn: track21b-build
+	PYTHONDONTWRITEBYTECODE=1 python3 tests/track21b/verify_hw_vulkan_dzn.py
 
 
 

@@ -75,12 +75,14 @@ static void test_device_caps_and_negotiation(void) {
            (vkc.api_version >> 22) & 0x7fU, (vkc.api_version >> 12) & 0x3ffU, vkc.api_version & 0xfffU,
            vkc.max_push_constants_size, (unsigned long long)vkc.max_storage_buffer_range);
 
-    T_CHECK(st == ZCC_STATUS_OK && vkc.vulkan_available == 1U, "Vulkan loader + llvmpipe available");
+    T_CHECK(st == ZCC_STATUS_OK && vkc.vulkan_available == 1U, "Vulkan loader + ICD available");
     T_CHECK(vkc.validation_layer_available == 1U && vkc.validation_layer_enabled == 1U, "VK_LAYER_KHRONOS_validation active");
-    T_CHECK(vkc.physical_device_type == ZCC_VK_DEVTYPE_CPU && strcmp(vkc.device_type_str, "CPU") == 0,
-            "WSL2 llvmpipe explicitly identified as CPU deviceType");
+    int is_hw_gpu = (vkc.physical_device_type == ZCC_VK_DEVTYPE_DISCRETE_GPU ||
+                     vkc.physical_device_type == ZCC_VK_DEVTYPE_INTEGRATED_GPU);
+    int devtype_ok = (strcmp(vkc.device_type_str, zcc_vulkan_device_type_str(vkc.physical_device_type)) == 0) &&
+                     (vkc.physical_device_type == ZCC_VK_DEVTYPE_CPU || is_hw_gpu);
+    T_CHECK(devtype_ok, "Vulkan physical deviceType matches reported device_type_str");
 
-    /* CPU llvmpipe must reject ZCC_BACKEND_VULKAN_GPU under EXACT_REQUIRED */
     float a[4] = {1.0f, 2.0f, 3.0f, 4.0f};
     float b[4] = {2.0f, 3.0f, 4.0f, 5.0f};
     float out[4] = {0};
@@ -96,15 +98,42 @@ static void test_device_caps_and_negotiation(void) {
     opts.base.selection_policy = ZCC_POLICY_EXACT_REQUIRED;
     zcc_compute_v2_receipt_t rec;
     st = zcc_compute_exec_v2(ZCC_OP_VEC_ADD_F32, ins, 2, &dout, &opts, &rec);
-    T_CHECK(st == ZCC_STATUS_ERR_UNSUPPORTED_HW, "VULKAN_GPU rejected fail-closed on CPU llvmpipe");
-    T_CHECK(rec.base.fallback_occurred == 0U && strcmp(rec.v2_verification_status, "UNVERIFIED_RUNTIME_ONLY") == 0,
-            "Rejected GPU request records no silent fallback and UNVERIFIED_RUNTIME_ONLY");
+    if (is_hw_gpu) {
+        T_CHECK(st == ZCC_STATUS_OK && rec.base.backend_executed == ZCC_BACKEND_VULKAN_GPU,
+                "VULKAN_GPU executes directly on hardware GPU ICD");
+        T_CHECK(rec.base.fallback_occurred == 0U && strcmp(rec.v2_verification_status, "UNVERIFIED_RUNTIME_ONLY") == 0,
+                "Hardware GPU request records no fallback and UNVERIFIED_RUNTIME_ONLY");
+        T_CHECK(fabsf(out[0] - 3.0f) < 1e-6f && fabsf(out[3] - 9.0f) < 1e-6f,
+                "Hardware VULKAN_GPU produces exact VEC_ADD_F32 result");
 
-    /* With AUTO_FALLBACK, VULKAN_GPU falls back cleanly to VULKAN_SPV and records fallback */
-    opts.base.selection_policy = ZCC_POLICY_AUTO_FALLBACK;
-    st = zcc_compute_exec_v2(ZCC_OP_VEC_ADD_F32, ins, 2, &dout, &opts, &rec);
-    T_CHECK(st == ZCC_STATUS_OK && rec.base.fallback_occurred == 1U && rec.base.backend_executed == ZCC_BACKEND_VULKAN_SPV,
-            "AUTO_FALLBACK records explicit fallback from VULKAN_GPU to VULKAN_SPV");
+        opts.base.selection_policy = ZCC_POLICY_AUTO_FALLBACK;
+        st = zcc_compute_exec_v2(ZCC_OP_VEC_ADD_F32, ins, 2, &dout, &opts, &rec);
+        T_CHECK(st == ZCC_STATUS_OK && rec.base.fallback_occurred == 0U && rec.base.backend_executed == ZCC_BACKEND_VULKAN_GPU,
+                "AUTO_FALLBACK stays on VULKAN_GPU when hardware GPU is active");
+
+        zcc_vulkan_caps_t mock_cpu = vkc;
+        mock_cpu.physical_device_type = ZCC_VK_DEVTYPE_CPU;
+        snprintf(mock_cpu.device_type_str, sizeof(mock_cpu.device_type_str), "CPU");
+        opts.base.selection_policy = ZCC_POLICY_EXACT_REQUIRED;
+        st = zcc_compute_exec_v2_with_caps(ZCC_OP_VEC_ADD_F32, ins, 2, &dout, &opts, NULL, &mock_cpu, &rec);
+        T_CHECK(st == ZCC_STATUS_ERR_UNSUPPORTED_HW && rec.base.fallback_occurred == 0U,
+                "CPU-clamped VULKAN_GPU rejected fail-closed under EXACT_REQUIRED");
+        opts.base.selection_policy = ZCC_POLICY_AUTO_FALLBACK;
+        st = zcc_compute_exec_v2_with_caps(ZCC_OP_VEC_ADD_F32, ins, 2, &dout, &opts, NULL, &mock_cpu, &rec);
+        T_CHECK(st == ZCC_STATUS_OK && rec.base.fallback_occurred == 1U && rec.base.backend_executed == ZCC_BACKEND_VULKAN_SPV,
+                "CPU-clamped AUTO_FALLBACK records explicit fallback to VULKAN_SPV");
+    } else {
+        /* CPU llvmpipe must reject ZCC_BACKEND_VULKAN_GPU under EXACT_REQUIRED */
+        T_CHECK(st == ZCC_STATUS_ERR_UNSUPPORTED_HW, "VULKAN_GPU rejected fail-closed on CPU ICD");
+        T_CHECK(rec.base.fallback_occurred == 0U && strcmp(rec.v2_verification_status, "UNVERIFIED_RUNTIME_ONLY") == 0,
+                "Rejected GPU request records no silent fallback and UNVERIFIED_RUNTIME_ONLY");
+
+        /* With AUTO_FALLBACK, VULKAN_GPU falls back cleanly to VULKAN_SPV and records fallback */
+        opts.base.selection_policy = ZCC_POLICY_AUTO_FALLBACK;
+        st = zcc_compute_exec_v2(ZCC_OP_VEC_ADD_F32, ins, 2, &dout, &opts, &rec);
+        T_CHECK(st == ZCC_STATUS_OK && rec.base.fallback_occurred == 1U && rec.base.backend_executed == ZCC_BACKEND_VULKAN_SPV,
+                "AUTO_FALLBACK records explicit fallback from VULKAN_GPU to VULKAN_SPV");
+    }
 
     /* Restricted vk_caps controls */
     zcc_vulkan_caps_t mock_unavail = vkc;
@@ -150,7 +179,25 @@ static void test_device_caps_and_negotiation(void) {
     T_CHECK(st == ZCC_STATUS_ERR_BACKEND_RUNTIME, "Corrupted SPIR-V payload fails closed in vkCreateShaderModule");
 }
 
-static void test_all_13_ops_and_replay(int run_ptx) {
+static zcc_status_t exec_maybe_ctx(
+    zcc_vulkan_ctx_t *ctx,
+    zcc_op_t op,
+    const zcc_tensor_desc_t *inputs,
+    uint32_t num_inputs,
+    zcc_tensor_desc_t *output,
+    const zcc_vulkan_exec_options_t *opt,
+    zcc_compute_v2_receipt_t *rec
+) {
+    return ctx ? zcc_vulkan_ctx_exec(ctx, op, inputs, num_inputs, output, opt, rec)
+               : zcc_compute_exec_v2(op, inputs, num_inputs, output, opt, rec);
+}
+
+static void test_all_13_ops_and_replay(int run_ptx, int prefer_ctx) {
+    zcc_vulkan_ctx_t *shared_ctx = NULL;
+    if (prefer_ctx) {
+        T_CHECK(zcc_vulkan_ctx_create(1, 0U, &shared_ctx) == ZCC_STATUS_OK && shared_ctx != NULL,
+                "shared ctx create validated PASS");
+    }
     float vec_a[17], vec_b[17], vec_c[17];
     for (int i = 0; i < 17; i++) {
         vec_a[i] = (float)(i + 1) * 0.25f - 1.5f;
@@ -188,7 +235,7 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     for (zcc_op_t op = ZCC_OP_VEC_ADD_F32; op <= ZCC_OP_VEC_FMA_F32; op++) {
         uint32_t nin = (op == ZCC_OP_VEC_FMA_F32) ? 3U : 2U;
         T_CHECK(zcc_compute_exec_v2(op, ins3, nin, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "scalar vec op");
-        T_CHECK(zcc_compute_exec_v2(op, ins3, nin, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk vec op");
+        T_CHECK(exec_maybe_ctx(shared_ctx, op, ins3, nin, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk vec op");
         T_CHECK(r_vk.sync_barrier_count == 2U && r_vk.validation_error_count == 0U, "vk sync & validation");
         T_CHECK(compare_arr_f32(o_vk, o_ref, 17U, 1e-6f, 1e-6f), "vk vec matches scalar");
         T_CHECK(zcc_receipt_v2_verify_canonical(&r_vk, hkey, sizeof(hkey)) == ZCC_STATUS_OK, "v2 hmac receipt verifies");
@@ -198,7 +245,7 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     zcc_tensor_desc_init_1d(&dout_ref, ZCC_DTYPE_F32, 1, o_ref, 4U, 1, ZCC_OWNER_BORROWED_HOST);
     zcc_tensor_desc_init_1d(&dout_vk, ZCC_DTYPE_F32, 1, o_vk, 4U, 1, ZCC_OWNER_BORROWED_HOST);
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_DOT_F32, ins3, 2U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "scalar dot");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_DOT_F32, ins3, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk dot");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_DOT_F32, ins3, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk dot");
     T_CHECK(compare_arr_f32(o_vk, o_ref, 1U, 1e-4f, 1e-4f), "vk dot matches scalar");
 
     /* Op 5: GEMM [3, 5] x [5, 4] */
@@ -211,7 +258,7 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     zcc_tensor_desc_init_2d(&dout_vk, ZCC_DTYPE_F32, 3, 4, 0, o_vk, 12U * 4U, 1, ZCC_OWNER_BORROWED_HOST);
     zcc_tensor_desc_t ins_g[2] = {da, db};
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_GEMM_F32, ins_g, 2U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "scalar gemm");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_GEMM_F32, ins_g, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk gemm");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_GEMM_F32, ins_g, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk gemm");
     T_CHECK(compare_arr_f32(o_vk, o_ref, 12U, 1e-4f, 1e-4f), "vk gemm matches scalar");
 
     /* Op 6 & 7: RMSNORM + SOFTMAX [3, 7] */
@@ -224,11 +271,11 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     zcc_tensor_desc_init_2d(&dout_vk, ZCC_DTYPE_F32, 3, 7, 0, o_vk, 21U * 4U, 1, ZCC_OWNER_BORROWED_HOST);
     zcc_tensor_desc_t ins_r[2] = {da, db};
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_RMSNORM_F32, ins_r, 2U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "scalar rmsnorm");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_RMSNORM_F32, ins_r, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk rmsnorm");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_RMSNORM_F32, ins_r, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk rmsnorm");
     T_CHECK(compare_arr_f32(o_vk, o_ref, 21U, 1e-5f, 1e-4f), "vk rmsnorm matches scalar");
 
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_SOFTMAX_F32, &da, 1U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "scalar softmax");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_SOFTMAX_F32, &da, 1U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk softmax");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_SOFTMAX_F32, &da, 1U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk softmax");
     T_CHECK(compare_arr_f32(o_vk, o_ref, 21U, 1e-5f, 1e-4f), "vk softmax matches scalar");
 
     /* Strided GEMM with canary gap preservation + NaN row propagation on SOFTMAX */
@@ -242,7 +289,7 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     zcc_tensor_desc_init_2d(&dout_vk, ZCC_DTYPE_F32, 3, 4, 9 * 4, gm_vo, sizeof(gm_vo), 4, ZCC_OWNER_BORROWED_HOST);
     zcc_tensor_desc_t ins_sg[2] = {da, db};
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_GEMM_F32, ins_sg, 2U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "sc strided gemm");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_GEMM_F32, ins_sg, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk strided gemm");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_GEMM_F32, ins_sg, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk strided gemm");
     int sg_ok = 1;
     for (int rr = 0; rr < 3; rr++) {
         for (int cc = 0; cc < 9; cc++) {
@@ -258,7 +305,7 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     zcc_tensor_desc_init_2d(&dout_ref, ZCC_DTYPE_F32, 3, 7, 0, o_ref, 21U * 4U, 1, ZCC_OWNER_BORROWED_HOST);
     zcc_tensor_desc_init_2d(&dout_vk, ZCC_DTYPE_F32, 3, 7, 0, o_vk, 21U * 4U, 1, ZCC_OWNER_BORROWED_HOST);
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_SOFTMAX_F32, &da, 1U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "sc softmax nan");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_SOFTMAX_F32, &da, 1U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk softmax nan");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_SOFTMAX_F32, &da, 1U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk softmax nan");
     int nan_ok = 1;
     for (int j = 0; j < 7; j++) if (!isnan(o_vk[j])) nan_ok = 0;
     for (int j = 7; j < 21; j++) if (!compare_arr_f32(&o_vk[j], &o_ref[j], 1U, 1e-5f, 1e-4f)) nan_ok = 0;
@@ -290,7 +337,7 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     zcc_tensor_desc_init_2d(&dout_ref, ZCC_DTYPE_F32, 1, 32, 0, o_ref, 32U * 4U, 1, ZCC_OWNER_BORROWED_HOST);
     zcc_tensor_desc_init_2d(&dout_vk, ZCC_DTYPE_F32, 1, 32, 0, o_vk, 32U * 4U, 1, ZCC_OWNER_BORROWED_HOST);
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_DEQUANT_Q8_0, &da, 1U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "sc q8_0");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_DEQUANT_Q8_0, &da, 1U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk q8_0 unaligned+1");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_DEQUANT_Q8_0, &da, 1U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk q8_0 unaligned+1");
     T_CHECK(compare_arr_f32(o_vk, o_ref, 32U, 1e-6f, 1e-5f), "vk q8_0 unaligned+1 matches scalar");
 
     zcc_tensor_desc_init_1d(&db, ZCC_DTYPE_F32, 32, xv, 32U * 4U, 1, ZCC_OWNER_BORROWED_HOST);
@@ -298,7 +345,7 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     zcc_tensor_desc_init_1d(&dout_vk, ZCC_DTYPE_F32, 1, o_vk, 4U, 1, ZCC_OWNER_BORROWED_HOST);
     zcc_tensor_desc_t ins_q[2] = {da, db};
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_MATVEC_Q8_0, ins_q, 2U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "sc mv q8_0");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_MATVEC_Q8_0, ins_q, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk mv q8_0");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_MATVEC_Q8_0, ins_q, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk mv q8_0");
     T_CHECK(compare_arr_f32(o_vk, o_ref, 1U, 5e-4f, 5e-4f), "vk mv q8_0 matches scalar");
 
     /* Q4_0 [1, 32] */
@@ -306,14 +353,14 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     zcc_tensor_desc_init_2d(&dout_ref, ZCC_DTYPE_F32, 1, 32, 0, o_ref, 32U * 4U, 1, ZCC_OWNER_BORROWED_HOST);
     zcc_tensor_desc_init_2d(&dout_vk, ZCC_DTYPE_F32, 1, 32, 0, o_vk, 32U * 4U, 1, ZCC_OWNER_BORROWED_HOST);
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_DEQUANT_Q4_0, &da, 1U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "sc q4_0");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_DEQUANT_Q4_0, &da, 1U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk q4_0");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_DEQUANT_Q4_0, &da, 1U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk q4_0");
     T_CHECK(compare_arr_f32(o_vk, o_ref, 32U, 1e-6f, 1e-5f), "vk q4_0 matches scalar");
 
     ins_q[0] = da;
     zcc_tensor_desc_init_1d(&dout_ref, ZCC_DTYPE_F32, 1, o_ref, 4U, 1, ZCC_OWNER_BORROWED_HOST);
     zcc_tensor_desc_init_1d(&dout_vk, ZCC_DTYPE_F32, 1, o_vk, 4U, 1, ZCC_OWNER_BORROWED_HOST);
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_MATVEC_Q4_0, ins_q, 2U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "sc mv q4_0");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_MATVEC_Q4_0, ins_q, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk mv q4_0");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_MATVEC_Q4_0, ins_q, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk mv q4_0");
     T_CHECK(compare_arr_f32(o_vk, o_ref, 1U, 5e-4f, 5e-4f), "vk mv q4_0 matches scalar");
 
     /* Q4_K [1, 256] + Deterministic Replay */
@@ -321,7 +368,7 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     zcc_tensor_desc_init_2d(&dout_ref, ZCC_DTYPE_F32, 1, 256, 0, o_ref, 256U * 4U, 1, ZCC_OWNER_BORROWED_HOST);
     zcc_tensor_desc_init_2d(&dout_vk, ZCC_DTYPE_F32, 1, 256, 0, o_vk, 256U * 4U, 1, ZCC_OWNER_BORROWED_HOST);
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_DEQUANT_Q4_K, &da, 1U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "sc q4_k");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_DEQUANT_Q4_K, &da, 1U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk q4_k unaligned+1");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_DEQUANT_Q4_K, &da, 1U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk q4_k unaligned+1");
     T_CHECK(compare_arr_f32(o_vk, o_ref, 256U, 1e-6f, 1e-5f), "vk q4_k matches scalar");
 
     zcc_tensor_desc_init_1d(&db, ZCC_DTYPE_F32, 256, xv, sizeof(xv), 1, ZCC_OWNER_BORROWED_HOST);
@@ -331,8 +378,8 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     zcc_tensor_desc_init_1d(&dout_vk2, ZCC_DTYPE_F32, 1, o_vk2, 4U, 1, ZCC_OWNER_BORROWED_HOST);
     ins_q[0] = da; ins_q[1] = db;
     T_CHECK(zcc_compute_exec_v2(ZCC_OP_MATVEC_Q4_K, ins_q, 2U, &dout_ref, &opt_sc, &r_sc) == ZCC_STATUS_OK, "sc mv q4_k");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_MATVEC_Q4_K, ins_q, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk mv q4_k #1");
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_MATVEC_Q4_K, ins_q, 2U, &dout_vk2, &opt_vk, &r_vk2) == ZCC_STATUS_OK, "vk mv q4_k #2");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_MATVEC_Q4_K, ins_q, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_OK, "vk mv q4_k #1");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_MATVEC_Q4_K, ins_q, 2U, &dout_vk2, &opt_vk, &r_vk2) == ZCC_STATUS_OK, "vk mv q4_k #2");
     T_CHECK(compare_arr_f32(o_vk, o_ref, 1U, 5e-4f, 5e-4f), "vk mv q4_k matches scalar");
     T_CHECK(strcmp(r_vk.base.output_buffer_sha256, r_vk2.base.output_buffer_sha256) == 0 &&
             strcmp(r_vk.spirv_module_sha256_hex, r_vk2.spirv_module_sha256_hex) == 0,
@@ -345,7 +392,9 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     T_CHECK(zcc_receipt_v2_verify_canonical(&tamp, hkey, sizeof(hkey)) == ZCC_STATUS_ERR_RECEIPT_TAMPER, "self-certified v2 rejected");
     tamp = r_vk; tamp.spirv_module_sha256_hex[0] ^= 1;
     T_CHECK(zcc_receipt_v2_verify_canonical(&tamp, hkey, sizeof(hkey)) == ZCC_STATUS_ERR_RECEIPT_TAMPER, "tampered spv hash rejected");
-    tamp = r_vk; snprintf(tamp.vulkan_caps.device_type_str, sizeof(tamp.vulkan_caps.device_type_str), "DISCRETE_GPU");
+    tamp = r_vk;
+    snprintf(tamp.vulkan_caps.device_type_str, sizeof(tamp.vulkan_caps.device_type_str),
+             (strcmp(r_vk.vulkan_caps.device_type_str, "DISCRETE_GPU") == 0) ? "CPU" : "DISCRETE_GPU");
     T_CHECK(zcc_receipt_v2_verify_canonical(&tamp, hkey, sizeof(hkey)) == ZCC_STATUS_ERR_RECEIPT_TAMPER, "spoofed device_type_str rejected");
     tamp = r_vk; tamp.sync_barrier_count = 0U;
     T_CHECK(zcc_receipt_v2_verify_canonical(&tamp, hkey, sizeof(hkey)) == ZCC_STATUS_ERR_RECEIPT_TAMPER, "tampered barrier count rejected");
@@ -354,31 +403,56 @@ static void test_all_13_ops_and_replay(int run_ptx) {
     g_oom_after = 0U; g_oom_calls = 0U;
     opt_vk.base.alloc_fn = mock_oom_alloc;
     opt_vk.base.free_fn = mock_oom_free;
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_MATVEC_Q4_K, ins_q, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_ERR_OOM, "OOM hook clean");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_MATVEC_Q4_K, ins_q, 2U, &dout_vk, &opt_vk, &r_vk) == ZCC_STATUS_ERR_OOM, "OOM hook clean");
 
     zcc_vulkan_exec_options_t bad_abi = opt_vk;
     bad_abi.abi_v2_version = 0x9999U;
-    T_CHECK(zcc_compute_exec_v2(ZCC_OP_MATVEC_Q4_K, ins_q, 2U, &dout_vk, &bad_abi, &r_vk) == ZCC_STATUS_ERR_ABI_MISMATCH, "ABI mismatch rejected");
+    T_CHECK(exec_maybe_ctx(shared_ctx, ZCC_OP_MATVEC_Q4_K, ins_q, 2U, &dout_vk, &bad_abi, &r_vk) == ZCC_STATUS_ERR_ABI_MISMATCH, "ABI mismatch rejected");
 
-    /* Optional cross-check PTX vs Vulkan on same op when non-ASan */
+    /* Optional cross-check PTX vs Vulkan on same op when non-ASan and CUDA GPU present */
     if (run_ptx) {
-        zcc_vulkan_exec_options_t opt_ptx;
-        zcc_vulkan_exec_options_init(&opt_ptx);
-        opt_ptx.base.requested_backend = ZCC_BACKEND_PTX_SM120;
-        opt_ptx.base.selection_policy = ZCC_POLICY_EXACT_REQUIRED;
-        float o_ptx[4] = {0};
-        zcc_tensor_desc_t dout_ptx;
-        zcc_tensor_desc_init_1d(&dout_ptx, ZCC_DTYPE_F32, 1, o_ptx, sizeof(o_ptx), 1, ZCC_OWNER_BORROWED_HOST);
-        zcc_status_t st_ptx = zcc_compute_exec_v2(ZCC_OP_MATVEC_Q4_K, ins_q, 2U, &dout_ptx, &opt_ptx, &r_sc);
-        T_CHECK(st_ptx == ZCC_STATUS_OK && compare_arr_f32(o_ptx, o_vk, 1U, 5e-4f, 5e-4f), "PTX matches Vulkan Q4_K matvec");
+        zcc_ptx_caps_t ptxc;
+        memset(&ptxc, 0, sizeof(ptxc));
+        zcc_probe_ptx_caps(&ptxc, NULL);
+        if (ptxc.cuda_available == 1U) {
+            zcc_vulkan_exec_options_t opt_ptx;
+            zcc_vulkan_exec_options_init(&opt_ptx);
+            opt_ptx.base.requested_backend = ZCC_BACKEND_PTX_SM120;
+            opt_ptx.base.selection_policy = ZCC_POLICY_EXACT_REQUIRED;
+            float o_ptx[4] = {0};
+            zcc_tensor_desc_t dout_ptx;
+            zcc_tensor_desc_init_1d(&dout_ptx, ZCC_DTYPE_F32, 1, o_ptx, sizeof(o_ptx), 1, ZCC_OWNER_BORROWED_HOST);
+            zcc_status_t st_ptx = zcc_compute_exec_v2(ZCC_OP_MATVEC_Q4_K, ins_q, 2U, &dout_ptx, &opt_ptx, &r_sc);
+            T_CHECK(st_ptx == ZCC_STATUS_OK && compare_arr_f32(o_ptx, o_vk, 1U, 5e-4f, 5e-4f), "PTX matches Vulkan Q4_K matvec");
+        } else {
+            printf("PTX_CROSS_CHECK_SKIP cuda_available=0\n");
+        }
     }
+    if (shared_ctx) zcc_vulkan_ctx_destroy(shared_ctx);
 }
 
 static void test_persistent_vulkan_context(void) {
+    zcc_vulkan_caps_t live_vk;
+    T_CHECK(zcc_probe_vulkan_caps(&live_vk, 1) == ZCC_STATUS_OK && live_vk.vulkan_available == 1U, "probe live vk before ctx");
+    int is_hw_gpu = (live_vk.physical_device_type == ZCC_VK_DEVTYPE_DISCRETE_GPU ||
+                     live_vk.physical_device_type == ZCC_VK_DEVTYPE_INTEGRATED_GPU);
+
     zcc_vulkan_ctx_t *bad_ctx = NULL;
     T_CHECK(zcc_vulkan_ctx_create(1, 0U, NULL) == ZCC_STATUS_ERR_NULL_PTR, "ctx null out rejected");
-    T_CHECK(zcc_vulkan_ctx_create(1, 1U, &bad_ctx) == ZCC_STATUS_ERR_UNSUPPORTED_HW && bad_ctx == NULL,
-            "ctx require_hardware_gpu rejected on CPU ICD");
+    if (is_hw_gpu) {
+        zcc_vulkan_ctx_t *hw_ctx = NULL;
+        zcc_vulkan_caps_t hcaps;
+        T_CHECK(zcc_vulkan_ctx_create(1, 1U, &hw_ctx) == ZCC_STATUS_OK && hw_ctx != NULL,
+                "ctx require_hardware_gpu succeeds on HW GPU ICD");
+        T_CHECK(zcc_vulkan_ctx_get_caps(hw_ctx, &hcaps) == ZCC_STATUS_OK &&
+                hcaps.physical_device_type == live_vk.physical_device_type &&
+                hcaps.validation_layer_enabled == 1U,
+                "hw ctx caps match live HW GPU + validation");
+        zcc_vulkan_ctx_destroy(hw_ctx);
+    } else {
+        T_CHECK(zcc_vulkan_ctx_create(1, 1U, &bad_ctx) == ZCC_STATUS_ERR_UNSUPPORTED_HW && bad_ctx == NULL,
+                "ctx require_hardware_gpu rejected on CPU ICD");
+    }
 
     zcc_vulkan_caps_t ccaps;
     T_CHECK(zcc_vulkan_ctx_get_caps(NULL, &ccaps) == ZCC_STATUS_ERR_INVALID_ARG, "ctx get_caps NULL rejected");
@@ -386,9 +460,9 @@ static void test_persistent_vulkan_context(void) {
     zcc_vulkan_ctx_t *ctx = NULL;
     T_CHECK(zcc_vulkan_ctx_create(1, 0U, &ctx) == ZCC_STATUS_OK && ctx != NULL, "ctx create validated PASS");
     T_CHECK(zcc_vulkan_ctx_get_caps(ctx, &ccaps) == ZCC_STATUS_OK &&
-            ccaps.physical_device_type == ZCC_VK_DEVTYPE_CPU &&
+            ccaps.physical_device_type == live_vk.physical_device_type &&
             ccaps.validation_layer_enabled == 1U,
-            "ctx caps expose CPU + validation");
+            "ctx caps expose active deviceType + validation");
 
     const uint8_t hkey[8] = {0x4B, 0x45, 0x59, 0x21, 0x32, 0x31, 0x42, 0x02};
     zcc_vulkan_exec_options_t opt;
@@ -530,6 +604,8 @@ static int run_benchmarks(const char *out_path) {
 
     uint32_t backends[4] = {ZCC_BACKEND_SCALAR_C99, ZCC_BACKEND_AVX2_FMA, ZCC_BACKEND_PTX_SM120, ZCC_BACKEND_VULKAN_SPV};
     FILE *fp = out_path ? fopen(out_path, "w") : NULL;
+    zcc_cpu_caps_t cpuc; zcc_probe_cpu_caps(&cpuc);
+    zcc_ptx_caps_t ptxc; memset(&ptxc, 0, sizeof(ptxc)); zcc_probe_ptx_caps(&ptxc, NULL);
     zcc_vulkan_caps_t vkc; zcc_probe_vulkan_caps(&vkc, 0);
     zcc_vulkan_ctx_t *bench_ctx = NULL;
     if (zcc_vulkan_ctx_create(0, 0U, &bench_ctx) != ZCC_STATUS_OK || !bench_ctx) {
@@ -539,15 +615,17 @@ static int run_benchmarks(const char *out_path) {
     }
     if (fp) {
         fprintf(fp, "{\n  \"schema_version\": \"track21b.performance.v1\",\n"
-                    "  \"hardware\": {\"vulkan_device\": \"%s\", \"vulkan_device_type\": \"%s\", \"vendor_id\": \"0x%04x\"},\n"
-                    "  \"notes\": \"Full dispatch + buffer SHA-256 + HtoD/DtoH (PTX) + stateless Vulkan vs persistent zcc_vulkan_ctx_t (llvmpipe CPU ICD).\",\n"
-                    "  \"results\": [\n", vkc.device_name, vkc.device_type_str, vkc.vendor_id);
+                    "  \"hardware\": {\"vulkan_device\": \"%s\", \"vulkan_device_type\": \"%s\", \"vendor_id\": \"0x%04x\", \"ptx_available\": %u},\n"
+                    "  \"notes\": \"Full dispatch + buffer SHA-256 + HtoD/DtoH (PTX when available) + stateless Vulkan vs persistent zcc_vulkan_ctx_t (%s %s).\",\n"
+                    "  \"results\": [\n", vkc.device_name, vkc.device_type_str, vkc.vendor_id, ptxc.cuda_available, vkc.device_name, vkc.device_type_str);
     }
 
     int first = 1;
     for (int bi = 0; bi < 5; bi++) {
         int use_ctx = (bi == 4);
         uint32_t b_id = use_ctx ? ZCC_BACKEND_VULKAN_SPV : backends[bi];
+        if (!use_ctx && b_id == ZCC_BACKEND_AVX2_FMA && !zcc_cpu_has_avx2_fma(&cpuc)) continue;
+        if (!use_ctx && b_id == ZCC_BACKEND_PTX_SM120 && ptxc.cuda_available == 0U) continue;
         const char *b_label = use_ctx ? "VULKAN_SPV_CTX" : zcc_backend_v2_str(b_id);
         zcc_vulkan_exec_options_t opts;
         zcc_vulkan_exec_options_init(&opts);
@@ -613,15 +691,17 @@ static int run_benchmarks(const char *out_path) {
 
 int main(int argc, char **argv) {
     int run_ptx = 1;
+    int prefer_ctx = 0;
     const char *bench_out = NULL;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--skip-ptx") == 0) run_ptx = 0;
+        else if (strcmp(argv[i], "--prefer-ctx") == 0) prefer_ctx = 1;
         else if (strcmp(argv[i], "--bench") == 0 && i + 1 < argc) bench_out = argv[++i];
     }
     if (bench_out) return run_benchmarks(bench_out);
 
     test_device_caps_and_negotiation();
-    test_all_13_ops_and_replay(run_ptx);
+    test_all_13_ops_and_replay(run_ptx, prefer_ctx);
     test_persistent_vulkan_context();
     printf("TRACK21B_C_TESTS pass=%d fail=%d\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;

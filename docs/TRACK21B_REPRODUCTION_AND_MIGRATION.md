@@ -68,6 +68,15 @@ All commands run cleanly from repository root (and from an isolated `git worktre
    ```
    Generates `TRACK21B_RELEASE_EVIDENCE.json` and confirms core compiler `PARTS` (`zcc2.s == zcc3.s`), `BOOTSTRAP_BASELINES.tsv`, and Track 21A frozen deliverables remain unchanged (`S_before == S_after`).
 
+7. **Reproduce WSL2 Hardware GPU Verification via Mesa Dozen (`dzn`) -> D3D12 (`/dev/dxg`):**
+   ```bash
+   make track21b-hw-dzn
+   ```
+   When Mesa `dzn` (`VK_ICD_FILENAMES=.../dzn_devenv_icd.x86_64.json`) and `/dev/dxg` are available, verifies BOTH `NVIDIA GeForce RTX 5070 Laptop GPU` (`ZCC_VK_VENDOR_ID=0x10de`, `DISCRETE_GPU`) and `AMD Radeon(TM) Graphics` (`ZCC_VK_VENDOR_ID=0x1002`, `INTEGRATED_GPU`) under UBSan, ASan (`--prefer-ctx` persistent context with `detect_leaks=0` due to D3D12 UMD globals and ASan virtual shadow limits), O2, benchmarks, and the `208/208` differential oracle (`TRACK21B_HW_VULKAN_REPORT.json`). Fails closed with `BLOCKED` (`exit 3`) on CPU-only hosts lacking `dzn` or `/dev/dxg`.
+
+8. **GitHub Actions CI (`track21b-ci.yml`):**
+   Runs automatically on `ubuntu-24.04` (CPU-only VM without CUDA/DXG), dynamically detecting `ptx_available=0` and verifying `spirv-val`, `glslangValidator`, Mesa `llvmpipe` + `VK_LAYER_KHRONOS_validation`, UBSan, ASan+LSan, O2, MJS SDK, Differential Oracle, Mutation Observatory, and `verify_hw_vulkan_dzn.py --check-only`.
+
 ---
 
 ## 3. Explicit Status Semantics & Hardware Deferral
@@ -78,18 +87,20 @@ Every Track 21B verifier report and receipt preserves explicit states:
 | --- | --- |
 | `PASS` | Executed cleanly and independently validated within specification/tolerance. |
 | `FAIL` | Violated numerical bound, capability invariant, validation layer rule, or receipt check. |
-| `BLOCKED` | External validator (`spirv-val`, `glslangValidator`, `libvulkan.so.1`, `VK_LAYER_KHRONOS_validation`) unavailable or host-blocked. Never promoted to `PASS`. |
+| `BLOCKED` | External validator (`spirv-val`, `glslangValidator`, `libvulkan.so.1`, `VK_LAYER_KHRONOS_validation`) or `/dev/dxg` hardware bridge unavailable or host-blocked. Never promoted to `PASS`. |
 | `UNKNOWN` | Unregistered anomaly preserved verbatim by the mutation observatory. |
-| `DEFERRED` | Explicitly deferred hardware gate outside WSL2 software Vulkan scope. |
+| `DEFERRED` | Explicitly deferred native Win64 gate blocked by Windows Smart App Control. |
 
-### Deferred Hardware Gates (`T21B-GPU-NV`, `T21B-GPU-AMD`)
+### Hardware Vulkan Gates (`DZN` vs Native Win64)
 
-- `T21B-GPU-NV`: Native NVIDIA RTX 5070 Vulkan execution (`0x10de`) -> **`DEFERRED`**
-- `T21B-GPU-AMD`: Native AMD Radeon Graphics Vulkan execution (`0x1002`) -> **`DEFERRED`**
+- `T21B-GPU-NV-DZN`: NVIDIA RTX 5070 via WSL2 `/dev/dxg` Mesa Dozen (`0x10de`, `DISCRETE_GPU`, `conformanceVersion 0.0.0.0`) -> **`PASS`** (recorded in `TRACK21B_HW_VULKAN_REPORT.json`; `NOT_RUN` on CPU-only CI runners without `/dev/dxg`)
+- `T21B-GPU-AMD-DZN`: AMD Radeon Graphics via WSL2 `/dev/dxg` Mesa Dozen (`0x1002`, `INTEGRATED_GPU`, `conformanceVersion 0.0.0.0`) -> **`PASS`** (recorded in `TRACK21B_HW_VULKAN_REPORT.json`; `NOT_RUN` on CPU-only CI runners without `/dev/dxg`)
+- `T21B-GPU-NV-NATIVE`: Native Win64 NVIDIA RTX 5070 Vulkan ICD `1.4.303` (`0x10de`) -> **`DEFERRED`** (Smart App Control blocks unsigned Win64 executables)
+- `T21B-GPU-AMD-NATIVE`: Native Win64 AMD Radeon Vulkan ICD `1.4.329` (`0x1002`) -> **`DEFERRED`** (Smart App Control blocks unsigned Win64 executables)
 
 On this Windows + WSL2 workstation:
-- WSL2 `/dev/dxg` exposes CUDA (`PTX_SM120`) and Vulkan software rendering (`llvmpipe`, `VK_PHYSICAL_DEVICE_TYPE_CPU`), not hardware Vulkan ICDs for `0x10de` / `0x1002`.
-- Native Windows unsigned executables are blocked by Windows Smart App Control (explicit policy forbids bypassing Smart App Control).
+- Default WSL2 exposes Mesa `llvmpipe` (`VK_PHYSICAL_DEVICE_TYPE_CPU`, `0x10005`), while building Mesa Dozen (`dzn`) over `/dev/dxg` + `libd3d12.so` exercises real physical GPU hardware compute queues for `0x10de` and `0x1002` inside WSL2 without bypassing Smart App Control.
+- Direct Win64 unsigned executables remain blocked by Windows Smart App Control (`VerifiedAndReputablePolicyState = 1`; explicit policy forbids bypassing Smart App Control).
 - Software `llvmpipe` runs MUST always identify as `device_type = "CPU"` and satisfy `T21-G02-CPU` cleanly without claiming hardware GPU execution.
 
 ---
