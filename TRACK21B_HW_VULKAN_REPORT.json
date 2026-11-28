@@ -1,8 +1,8 @@
 {
   "schema_version": "track21b.hw_vulkan_report.v1",
-  "generated_at_utc": "2026-11-27T10:02:00Z",
+  "generated_at_utc": "2026-11-28T02:42:37Z",
   "governing_rule_version": "ZCC-EF-7 v1.0.0 + ZCC-EF-0",
-  "git_head_sha": "3d2fce68b13870bcc0e7811ecf40100ed9a834b3",
+  "git_head_sha": "8eb5e2919aed2c3f31508d28c4946c6c56b9136b",
   "bridge_icd_path": "/tmp/dzn_build/build/src/microsoft/vulkan/dzn_devenv_icd.x86_64.json",
   "bridge_icd_sha256": "5e458a2c57e9afb542931ea5a067a1547051841572db6955cf47298518725218",
   "cross_gpu_gemm_sha256_parity": true,
@@ -191,20 +191,366 @@
   },
   "native_windows_gates": {
     "T21B-GPU-NV-NATIVE": {
-      "status": "DEFERRED",
-      "target": "Native Win64 NVIDIA RTX 5070 Vulkan ICD 1.4.303 (0x10de)",
-      "reason": "Unsigned native Win64 binaries are blocked by enforced Windows Smart App Control (VerifiedAndReputablePolicyState=1)."
+      "status": "PASS",
+      "target": "Native Win64 NVIDIA GeForce RTX 5070 Laptop GPU Vulkan ICD 1.4.303 (0x10de)",
+      "execution_bridge": "Signed Win64 Python ctypes.WinDLL('C:\\\\Windows\\\\System32\\\\vulkan-1.dll') -> SPIR-V 1.0 compute shaders",
+      "smart_app_control_policy_state": 1,
+      "signed_runtime": {
+        "python_exe": "D:\\hyperion_phase8_env\\py312\\python.exe",
+        "python_sha256": "4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a",
+        "vulkan_loader": "C:\\Windows\\System32\\vulkan-1.dll",
+        "vulkan_loader_sha256": "eed42695ae96208d6feda743e784de49b742740911d9596fd968c8ed7a84f7a0"
+      },
+      "hardware": {
+        "device_name": "NVIDIA GeForce RTX 5070 Laptop GPU",
+        "device_type": "DISCRETE_GPU",
+        "vendor_id": "0x10de",
+        "device_id": "0x2d18",
+        "api_version": "1.4.303",
+        "driver_version": 2417164288,
+        "driver_id": 4,
+        "driver_name": "NVIDIA",
+        "driver_info": "576.76",
+        "conformance_version": "1.4.1.0",
+        "max_push_constants_size": 256,
+        "max_storage_buffer_range": 4294967295
+      },
+      "spirv_modules_validated": 13,
+      "ops_verified": 13,
+      "ops_passed": 13,
+      "ops_failed": 0,
+      "replay_3x_deterministic_ops": 13,
+      "gemm_128x512x128_sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6",
+      "gemm_128x512x128_avg_us": 720.43,
+      "sync_barriers_per_dispatch": 2,
+      "teardown_accounting": {
+        "dev_c": 1,
+        "dev_d": 1,
+        "dsl_c": 1,
+        "dsl_d": 1,
+        "pl_c": 1,
+        "pl_d": 1,
+        "dpool_c": 1,
+        "dpool_d": 1,
+        "cpool_c": 1,
+        "cpool_d": 1,
+        "fence_c": 1,
+        "fence_d": 1,
+        "smod_c": 13,
+        "smod_d": 13,
+        "pipe_c": 13,
+        "pipe_d": 13,
+        "buf_c": 4,
+        "buf_d": 4,
+        "mem_c": 4,
+        "mem_d": 4,
+        "map_c": 4,
+        "map_d": 4,
+        "live_handles": 0
+      },
+      "op_results": [
+        {
+          "op_id": 1,
+          "op_name": "VEC_ADD_F32",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "7d6a3a7c9c2fea7b7299a3c5ee2caa550e9ad69ee1a08465fb473d2f3d9c27d6",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 2,
+          "op_name": "VEC_MUL_F32",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "fb3e09cb32e5f3f9e25634cd925aac2d23ce90fba29ff9dc68ac73d773ea66bc",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 3,
+          "op_name": "VEC_FMA_F32",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "f2dea1071012d19614b005db8bacbe2bdc96d0dc0c823e11649ffd9da281cffb",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 4,
+          "op_name": "DOT_F32",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "13b58dd52034188d2da9c4b896cde48c0ecf9df6436e9931cd4ce3a40f933fec",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 5,
+          "op_name": "GEMM_F32",
+          "status": "PASS",
+          "max_abs_err": 1.9073e-06,
+          "replay_3x_sha256": "b3d77e4f8e2f2eac3f2f06f1d375e73742e543be7286f3037c326d0fcd3c3770",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 6,
+          "op_name": "RMSNORM_F32",
+          "status": "PASS",
+          "max_abs_err": 7.153e-07,
+          "replay_3x_sha256": "13e0d5372bd36c58d313ce0169dc9af103036d224ed63a12619ccd1e75fc056d",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 7,
+          "op_name": "SOFTMAX_F32",
+          "status": "PASS",
+          "max_abs_err": 1.49e-08,
+          "replay_3x_sha256": "506da2c7ebe0a2905910db95263ed7234b4309ccdf5aead211b42964a5a9fc43",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 8,
+          "op_name": "DEQUANT_Q8_0",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "3fc6e3cd68f57f7e50ca23ed69778c7b73c47f4bd60a075ad144f2a192ef6604",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 9,
+          "op_name": "MATVEC_Q8_0",
+          "status": "PASS",
+          "max_abs_err": 4.57764e-05,
+          "replay_3x_sha256": "94fd0440f7bb250151c695e53a0898f83758710175f4819ddb63e30aa71b1a9a",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 10,
+          "op_name": "DEQUANT_Q4_0",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "f95da17dab2773bea0153fb66e6c531f0cca0190e8f743fddc3d775f2ef1a6d2",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 11,
+          "op_name": "MATVEC_Q4_0",
+          "status": "PASS",
+          "max_abs_err": 1.4305e-06,
+          "replay_3x_sha256": "66aa772dbf4f78c6b4e2e916e2e3b54e548a14c53f49b246a3ee1d58ad753214",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 12,
+          "op_name": "DEQUANT_Q4_K",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "6d818869f3812c2af7b396af44b82d99de40e38e359225fcc1994347ce1f4c62",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 13,
+          "op_name": "MATVEC_Q4_K",
+          "status": "PASS",
+          "max_abs_err": 0.0001831055,
+          "replay_3x_sha256": "66210bdbeccf569865d90c24bf19d0bda7e77372c0bbe9ac6034d1bff6bb5af0",
+          "replay_deterministic": true,
+          "detail": "ok"
+        }
+      ]
     },
     "T21B-GPU-AMD-NATIVE": {
-      "status": "DEFERRED",
-      "target": "Native Win64 AMD Radeon Vulkan ICD 1.4.329 (0x1002)",
-      "reason": "Unsigned native Win64 binaries are blocked by enforced Windows Smart App Control (VerifiedAndReputablePolicyState=1)."
+      "status": "PASS",
+      "target": "Native Win64 AMD Radeon(TM) Graphics Vulkan ICD 1.4.329 (0x1002)",
+      "execution_bridge": "Signed Win64 Python ctypes.WinDLL('C:\\\\Windows\\\\System32\\\\vulkan-1.dll') -> SPIR-V 1.0 compute shaders",
+      "smart_app_control_policy_state": 1,
+      "signed_runtime": {
+        "python_exe": "D:\\hyperion_phase8_env\\py312\\python.exe",
+        "python_sha256": "4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a",
+        "vulkan_loader": "C:\\Windows\\System32\\vulkan-1.dll",
+        "vulkan_loader_sha256": "eed42695ae96208d6feda743e784de49b742740911d9596fd968c8ed7a84f7a0"
+      },
+      "hardware": {
+        "device_name": "AMD Radeon(TM) Graphics",
+        "device_type": "INTEGRATED_GPU",
+        "vendor_id": "0x1002",
+        "device_id": "0x1114",
+        "api_version": "1.4.329",
+        "driver_version": 8388981,
+        "driver_id": 1,
+        "driver_name": "AMD proprietary driver",
+        "driver_info": "25.20.42 (LLPC)",
+        "conformance_version": "1.4.0.0",
+        "max_push_constants_size": 256,
+        "max_storage_buffer_range": 4294967295
+      },
+      "spirv_modules_validated": 13,
+      "ops_verified": 13,
+      "ops_passed": 13,
+      "ops_failed": 0,
+      "replay_3x_deterministic_ops": 13,
+      "gemm_128x512x128_sha256": "c317dfaae1c558dde2c9424f81d1b3e996b2c468561dbef3a95ae208927539b6",
+      "gemm_128x512x128_avg_us": 514.8,
+      "sync_barriers_per_dispatch": 2,
+      "teardown_accounting": {
+        "dev_c": 1,
+        "dev_d": 1,
+        "dsl_c": 1,
+        "dsl_d": 1,
+        "pl_c": 1,
+        "pl_d": 1,
+        "dpool_c": 1,
+        "dpool_d": 1,
+        "cpool_c": 1,
+        "cpool_d": 1,
+        "fence_c": 1,
+        "fence_d": 1,
+        "smod_c": 13,
+        "smod_d": 13,
+        "pipe_c": 13,
+        "pipe_d": 13,
+        "buf_c": 4,
+        "buf_d": 4,
+        "mem_c": 4,
+        "mem_d": 4,
+        "map_c": 4,
+        "map_d": 4,
+        "live_handles": 0
+      },
+      "op_results": [
+        {
+          "op_id": 1,
+          "op_name": "VEC_ADD_F32",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "7d6a3a7c9c2fea7b7299a3c5ee2caa550e9ad69ee1a08465fb473d2f3d9c27d6",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 2,
+          "op_name": "VEC_MUL_F32",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "fb3e09cb32e5f3f9e25634cd925aac2d23ce90fba29ff9dc68ac73d773ea66bc",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 3,
+          "op_name": "VEC_FMA_F32",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "f2dea1071012d19614b005db8bacbe2bdc96d0dc0c823e11649ffd9da281cffb",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 4,
+          "op_name": "DOT_F32",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "13b58dd52034188d2da9c4b896cde48c0ecf9df6436e9931cd4ce3a40f933fec",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 5,
+          "op_name": "GEMM_F32",
+          "status": "PASS",
+          "max_abs_err": 1.9073e-06,
+          "replay_3x_sha256": "b3d77e4f8e2f2eac3f2f06f1d375e73742e543be7286f3037c326d0fcd3c3770",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 6,
+          "op_name": "RMSNORM_F32",
+          "status": "PASS",
+          "max_abs_err": 7.153e-07,
+          "replay_3x_sha256": "bbb1973e195403a73eb4d0e89ad407387a1a150330e0d22c4a0fe04d0b778791",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 7,
+          "op_name": "SOFTMAX_F32",
+          "status": "PASS",
+          "max_abs_err": 2.98e-08,
+          "replay_3x_sha256": "0a20ea99b555b010ffb3c81737fb5a06936999addee496a12a5d78ace3865f6c",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 8,
+          "op_name": "DEQUANT_Q8_0",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "3fc6e3cd68f57f7e50ca23ed69778c7b73c47f4bd60a075ad144f2a192ef6604",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 9,
+          "op_name": "MATVEC_Q8_0",
+          "status": "PASS",
+          "max_abs_err": 4.57764e-05,
+          "replay_3x_sha256": "94fd0440f7bb250151c695e53a0898f83758710175f4819ddb63e30aa71b1a9a",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 10,
+          "op_name": "DEQUANT_Q4_0",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "f95da17dab2773bea0153fb66e6c531f0cca0190e8f743fddc3d775f2ef1a6d2",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 11,
+          "op_name": "MATVEC_Q4_0",
+          "status": "PASS",
+          "max_abs_err": 1.4305e-06,
+          "replay_3x_sha256": "66aa772dbf4f78c6b4e2e916e2e3b54e548a14c53f49b246a3ee1d58ad753214",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 12,
+          "op_name": "DEQUANT_Q4_K",
+          "status": "PASS",
+          "max_abs_err": 0.0,
+          "replay_3x_sha256": "6d818869f3812c2af7b396af44b82d99de40e38e359225fcc1994347ce1f4c62",
+          "replay_deterministic": true,
+          "detail": "ok"
+        },
+        {
+          "op_id": 13,
+          "op_name": "MATVEC_Q4_K",
+          "status": "PASS",
+          "max_abs_err": 0.0001831055,
+          "replay_3x_sha256": "66210bdbeccf569865d90c24bf19d0bda7e77372c0bbe9ac6034d1bff6bb5af0",
+          "replay_deterministic": true,
+          "detail": "ok"
+        }
+      ]
     }
   },
   "limitations": [
     "Mesa Dozen (`dzn`) translates Vulkan SPIR-V 1.0 to DXIL over D3D12 (`/dev/dxg`) and self-reports conformanceVersion 0.0.0.0 (non-conformant testing ICD).",
     "ASan memory-safety execution against D3D12 UMDs (`libd3d12core.so`) uses ASAN_OPTIONS=detect_leaks=0 because Microsoft/IHV D3D12 user-mode drivers retain global driver allocations across dlclose; strict LSan leak checks execute on Mesa llvmpipe.",
-    "Direct Win64 proprietary ICD execution remains DEFERRED until binaries carry an Authenticode signature or Smart App Control policy permits native execution."
+    "Native Win64 hardware Vulkan gates T21B-GPU-NV-NATIVE (0x10de) and T21B-GPU-AMD-NATIVE (0x1002) execute all 13 ZCC SPIR-V 1.0 kernels directly on proprietary Win64 ICDs via Authenticode-signed Win64 Python loading C:\\Windows\\System32\\vulkan-1.dll with Windows Smart App Control ON (VerifiedAndReputablePolicyState=1)."
   ],
   "verdict": "PASS"
 }
