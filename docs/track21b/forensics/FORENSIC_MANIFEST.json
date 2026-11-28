@@ -76,7 +76,27 @@
       "disasm_memset_size": "0x150e16: mov $0x80,%edx",
       "disasm_caps_copy": "0x1512cb: mov $0x106,%ecx (rep movsq 2096B -> _util_cpu_caps_state.caps at .bss 0xb61ea8)"
     },
-    "orphan_mechanism": "get_cpu_topology(true) assigns realloc'd L3_affinity_masks to util_cpu_caps.L3_affinity_mask (copied to _util_cpu_caps_state.caps) with zero atexit/destructor teardown. When Vulkan Loader dlcloses libvulkan_lvp.so during vkDestroyInstance on Noble glibc 2.39, the DSO unmaps (lvp_mapped=0) and orphans L3_affinity_masks."
+    "orphan_mechanism": "get_cpu_topology(true) assigns realloc'd L3_affinity_masks to util_cpu_caps.L3_affinity_mask (copied to _util_cpu_caps_state.caps) with zero atexit/destructor teardown. When Vulkan Loader dlcloses libvulkan_lvp.so during vkDestroyInstance on Noble glibc 2.39, the DSO unmaps (lvp_mapped=0) and orphans L3_affinity_masks.",
+    "stb_gnu_unique_pinning": {
+      "affected_icds_in_mesa_25_2_8_noble": ["libvulkan_lvp.so", "libvulkan_asahi.so", "libvulkan_nouveau.so"],
+      "libllvm20_build_id": "3fcd3870b6181594738d6ab5e8275744cca4cb03",
+      "libllvm20_flags_1": "NODELETE",
+      "unique_symbol_count": 5,
+      "unique_symbols": [
+        "spvTargetEnvNameMap",
+        "_ZZN8spvtools5utils8HexFloatINS0_10FloatProxyIfEENS0_14HexFloatTraitsIS3_EEE31getRoundedNormalizedSignificandINS1_INS2_INS0_7Float16EEENS4_IS9_EEEEEENT_9uint_typeENS0_15round_directionEPbE17first_rounded_bit",
+        "_ZGVZN8spvtools5utils8HexFloatINS0_10FloatProxyIfEENS0_14HexFloatTraitsIS3_EEE31getRoundedNormalizedSignificandINS1_INS2_INS0_7Float16EEENS4_IS9_EEEEEENT_9uint_typeENS0_15round_directionEPbE17first_rounded_bit",
+        "_ZZN8spvtools5utils8HexFloatINS0_10FloatProxyIfEENS0_14HexFloatTraitsIS3_EEE31getRoundedNormalizedSignificandINS1_INS2_INS0_7Float16EEENS4_IS9_EEEEEENT_9uint_typeENS0_15round_directionEPbE20last_significant_bit",
+        "_ZGVZN8spvtools5utils8HexFloatINS0_10FloatProxyIfEENS0_14HexFloatTraitsIS3_EEE31getRoundedNormalizedSignificandINS1_INS2_INS0_7Float16EEENS4_IS9_EEEEEENT_9uint_typeENS0_15round_directionEPbE20last_significant_bit"
+      ],
+      "relocation_type": "R_X86_64_GLOB_DAT",
+      "ld_debug_evidence": {
+        "lvp_only": ["marking .../libvulkan_lvp.so [0] as NODELETE due to unique symbol", "activating NODELETE for .../libvulkan_lvp.so [0]", "lvp_mapped_end=1"],
+        "lvp_then_asahi_or_nouveau": "lvp_mapped_end=1",
+        "asahi_or_nouveau_then_lvp": ["marking .../libvulkan_asahi.so [0] as NODELETE due to unique symbol", "lvp_mapped_end=0"]
+      },
+      "filesystem_nondeterminism_note": "On Ubuntu 24.04 CI runners (e.g., 46010671506 job 140545047485 vs 46010857254), overlayfs readdir() order over /usr/share/vulkan/icd.d determines whether lvp or asahi/nouveau registers STB_GNU_UNIQUE symbols first. Natural ICD enumeration is preserved in Lane 1 and icd_readdir_order is logged; attributing runtime NODELETE classifies stock behavior as UPSTREAM_DEPENDENCY_BLOCKED without fixing the underlying overlayfs ordering or stock packaging."
+    }
   },
   "zero_zcc_control_matrix": {
     "dlopen_only_10": {"iters": 10, "lsan_rc": 0, "leaked_bytes": 0, "leaked_allocs": 0, "lvp_mapped_end": 0},

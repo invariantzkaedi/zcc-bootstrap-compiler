@@ -721,7 +721,7 @@ def verify_release(
         trans_mut_rep.get("verdict") == "PASS"
         and trans_mut_rep.get("survived", 1) == 0
         and trans_mut_rep.get("false_positives_on_clean_control", 1) == 0
-        and trans_mut_rep.get("total_controls", 0) >= 9
+        and trans_mut_rep.get("total_controls", 0) >= 20
         and trans_mut_rep.get("killed", 0) == trans_mut_rep.get("total_controls", -1)
     )
     dep_verdict: Dict[str, Any] | None = None

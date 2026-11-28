@@ -1,21 +1,32 @@
 #!/usr/bin/env python3
-"""ZCC Track 21B — 9 Transitive Allocator & Verdict Authority Mutation Controls.
+"""ZCC Track 21B — 20 Transitive Allocator & Verdict Authority Mutation Controls.
 
 Verifies ZIG-VK-TRANSITIVE-001..008 fail-closed enforcement by executing real
 compiled C binaries and shared libraries under LD_PRELOAD=transitive_alloc_auditor.so
 combined with tools/track21b_transitive_verifier.py.
 
-Required 9 negative controls:
-  1. ZCC heap leak (TMC_01)
-  2. Vulkan resource / API leak (TMC_02)
-  3. Same-sized (128B) allocation from unrelated callsite (TMC_03)
-  4. Wrong Mesa/target ELF Build ID (TMC_04)
-  5. Unexpected allocation/orphan count mismatch (TMC_05)
-  6. Nonlinear leak scaling across cycles (TMC_06)
-  7. Forged audit/verdict evidence & EF-0 self-certification (TMC_07)
-  8. Missing mandatory gate or evidence block (TMC_08)
-  9. Concurrent lifecycle / RTLD_NODELETE DSO pinning violation (TMC_09)
-Plus a clean zero-leak control (0 false positives) and allocator edge probe.
+Required 20 negative controls:
+  1.  ZCC heap leak (TMC_01)
+  2.  Vulkan resource / API leak (TMC_02)
+  3.  Same-sized (128B) allocation from unrelated callsite (TMC_03)
+  4.  Wrong Mesa/target ELF Build ID (TMC_04)
+  5.  Unexpected allocation/orphan count mismatch (TMC_05)
+  6.  Nonlinear leak scaling across cycles (TMC_06)
+  7.  Forged audit/verdict evidence & EF-0 self-certification (TMC_07)
+  8.  Missing mandatory gate or evidence block (TMC_08)
+  9.  Concurrent lifecycle / RTLD_NODELETE DSO pinning violation in strict lane (TMC_09)
+  10. Static DF_1_NODELETE or explicit RTLD_NODELETE in stock compat lane (TMC_10)
+  11. Valid Build ID with mismatched binary SHA-256 (TMC_11)
+  12. Positive unique symbol count with no runtime LD_DEBUG attribution (TMC_12)
+  13. Missing or truncated probe LD_DEBUG log / digest (TMC_13)
+  14. Stale/mismatched CI execution run identity (TMC_14)
+  15. Unbalanced outstanding dlopen() reference handle (TMC_15)
+  16. Pinned unrelated DSO instead of libvulkan_lvp.so (TMC_16)
+  17. Missing fields or invalid JSON field types in pin provenance (TMC_17)
+  18. Stock compatibility pin evidence injected into strict Lane 2 (TMC_18)
+  19. Orphaned allocations hidden despite aggregate reconciliation (TMC_19)
+  20. Probe non-zero exit code paired with claimed positive attribution (TMC_20)
+Plus clean strict and attributed stock positive-control baselines (0 false positives).
 """
 
 from __future__ import annotations
@@ -37,6 +48,8 @@ from tools.track21b_transitive_verifier import (  # noqa: E402
     PINNED_DEBIAN_SHA256,
     PINNED_ORIG_SHA256,
     PINNED_PATCH_SHA256,
+    PINNED_STOCK_NOBLE_LVP_BUILD_ID,
+    PINNED_STOCK_NOBLE_LVP_SHA256,
     VERIFIED_FAIL,
     VERIFIED_PASS,
     UPSTREAM_DEPENDENCY_BLOCKED,
@@ -419,6 +432,186 @@ int main(int argc, char **argv) {
             and v9["complete_execution_stack_correctness"] == VERIFIED_FAIL
         )
         results.append({"control_id": "TMC_09_CONCURRENT_NODELETE_PINNING", "killed": k9, "verdict": v9["complete_execution_stack_correctness"], "detail": f"final_mapped={a9['final_target_mapped']} unmapped_ev={a9['unmapped_target_events']}"})
+
+        # Positive-control baseline for stock Ubuntu 24.04 runtime STB_GNU_UNIQUE pinning attribution
+        stock_pinned_audit = json.loads(json.dumps(clean_audit))
+        stock_pinned_audit["dso_build_ids"] = [{"module": "libvulkan_lvp.so", "build_id": PINNED_STOCK_NOBLE_LVP_BUILD_ID}]
+        stock_pinned_audit["final_target_mapped"] = 1
+        stock_pinned_audit["unmapped_target_events"] = 0
+        stock_pinned_audit["retained_target_events"] = 110
+        stock_pinned_audit["explicit_rtld_nodelete_calls"] = 0
+        stock_pinned_audit["orphaned_on_dlclose_count"] = 0
+        stock_pinned_audit["orphaned_on_dlclose_bytes"] = 0
+        stock_pinned_audit["target_dso_live_count"] = 0
+        stock_pinned_audit["target_dso_live_bytes"] = 0
+        stock_pinned_audit["buckets"] = []
+        stock_pinned_baseline_ev: Dict[str, Any] = {
+            "lane": "stock-ubuntu2404-compat",
+            "execution_run_id": "ci-run-46010671506-lane1",
+            "cpu_is_zen": False,
+            "mandatory_gates": json.loads(json.dumps(clean_ev["mandatory_gates"])),
+            "zcc_c_runtime": json.loads(json.dumps(clean_ev["zcc_c_runtime"])),
+            "lsan_strict": {"detect_leaks": True, "suppression_used": False, "exit_code": 0, "leaked_bytes": 0, "leaked_allocs": 0},
+            "alloc_audit": stock_pinned_audit,
+            "transitive_mutations_killed": True,
+            "stock_dso_pin_provenance": {
+                "lvp_path": "/usr/lib/x86_64-linux-gnu/libvulkan_lvp.so",
+                "lvp_build_id": PINNED_STOCK_NOBLE_LVP_BUILD_ID,
+                "lvp_sha256": PINNED_STOCK_NOBLE_LVP_SHA256,
+                "lvp_device_inode": "2049:1048576",
+                "glibc_version": "glibc 2.39",
+                "static_df1_nodelete": False,
+                "stb_gnu_unique_count": 5,
+                "unique_symbol_names": [
+                    "_ZGVZN8spvtools5utils8HexFloatINS0_10FloatProxyIfEENS0_14HexFloatTraitsIS3_EEE31getRoundedNormalizedSignificandINS1_INS2_INS0_7Float16EEENS4_IS9_EEEEEENT_9uint_typeENS0_15round_directionEPbE20last_significant_bit",
+                    "_ZGVZN8spvtools5utils8HexFloatINS0_10FloatProxyIfEENS0_14HexFloatTraitsIS3_EEE31getRoundedNormalizedSignificandINS1_INS2_INS0_7Float16EEENS4_IS9_EEEEEENT_9uint_typeENS0_15round_directionEPbE17first_rounded_bit",
+                    "_ZZN8spvtools5utils8HexFloatINS0_10FloatProxyIfEENS0_14HexFloatTraitsIS3_EEE31getRoundedNormalizedSignificandINS1_INS2_INS0_7Float16EEENS4_IS9_EEEEEENT_9uint_typeENS0_15round_directionEPbE20last_significant_bit",
+                    "spvTargetEnvNameMap",
+                    "_ZZN8spvtools5utils8HexFloatINS0_10FloatProxyIfEENS0_14HexFloatTraitsIS3_EEE31getRoundedNormalizedSignificandINS1_INS2_INS0_7Float16EEENS4_IS9_EEEEEENT_9uint_typeENS0_15round_directionEPbE17first_rounded_bit",
+                ],
+                "unique_relocation_count": 5,
+                "runtime_unique_nodelete_observed": True,
+                "runtime_nodelete_log_lines": [
+                    "11667:\tmarking /usr/lib/x86_64-linux-gnu/libvulkan_lvp.so [0] as NODELETE due to unique symbol",
+                    "11667:\tactivating NODELETE for /usr/lib/x86_64-linux-gnu/libvulkan_lvp.so [0]",
+                ],
+                "explicit_nodelete_requested": False,
+                "outstanding_dlopen_handles": 0,
+                "zero_zcc_probe_sha256": "1" * 64,
+                "probe_log_sha256": "2" * 64,
+                "probe_exit_code": 0,
+                "zero_zcc_probe_lvp_mapped_end": 1,
+                "icd_readdir_order": ["lvp_icd.json", "asahi_icd.json", "nouveau_icd.json"],
+                "execution_run_id": "ci-run-46010671506-lane1",
+            },
+        }
+        v_pos_stock = evaluate_dependency_aware_verdicts(stock_pinned_baseline_ev)
+        ok_pos_stock, msg_pos_stock = verify_verdict_artifact(v_pos_stock)
+        pos_stock_valid = (
+            ok_pos_stock
+            and v_pos_stock["transitive_dependency_memory_correctness"] == UPSTREAM_DEPENDENCY_BLOCKED
+            and v_pos_stock["complete_execution_stack_correctness"] == UPSTREAM_DEPENDENCY_BLOCKED
+            and v_pos_stock["verifier_execution_success"] is True
+            and v_pos_stock["attribution_verified"] is True
+            and v_pos_stock["stack_fully_verified"] is False
+            and v_pos_stock["certification_passed"] is False
+            and v_pos_stock["release_approved"] is False
+        )
+        if not pos_stock_valid:
+            false_positives += 1
+            print("STOCK_POS_DEBUG:", msg_pos_stock, v_pos_stock, file=sys.stderr)
+
+        def check_stock_mutation(control_id: str, mut_fn, detail_msg: str) -> None:
+            ev_m = json.loads(json.dumps(stock_pinned_baseline_ev))
+            mut_fn(ev_m)
+            vm = evaluate_dependency_aware_verdicts(ev_m)
+            killed = (
+                vm["transitive_dependency_memory_correctness"] == VERIFIED_FAIL
+                and vm["complete_execution_stack_correctness"] == VERIFIED_FAIL
+                and vm["stack_fully_verified"] is False
+                and vm["certification_passed"] is False
+                and vm["release_approved"] is False
+            )
+            results.append({"control_id": control_id, "killed": killed, "verdict": vm["complete_execution_stack_correctness"], "detail": detail_msg})
+
+        # TMC_10: Static DF_1_NODELETE or explicit RTLD_NODELETE requested in stock compat
+        ev10b = json.loads(json.dumps(stock_pinned_baseline_ev))
+        ev10b["stock_dso_pin_provenance"]["explicit_nodelete_requested"] = True
+        v10b = evaluate_dependency_aware_verdicts(ev10b)
+        ev10a = json.loads(json.dumps(stock_pinned_baseline_ev))
+        ev10a["stock_dso_pin_provenance"]["static_df1_nodelete"] = True
+        v10a = evaluate_dependency_aware_verdicts(ev10a)
+        k10 = (v10a["complete_execution_stack_correctness"] == VERIFIED_FAIL and v10b["complete_execution_stack_correctness"] == VERIFIED_FAIL)
+        results.append({"control_id": "TMC_10_STATIC_OR_EXPLICIT_NODELETE", "killed": k10, "verdict": v10a["complete_execution_stack_correctness"], "detail": "rejected static DF_1_NODELETE & explicit RTLD_NODELETE"})
+
+        # TMC_11: Valid Build ID with mismatched binary SHA-256
+        check_stock_mutation(
+            "TMC_11_VALID_BUILD_ID_MISMATCHED_SHA256",
+            lambda d: d["stock_dso_pin_provenance"].__setitem__("lvp_sha256", "a" * 64),
+            "rejected valid Build ID paired with wrong lvp_sha256",
+        )
+
+        # TMC_12: Positive unique symbol count without runtime LD_DEBUG attribution
+        def mut12(d: Dict[str, Any]) -> None:
+            d["stock_dso_pin_provenance"]["runtime_unique_nodelete_observed"] = False
+            d["stock_dso_pin_provenance"]["runtime_nodelete_log_lines"] = ["11667:\tactivating NODELETE for /usr/lib/x86_64-linux-gnu/libvulkan_lvp.so [0]"]
+        check_stock_mutation(
+            "TMC_12_UNIQUE_SYMBOLS_NO_RUNTIME_LD_DEBUG",
+            mut12,
+            "rejected static UNIQUE=5 without runtime LD_DEBUG unique-symbol attribution",
+        )
+
+        # TMC_13: Missing or truncated probe LD_DEBUG log
+        def mut13(d: Dict[str, Any]) -> None:
+            d["stock_dso_pin_provenance"]["probe_log_sha256"] = ""
+            d["stock_dso_pin_provenance"]["runtime_nodelete_log_lines"] = []
+        check_stock_mutation(
+            "TMC_13_MISSING_OR_TRUNCATED_PROBE_LOG",
+            mut13,
+            "rejected missing/truncated probe LD_DEBUG log & digest",
+        )
+
+        # TMC_14: Stale CI execution identity from previous run
+        check_stock_mutation(
+            "TMC_14_STALE_PREVIOUS_CI_EXECUTION_ID",
+            lambda d: d["stock_dso_pin_provenance"].__setitem__("execution_run_id", "stale-ci-run-0001"),
+            "rejected mismatched previous-CI execution_run_id",
+        )
+
+        # TMC_15: Unbalanced outstanding dlopen() reference handle
+        check_stock_mutation(
+            "TMC_15_OUTSTANDING_DLOPEN_HANDLE",
+            lambda d: d["stock_dso_pin_provenance"].__setitem__("outstanding_dlopen_handles", 1),
+            "rejected unbalanced outstanding dlopen handle (>0)",
+        )
+
+        # TMC_16: Pinned unrelated DSO instead of libvulkan_lvp.so
+        check_stock_mutation(
+            "TMC_16_PINNED_UNRELATED_DSO",
+            lambda d: d["stock_dso_pin_provenance"].__setitem__(
+                "runtime_nodelete_log_lines",
+                [
+                    "11691:\tmarking /usr/lib/x86_64-linux-gnu/libvulkan_asahi.so [0] as NODELETE due to unique symbol",
+                    "11691:\tactivating NODELETE for /usr/lib/x86_64-linux-gnu/libvulkan_asahi.so [0]",
+                ],
+            ),
+            "rejected LD_DEBUG pinning attributed to unrelated DSO (libvulkan_asahi.so)",
+        )
+
+        # TMC_17: Missing fields or invalid JSON field types
+        ev17a = json.loads(json.dumps(stock_pinned_baseline_ev))
+        ev17a["stock_dso_pin_provenance"]["stb_gnu_unique_count"] = "five"
+        ev17b = json.loads(json.dumps(stock_pinned_baseline_ev))
+        del ev17b["stock_dso_pin_provenance"]["glibc_version"]
+        v17a = evaluate_dependency_aware_verdicts(ev17a)
+        v17b = evaluate_dependency_aware_verdicts(ev17b)
+        k17 = (v17a["complete_execution_stack_correctness"] == VERIFIED_FAIL and v17b["complete_execution_stack_correctness"] == VERIFIED_FAIL)
+        results.append({"control_id": "TMC_17_MISSING_FIELDS_OR_INVALID_TYPES", "killed": k17, "verdict": v17a["complete_execution_stack_correctness"], "detail": "rejected missing field & invalid JSON type"})
+
+        # TMC_18: Stock compatibility pin evidence injected into strict Lane 2
+        ev18 = json.loads(json.dumps(stock_pinned_baseline_ev))
+        ev18["lane"] = "corrected-mesa-strict-lsan"
+        ev18["mesa_build_manifest"] = json.loads(json.dumps(clean_ev["mesa_build_manifest"]))
+        v18 = evaluate_dependency_aware_verdicts(ev18)
+        k18 = (v18["transitive_dependency_memory_correctness"] == VERIFIED_FAIL and v18["complete_execution_stack_correctness"] == VERIFIED_FAIL)
+        results.append({"control_id": "TMC_18_STOCK_PIN_EVIDENCE_IN_LANE2", "killed": k18, "verdict": v18["complete_execution_stack_correctness"], "detail": "rejected stock pinning provenance injected into Lane 2"})
+
+        # TMC_19: Orphaned allocations hidden despite aggregate reconciliation
+        def mut19(d: Dict[str, Any]) -> None:
+            d["alloc_audit"]["orphaned_on_dlclose_count"] = 1
+            d["alloc_audit"]["orphaned_on_dlclose_bytes"] = 128
+        check_stock_mutation(
+            "TMC_19_ORPHAN_HIDDEN_BY_AGGREGATE",
+            mut19,
+            "rejected non-zero orphaned_on_dlclose despite aggregate reconciliation",
+        )
+
+        # TMC_20: Probe exits unsuccessfully while reporting positive attribution
+        check_stock_mutation(
+            "TMC_20_PROBE_NONZERO_EXIT_WITH_ATTRIBUTION",
+            lambda d: d["stock_dso_pin_provenance"].__setitem__("probe_exit_code", 2),
+            "rejected non-zero probe_exit_code paired with claimed attribution",
+        )
 
     killed_count = sum(1 for r in results if r["killed"])
     total = len(results)

@@ -197,9 +197,9 @@
       "id": "ZIG-VK-TRANSITIVE-008",
       "gate": "T21B-TRANSITIVE",
       "domains": ["vulkan", "cuda_ptx", "cpu_native", "wasm_future"],
-      "title": "Transitive Allocator & Verdict Authority Mutation Sensitivity (9 Controls)",
-      "proposition": "Verifier and auditor kill all 9 transitive fault classes (ZCC leak, Vulkan resource leak, unrelated 128B callsite leak, wrong Mesa Build ID, unexpected alloc count, nonlinear scaling growth, forged evidence, missing gate, concurrent/NODELETE violation).",
-      "fail_closed_condition": "Any of the 9 adversarial controls survives or returns VERIFIED_PASS.",
+      "title": "Transitive Allocator & Verdict Authority Mutation Sensitivity (20 Controls)",
+      "proposition": "Verifier and auditor kill all 20 transitive fault classes (TMC_01..TMC_20: ZCC leak, Vulkan resource leak, unrelated 128B callsite leak, wrong Mesa Build ID, unexpected alloc count, nonlinear scaling growth, forged evidence, missing gate, strict NODELETE violation, static/explicit NODELETE, Build ID/SHA-256 mismatch, unique count without LD_DEBUG runtime proof, missing/truncated log, stale execution ID, unbalanced dlopen handles, unrelated pinned DSO, invalid provenance types/missing fields, stock evidence in Lane 2, hidden orphans, and probe non-zero exit).",
+      "fail_closed_condition": "Any of the 20 adversarial controls survives or returns VERIFIED_PASS.",
       "verification_method": "tests/track21b/transitive_mutation_controls.py."
     }
   ]

@@ -90,6 +90,7 @@ typedef struct {
     uint64_t peak_live_bytes;
     uint64_t dlopen_calls;
     uint64_t dlclose_calls;
+    uint64_t explicit_rtld_nodelete_calls;
     uint64_t orphaned_on_dlclose_count;
     uint64_t orphaned_on_dlclose_bytes;
     uint64_t unmapped_lvp_events;
@@ -778,6 +779,9 @@ void *dlopen(const char *filename, int flags) {
     if (!g_initialized) init_hooks();
     void *h = real_dlopen(filename, flags);
     __atomic_fetch_add(&g_stats.dlopen_calls, 1, __ATOMIC_RELAXED);
+    if (flags & RTLD_NODELETE) {
+        __atomic_fetch_add(&g_stats.explicit_rtld_nodelete_calls, 1, __ATOMIC_RELAXED);
+    }
     if (!t_in_hook) {
         t_in_hook = 1;
         refresh_mods_snapshot();
@@ -1067,6 +1071,7 @@ static void auditor_dtor(void) {
             fprintf(jf, "  \"peak_live_bytes\": %llu,\n", (unsigned long long)g_stats.peak_live_bytes);
             fprintf(jf, "  \"dlopen_calls\": %llu,\n", (unsigned long long)g_stats.dlopen_calls);
             fprintf(jf, "  \"dlclose_calls\": %llu,\n", (unsigned long long)g_stats.dlclose_calls);
+            fprintf(jf, "  \"explicit_rtld_nodelete_calls\": %llu,\n", (unsigned long long)g_stats.explicit_rtld_nodelete_calls);
             fprintf(jf, "  \"live_count\": %llu,\n", (unsigned long long)final_live_count);
             fprintf(jf, "  \"live_bytes\": %llu,\n", (unsigned long long)final_live_bytes);
             fprintf(jf, "  \"zcc_owned_live_count\": %llu,\n", (unsigned long long)zcc_owned_live_count);

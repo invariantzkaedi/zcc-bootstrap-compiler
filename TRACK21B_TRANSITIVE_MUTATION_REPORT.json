@@ -1,8 +1,8 @@
 {
   "schema_version": "track21b.transitive_mutation_report.v1",
-  "generated_at_utc": "2026-11-27T12:50:45Z",
-  "total_controls": 9,
-  "killed": 9,
+  "generated_at_utc": "2026-11-28T01:56:54Z",
+  "total_controls": 20,
+  "killed": 20,
   "survived": 0,
   "false_positives_on_clean_control": 0,
   "verdict": "PASS",
@@ -60,6 +60,72 @@
       "killed": true,
       "verdict": "VERIFIED_FAIL",
       "detail": "final_mapped=1 unmapped_ev=0"
+    },
+    {
+      "control_id": "TMC_10_STATIC_OR_EXPLICIT_NODELETE",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected static DF_1_NODELETE & explicit RTLD_NODELETE"
+    },
+    {
+      "control_id": "TMC_11_VALID_BUILD_ID_MISMATCHED_SHA256",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected valid Build ID paired with wrong lvp_sha256"
+    },
+    {
+      "control_id": "TMC_12_UNIQUE_SYMBOLS_NO_RUNTIME_LD_DEBUG",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected static UNIQUE=5 without runtime LD_DEBUG unique-symbol attribution"
+    },
+    {
+      "control_id": "TMC_13_MISSING_OR_TRUNCATED_PROBE_LOG",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected missing/truncated probe LD_DEBUG log & digest"
+    },
+    {
+      "control_id": "TMC_14_STALE_PREVIOUS_CI_EXECUTION_ID",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected mismatched previous-CI execution_run_id"
+    },
+    {
+      "control_id": "TMC_15_OUTSTANDING_DLOPEN_HANDLE",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected unbalanced outstanding dlopen handle (>0)"
+    },
+    {
+      "control_id": "TMC_16_PINNED_UNRELATED_DSO",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected LD_DEBUG pinning attributed to unrelated DSO (libvulkan_asahi.so)"
+    },
+    {
+      "control_id": "TMC_17_MISSING_FIELDS_OR_INVALID_TYPES",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected missing field & invalid JSON type"
+    },
+    {
+      "control_id": "TMC_18_STOCK_PIN_EVIDENCE_IN_LANE2",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected stock pinning provenance injected into Lane 2"
+    },
+    {
+      "control_id": "TMC_19_ORPHAN_HIDDEN_BY_AGGREGATE",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected non-zero orphaned_on_dlclose despite aggregate reconciliation"
+    },
+    {
+      "control_id": "TMC_20_PROBE_NONZERO_EXIT_WITH_ATTRIBUTION",
+      "killed": true,
+      "verdict": "VERIFIED_FAIL",
+      "detail": "rejected non-zero probe_exit_code paired with claimed attribution"
     }
   ]
 }

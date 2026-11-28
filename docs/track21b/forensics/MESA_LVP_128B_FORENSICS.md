@@ -74,6 +74,17 @@ All tests below were run directly inside the reconstructed Ubuntu `24.04` sandbo
 
 Notice the `nodelete-icd` control proves why Ubuntu `26.04` (where `libvulkan_lvp.so` remains pinned in memory across `dlclose`) masked the defect under LeakSanitizer: keeping `libvulkan_lvp.so`'s `.bss` mapped leaves `L3_affinity_mask` reachable until process exit, whereas unloading `libvulkan_lvp.so` orphans the pointer immediately (`10/10` cycles reachable pre-`dlclose`, `10/10` cycles orphaned post-`dlclose` under `transitive_alloc_auditor`).
 
+### 3.1 Secondary Upstream Defect: Stock Ubuntu 24.04 `STB_GNU_UNIQUE` Self-Pinning (`LD_DEBUG` & ICD Order Matrix)
+Inspection of stock Ubuntu `24.04` (`noble-updates`) binaries (`mesa-vulkan-drivers 25.2.8-0ubuntu0.24.04.5`, `libllvm20 1:20.1.2-0ubuntu1~24.04.3`, `libvulkan1 1.3.275.0-1build1`, `vulkan-validationlayers 1.3.275.0-1`) identifies a second upstream packaging defect:
+- `libLLVM.so.20.1` (`Build ID: 3fcd3870b6181594738d6ab5e8275744cca4cb03`) carries static `FLAGS_1: NODELETE`.
+- `libvulkan_lvp.so` (`Build ID: 8494c48f5f2c2e0ff01872de64b5f9b40867e7a0`), `libvulkan_asahi.so`, and `libvulkan_nouveau.so` each export **5 `STB_GNU_UNIQUE` symbols** (`spvTargetEnvNameMap`, plus 4 `spvtools::utils::HexFloat<...>::getRoundedNormalizedSignificand` local statics/guards) bound via `R_X86_64_GLOB_DAT` from statically linked `libSPIRV-Tools`.
+- Isolated `VK_ICD_FILENAMES` order experiments using `zero_zcc_vulkan_repro.c` (`--mode val-on-with-phys --iters 3`) prove load-order-dependent retention under `dlclose()`:
+  - `lvp` alone -> `lvp_mapped_end=1` (`LD_DEBUG=bindings,files,reloc` logs: `marking .../libvulkan_lvp.so [0] as NODELETE due to unique symbol`, `activating NODELETE for .../libvulkan_lvp.so [0]`)
+  - `lvp:asahi` or `lvp:nouveau` -> `lvp_mapped_end=1`
+  - `asahi:lvp` or `nouveau:lvp` -> `lvp_mapped_end=0` (`LD_DEBUG` logs: `marking .../libvulkan_asahi.so [0] as NODELETE due to unique symbol`; `asahi`/`nouveau` absorbs `DF_1_NODELETE`, allowing `libvulkan_lvp.so` to unmap cleanly)
+
+Note that attributing runtime `STB_GNU_UNIQUE` `NODELETE` in `Lane 1` (`stock-ubuntu2404-compat`) explains the `overlayfs` `readdir()` nondeterminism observed on CI run `46010671506` job `140545047485` without repairing the underlying filesystem scan order or stock Mesa packaging defect. Natural ICD enumeration (`VK_ICD_FILENAMES` unset) is preserved in `Lane 1` with `icd_readdir_order` logged on every run, while `Lane 2` (`build_clean_mesa_lvp.sh`) resolves the bug cleanly via `-fno-gnu-unique` and `-Wl,--exclude-libs,libSPIRV-Tools.a:libSPIRV-Tools-opt.a:libSPIRV-Tools-link.a` (`stb_gnu_unique_count == 0`).
+
 ---
 
 ## 4. Machine-Readable Artifacts & Checksums

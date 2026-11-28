@@ -77,6 +77,18 @@ Scaling across `1`, `10`, and `100` cycles (with `vkEnumeratePhysicalDevices` an
 
 ---
 
+## Companion Packaging Defect: Exported `STB_GNU_UNIQUE` Symbols Pinning `libvulkan_lvp.so` Across `dlclose()`
+
+In Ubuntu `24.04` (`mesa-vulkan-drivers 25.2.8-0ubuntu0.24.04.5`, Build ID `8494c48f5f2c2e0ff01872de64b5f9b40867e7a0`), `libvulkan_lvp.so`, `libvulkan_asahi.so`, and `libvulkan_nouveau.so` each export **5 `STB_GNU_UNIQUE` symbols** (`spvTargetEnvNameMap` plus 4 `spvtools::utils::HexFloat<...>::getRoundedNormalizedSignificand` statics/guards) referenced via `R_X86_64_GLOB_DAT` from statically linked `libSPIRV-Tools`, while `libLLVM.so.20.1` (`Build ID: 3fcd3870...`) carries `FLAGS_1: NODELETE`.
+
+When `libvulkan_lvp.so` is loaded standalone (or scanned ahead of `asahi`/`nouveau` in `/usr/share/vulkan/icd.d/`), `LD_DEBUG=bindings,files,reloc` shows glibc's `do_lookup_unique()` marking and activating `NODELETE` directly on `libvulkan_lvp.so`:
+- `marking .../libvulkan_lvp.so [0] as NODELETE due to unique symbol`
+- `activating NODELETE for .../libvulkan_lvp.so [0]`
+
+By contrast, loading `asahi` or `nouveau` first shifts the `NODELETE` pin onto `libvulkan_asahi.so`/`libvulkan_nouveau.so` and lets `libvulkan_lvp.so` unload (`lvp_mapped_end=0`), exposing the `L3_affinity_masks` leak. Building Lavapipe with `-fno-gnu-unique` and `-Wl,--exclude-libs,libSPIRV-Tools.a:libSPIRV-Tools-opt.a:libSPIRV-Tools-link.a` reduces `STB_GNU_UNIQUE` symbols to `0` (`stb_gnu_unique_count == 0`) and resolves the unintentional DSO pinning cleanly. *(Attributing this runtime `NODELETE` behavior in downstream test harnesses classifies stock packaging accurately as blocked without altering natural ICD enumeration order or fixing the underlying filesystem scan sensitivity.)*
+
+---
+
 ## Proposed Minimal Patch
 
 Consistent with existing teardown patterns in `src/util/` (`u_queue.c:82`, `u_process.c:213`, `strtod.c:53`), register `free_l3_affinity_masks` via `atexit()` inside `_util_cpu_detect_once` (and guard `free_l3_affinity_masks()` on re-entry), handle OOM `realloc` failure without returning early past saved affinity restoration or leaking prior `L3_affinity_masks`, and guard `thread_sched.c` against NULL `caps->L3_affinity_mask` or out-of-range `num_L3_caches`:

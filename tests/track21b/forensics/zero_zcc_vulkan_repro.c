@@ -88,20 +88,35 @@ typedef struct {
     int err;
 } mt_arg_t;
 
+static int g_probe_dlopen_calls = 0;
+static int g_probe_dlclose_calls = 0;
+
+static void *probe_dlopen(const char *filename, int flags) {
+    void *h = dlopen(filename, flags);
+    if (h) __atomic_fetch_add(&g_probe_dlopen_calls, 1, __ATOMIC_RELAXED);
+    return h;
+}
+
+static int probe_dlclose(void *h) {
+    if (!h) return 0;
+    __atomic_fetch_add(&g_probe_dlclose_calls, 1, __ATOMIC_RELAXED);
+    return dlclose(h);
+}
+
 static int run_one_vk_cycle(int use_val, int use_phys, int keep_so_open, void **cached_so, uint32_t *out_phys) {
-    void *so = (keep_so_open && *cached_so) ? *cached_so : dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+    void *so = (keep_so_open && *cached_so) ? *cached_so : probe_dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
     if (!so) return 1;
     if (keep_so_open) *cached_so = so;
 
     PFN_vkGetInstanceProcAddr gipa = (PFN_vkGetInstanceProcAddr)dlsym(so, "vkGetInstanceProcAddr");
     if (!gipa) {
-        if (!keep_so_open) dlclose(so);
+        if (!keep_so_open) probe_dlclose(so);
         return 1;
     }
 
     PFN_vkCreateInstance ci = (PFN_vkCreateInstance)gipa(VK_NULL_HANDLE, "vkCreateInstance");
     if (!ci) {
-        if (!keep_so_open) dlclose(so);
+        if (!keep_so_open) probe_dlclose(so);
         return 1;
     }
 
@@ -122,7 +137,7 @@ static int run_one_vk_cycle(int use_val, int use_phys, int keep_so_open, void **
     VkInstance inst = VK_NULL_HANDLE;
     VkResult vr = ci(&ici, NULL, &inst);
     if (vr != VK_SUCCESS || inst == VK_NULL_HANDLE) {
-        if (!keep_so_open) dlclose(so);
+        if (!keep_so_open) probe_dlclose(so);
         return 2;
     }
 
@@ -137,13 +152,13 @@ static int run_one_vk_cycle(int use_val, int use_phys, int keep_so_open, void **
     PFN_vkDestroyInstance di = (PFN_vkDestroyInstance)gipa(inst, "vkDestroyInstance");
     if (di) di(inst, NULL);
 
-    if (!keep_so_open) dlclose(so);
+    if (!keep_so_open) probe_dlclose(so);
     return 0;
 }
 
 static void *mt_worker(void *argp) {
     mt_arg_t *arg = (mt_arg_t *)argp;
-    void *so = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+    void *so = probe_dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
     if (!so) {
         arg->err = 1;
         return NULL;
@@ -151,7 +166,7 @@ static void *mt_worker(void *argp) {
     PFN_vkGetInstanceProcAddr gipa = (PFN_vkGetInstanceProcAddr)dlsym(so, "vkGetInstanceProcAddr");
     PFN_vkCreateInstance ci = gipa ? (PFN_vkCreateInstance)gipa(VK_NULL_HANDLE, "vkCreateInstance") : NULL;
     if (!ci) {
-        dlclose(so);
+        probe_dlclose(so);
         arg->err = 1;
         return NULL;
     }
@@ -189,7 +204,7 @@ static void *mt_worker(void *argp) {
             }
         }
     }
-    dlclose(so);
+    probe_dlclose(so);
     return NULL;
 }
 
@@ -222,9 +237,9 @@ int main(int argc, char **argv) {
 
     if (strcmp(mode, "dlopen-only") == 0) {
         for (int i = 0; i < iters; i++) {
-            void *so = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+            void *so = probe_dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
             if (!so) return 2;
-            dlclose(so);
+            probe_dlclose(so);
         }
         fprintf(stderr, "ZERO_ZCC_PROBE mode=%s iters=%d lvp_mapped=%d\n",
                 mode, iters, count_mapped_dso("libvulkan_lvp"));
@@ -272,7 +287,7 @@ int main(int argc, char **argv) {
 
     void *pinned_lvp = NULL;
     if (nodelete_icd) {
-        pinned_lvp = dlopen("libvulkan_lvp.so", RTLD_LAZY | RTLD_LOCAL);
+        pinned_lvp = probe_dlopen("libvulkan_lvp.so", RTLD_LAZY | RTLD_LOCAL);
     }
 
     void *cached_so = NULL;
@@ -286,14 +301,16 @@ int main(int argc, char **argv) {
     }
 
     int mapped_before_cleanup = count_mapped_dso("libvulkan_lvp");
-    if (cached_so) dlclose(cached_so);
+    if (cached_so) probe_dlclose(cached_so);
     int mapped_after_so_close = count_mapped_dso("libvulkan_lvp");
-    if (pinned_lvp) dlclose(pinned_lvp);
+    if (pinned_lvp) probe_dlclose(pinned_lvp);
 
+    int outstanding_dlopen = g_probe_dlopen_calls - g_probe_dlclose_calls;
     fprintf(stderr,
-            "ZERO_ZCC_PROBE mode=%s iters=%d val=%d phys=%d reuse_so=%d nodelete_icd=%d phys_count=%u lvp_mapped_mid=%d lvp_mapped_end=%d rc=%d\n",
+            "ZERO_ZCC_PROBE mode=%s iters=%d val=%d phys=%d reuse_so=%d nodelete_icd=%d phys_count=%u lvp_mapped_mid=%d lvp_mapped_end=%d rc=%d dlopen_calls=%d dlclose_calls=%d outstanding_dlopen=%d\n",
             mode, iters, use_val, use_phys, reuse_so, nodelete_icd,
-            phys_count, mapped_before_cleanup, mapped_after_so_close, rc);
+            phys_count, mapped_before_cleanup, mapped_after_so_close, rc,
+            g_probe_dlopen_calls, g_probe_dlclose_calls, outstanding_dlopen);
     return rc;
 }
 

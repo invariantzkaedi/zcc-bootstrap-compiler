@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +44,188 @@ PINNED_PATCH_SHA256 = "65a58ad9d9bad78aeee362304235cb30e80b65d45a0ae6b7571f9debc
 PINNED_ORIG_SHA256 = "097842f3e49d996868b38688db87b006f7d4541e93ce86d2f341d8b3e7be7c93"
 PINNED_DEBIAN_SHA256 = "edda95cf4f8cf4378a0e6cefc4a62b9db811e2e0d94cb498ea077357dda41ed5"
 PINNED_STOCK_NOBLE_LVP_BUILD_ID = "8494c48f5f2c2e0ff01872de64b5f9b40867e7a0"
+PINNED_STOCK_NOBLE_LVP_SHA256 = "bd9a708b927aff0b327725af4816c54c53107017e443c72de26e65c310ec67ca"
+PINNED_HOST_REF_LVP_BUILD_ID = "1dab537bd9d19186a0a1e8aef43781f0fa90dbb6"
+PINNED_HOST_REF_LVP_SHA256 = "d9a8bc5d4b3ec0e065562d362541c2a4cb3f3d6208ac715f7ff1dcf01289d164"
+PINNED_STOCK_LVP_SHA256_BY_BUILD_ID = {
+    PINNED_STOCK_NOBLE_LVP_BUILD_ID: PINNED_STOCK_NOBLE_LVP_SHA256,
+    PINNED_HOST_REF_LVP_BUILD_ID: PINNED_HOST_REF_LVP_SHA256,
+}
+
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_DEV_INODE_RE = re.compile(r"^\d+:\d+$")
+_MARKING_UNIQUE_RE = re.compile(r"marking\s+\S*libvulkan_lvp\.so\b.*as\s+NODELETE\s+due\s+to\s+unique\s+symbol")
+_ACTIVATING_NODELETE_RE = re.compile(r"activating\s+NODELETE\s+for\s+\S*libvulkan_lvp\.so\b")
+
+
+def _is_strict_int(val: Any) -> bool:
+    return isinstance(val, int) and not isinstance(val, bool)
+
+
+def verify_stock_unique_pin_provenance(
+    evidence: Dict[str, Any],
+    audit: Dict[str, Any],
+    expected_bids: List[str],
+) -> Tuple[bool, str]:
+    """Fail-closed attribution gate for stock Ubuntu Mesa STB_GNU_UNIQUE NODELETE pinning."""
+    if str(evidence.get("lane", "")) != "stock-ubuntu2404-compat":
+        return False, "stock pinning provenance forbidden outside stock-ubuntu2404-compat lane"
+
+    prov = evidence.get("stock_dso_pin_provenance")
+    if not isinstance(prov, dict):
+        return False, "missing or malformed stock_dso_pin_provenance block"
+
+    required_keys = (
+        "lvp_path",
+        "lvp_build_id",
+        "lvp_sha256",
+        "lvp_device_inode",
+        "glibc_version",
+        "static_df1_nodelete",
+        "stb_gnu_unique_count",
+        "unique_symbol_names",
+        "unique_relocation_count",
+        "runtime_unique_nodelete_observed",
+        "runtime_nodelete_log_lines",
+        "explicit_nodelete_requested",
+        "outstanding_dlopen_handles",
+        "zero_zcc_probe_sha256",
+        "probe_log_sha256",
+        "probe_exit_code",
+        "zero_zcc_probe_lvp_mapped_end",
+        "execution_run_id",
+    )
+    missing = [k for k in required_keys if k not in prov]
+    if missing:
+        return False, f"stock_dso_pin_provenance missing required field(s): {missing}"
+
+    lvp_path = prov["lvp_path"]
+    if not isinstance(lvp_path, str) or not lvp_path.strip() or not lvp_path.strip().endswith("libvulkan_lvp.so"):
+        return False, f"invalid lvp_path: {lvp_path!r}"
+
+    lvp_bid = prov["lvp_build_id"]
+    dso_bids = [str(x.get("build_id", "")) for x in audit.get("dso_build_ids", [])]
+    if not isinstance(lvp_bid, str) or not lvp_bid or lvp_bid not in expected_bids or lvp_bid not in dso_bids:
+        return False, f"lvp_build_id {lvp_bid!r} missing from expected {expected_bids} or audit {dso_bids}"
+
+    sha_map = evidence.get("expected_stock_sha256_by_build_id", PINNED_STOCK_LVP_SHA256_BY_BUILD_ID)
+    if not isinstance(sha_map, dict):
+        return False, "invalid expected_stock_sha256_by_build_id mapping"
+    lvp_sha = prov["lvp_sha256"]
+    expected_sha = sha_map.get(lvp_bid)
+    if (
+        not isinstance(lvp_sha, str)
+        or not _SHA256_RE.match(lvp_sha)
+        or not isinstance(expected_sha, str)
+        or lvp_sha != expected_sha
+    ):
+        return False, f"lvp_sha256 mismatch for Build ID {lvp_bid}: got={lvp_sha!r} expected={expected_sha!r}"
+
+    dev_ino = prov["lvp_device_inode"]
+    if not isinstance(dev_ino, str) or not _DEV_INODE_RE.match(dev_ino):
+        return False, f"invalid lvp_device_inode: {dev_ino!r}"
+
+    glibc_ver = prov["glibc_version"]
+    if not isinstance(glibc_ver, str) or not glibc_ver.strip():
+        return False, f"invalid glibc_version: {glibc_ver!r}"
+
+    if prov["static_df1_nodelete"] is not False:
+        return False, f"static DF_1_NODELETE flag disallowed for STB_GNU_UNIQUE attribution: {prov['static_df1_nodelete']!r}"
+
+    uniq_cnt = prov["stb_gnu_unique_count"]
+    if not _is_strict_int(uniq_cnt) or uniq_cnt <= 0:
+        return False, f"invalid stb_gnu_unique_count: {uniq_cnt!r}"
+
+    uniq_syms = prov["unique_symbol_names"]
+    if (
+        not isinstance(uniq_syms, list)
+        or len(uniq_syms) != uniq_cnt
+        or any(not isinstance(s, str) or not s.strip() for s in uniq_syms)
+        or not any(("spvTargetEnvNameMap" in s or "HexFloat" in s) for s in uniq_syms)
+    ):
+        return False, "unique_symbol_names invalid or missing Mesa SPIRV-Tools STB_GNU_UNIQUE symbols"
+
+    reloc_cnt = prov["unique_relocation_count"]
+    if not _is_strict_int(reloc_cnt) or reloc_cnt <= 0:
+        return False, f"invalid unique_relocation_count: {reloc_cnt!r}"
+
+    if prov["runtime_unique_nodelete_observed"] is not True:
+        return False, "runtime LD_DEBUG unique-symbol NODELETE attribution not observed"
+
+    log_lines = prov["runtime_nodelete_log_lines"]
+    if not isinstance(log_lines, list) or not log_lines or any(not isinstance(ln, str) for ln in log_lines):
+        return False, "missing or invalid runtime_nodelete_log_lines"
+    has_mark = any(_MARKING_UNIQUE_RE.search(ln) for ln in log_lines)
+    has_act = any(_ACTIVATING_NODELETE_RE.search(ln) for ln in log_lines)
+    if not (has_mark and has_act):
+        return False, f"runtime LD_DEBUG lacks marking+activating NODELETE lines for libvulkan_lvp.so (mark={has_mark}, act={has_act})"
+
+    if prov["explicit_nodelete_requested"] is not False:
+        return False, f"explicit RTLD_NODELETE requested in probe: {prov['explicit_nodelete_requested']!r}"
+    if int(audit.get("explicit_rtld_nodelete_calls", 0)) != 0:
+        return False, f"auditor observed explicit RTLD_NODELETE dlopen call(s): {audit.get('explicit_rtld_nodelete_calls')}"
+
+    out_dl = prov["outstanding_dlopen_handles"]
+    if not _is_strict_int(out_dl) or out_dl != 0:
+        return False, f"unbalanced dlopen/dlclose handles in probe: outstanding={out_dl!r}"
+
+    for key in ("zero_zcc_probe_sha256", "probe_log_sha256"):
+        if not isinstance(prov[key], str) or not _SHA256_RE.match(prov[key]):
+            return False, f"invalid digest in {key}: {prov[key]!r}"
+
+    if not _is_strict_int(prov["probe_exit_code"]) or prov["probe_exit_code"] != 0:
+        return False, f"zero-ZCC probe failed or exited non-zero: rc={prov['probe_exit_code']!r}"
+
+    mapped_end = prov["zero_zcc_probe_lvp_mapped_end"]
+    if not _is_strict_int(mapped_end) or mapped_end < 1:
+        return False, f"zero-ZCC probe did not reproduce lvp retention: mapped_end={mapped_end!r}"
+
+    ev_run_id = evidence.get("execution_run_id")
+    prov_run_id = prov["execution_run_id"]
+    if (
+        not isinstance(ev_run_id, str)
+        or not ev_run_id.strip()
+        or not isinstance(prov_run_id, str)
+        or not prov_run_id.strip()
+        or prov_run_id != ev_run_id
+    ):
+        return False, f"stale or mismatched execution_run_id: prov={prov_run_id!r} vs ev={ev_run_id!r}"
+
+    orphaned_bytes = int(audit.get("orphaned_on_dlclose_bytes", -1))
+    orphaned_count = int(audit.get("orphaned_on_dlclose_count", -1))
+    if orphaned_bytes != 0 or orphaned_count != 0:
+        return False, f"orphaned_on_dlclose non-zero under pinned DSO attribution: {orphaned_count}/{orphaned_bytes} B"
+
+    buckets = audit.get("buckets", [])
+    if any(int(b.get("orphaned_count", 0)) > 0 for b in buckets):
+        return False, "bucket orphaned_count > 0 disallowed under pinned attribution"
+
+    tgt_bytes = int(audit.get("target_dso_live_bytes", -1))
+    tgt_count = int(audit.get("target_dso_live_count", -1))
+    if tgt_bytes < 0 or tgt_count < 0:
+        return False, f"invalid target_dso_live metrics: {tgt_count}/{tgt_bytes} B"
+    if tgt_bytes > 0:
+        if evidence.get("cpu_is_zen") is not True or tgt_count != 1 or tgt_bytes % 128 != 0:
+            return False, (
+                f"unexpected pinned target_dso_live state: cpu_is_zen={evidence.get('cpu_is_zen')} "
+                f"count={tgt_count} bytes={tgt_bytes}"
+            )
+        lvp_buckets = [b for b in buckets if str(b.get("module", "")) == "libvulkan_lvp.so"]
+        if not lvp_buckets or any(
+            str(b.get("build_id", "")) != lvp_bid
+            or int(b.get("orphaned_count", 0)) != 0
+            or int(b.get("min_size", 0)) <= 0
+            or int(b.get("min_size", 0)) != int(b.get("max_size", -1))
+            or int(b.get("min_size", 0)) % 128 != 0
+            for b in lvp_buckets
+        ):
+            return False, f"pinned libvulkan_lvp.so bucket failed single-init L3 invariant: {lvp_buckets}"
+
+    return True, (
+        f"runtime STB_GNU_UNIQUE NODELETE confirmed for {lvp_path} "
+        f"(BuildID={lvp_bid}, sha256={lvp_sha[:12]}..., unique={uniq_cnt}, relocs={reloc_cnt}, "
+        f"glibc={glibc_ver}, probe_rc=0, outstanding_dlopen=0)"
+    )
 
 
 def canonical_json_sha256(obj: Dict[str, Any]) -> str:
@@ -165,7 +348,7 @@ def evaluate_dependency_aware_verdicts(evidence: Dict[str, Any]) -> Dict[str, An
     failures_detected: List[str] = []
 
     if lane not in ("corrected-mesa-strict-lsan", "stock-ubuntu2404-compat"):
-        return {
+        out = {
             "schema_version": "track21b.dependency_verdict.v1",
             "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "lane": lane or "unknown",
@@ -173,10 +356,17 @@ def evaluate_dependency_aware_verdicts(evidence: Dict[str, Any]) -> Dict[str, An
             "vulkan_api_lifecycle_correctness": INSUFFICIENT_EVIDENCE,
             "transitive_dependency_memory_correctness": INSUFFICIENT_EVIDENCE,
             "complete_execution_stack_correctness": INSUFFICIENT_EVIDENCE,
+            "verifier_execution_success": True,
+            "attribution_verified": False,
+            "dependency_status": INSUFFICIENT_EVIDENCE,
+            "stack_fully_verified": False,
+            "certification_passed": False,
             "failures_detected": [f"unrecognized lane {lane!r}"],
             "reasons": reasons,
             "release_approved": False,
         }
+        out["canonical_sha256"] = canonical_json_sha256(out)
+        return out
 
     # --- Tamper / self-certification check ---
     if evidence.get("self_certified_override") is True:
@@ -191,6 +381,11 @@ def evaluate_dependency_aware_verdicts(evidence: Dict[str, Any]) -> Dict[str, An
             "vulkan_api_lifecycle_correctness": VERIFIED_FAIL,
             "transitive_dependency_memory_correctness": VERIFIED_FAIL,
             "complete_execution_stack_correctness": VERIFIED_FAIL,
+            "verifier_execution_success": True,
+            "attribution_verified": False,
+            "dependency_status": VERIFIED_FAIL,
+            "stack_fully_verified": False,
+            "certification_passed": False,
             "failures_detected": failures_detected,
             "reasons": reasons,
             "release_approved": False,
@@ -310,43 +505,74 @@ def evaluate_dependency_aware_verdicts(evidence: Dict[str, Any]) -> Dict[str, An
             msg = f"allocator reconciliation failed: {rec_msg}"
             failures_detected.append(msg)
             reasons["transitive"].append(msg)
-        elif final_mapped != 0 or unmapped_events < 1:
-            trans_verdict = VERIFIED_FAIL
-            msg = (
-                f"target DSO did not genuinely unload (possible NODELETE pinning): "
-                f"final_target_mapped={final_mapped} unmapped_target_events={unmapped_events}"
-            )
-            failures_detected.append(msg)
-            reasons["transitive"].append(msg)
         elif lane == "corrected-mesa-strict-lsan":
-            manifest = evidence.get("mesa_build_manifest")
-            if not isinstance(manifest, dict):
-                trans_verdict = INSUFFICIENT_EVIDENCE
-                msg = "corrected-mesa-strict-lsan lane requires mesa_build_manifest provenance"
+            if "stock_dso_pin_provenance" in evidence:
+                trans_verdict = VERIFIED_FAIL
+                msg = "stock_dso_pin_provenance forbidden in strict corrected-mesa-strict-lsan lane"
+                failures_detected.append(msg)
+                reasons["transitive"].append(msg)
+            elif final_mapped != 0 or unmapped_events < 1:
+                trans_verdict = VERIFIED_FAIL
+                msg = (
+                    f"target DSO did not genuinely unload in strict lane (possible NODELETE pinning): "
+                    f"final_target_mapped={final_mapped} unmapped_target_events={unmapped_events}"
+                )
                 failures_detected.append(msg)
                 reasons["transitive"].append(msg)
             else:
-                pin_ok = (
-                    manifest.get("patch_sha256") == PINNED_PATCH_SHA256
-                    and manifest.get("orig_sha256") == PINNED_ORIG_SHA256
-                    and manifest.get("debian_sha256") == PINNED_DEBIAN_SHA256
-                    and int(manifest.get("stb_gnu_unique_count", -1)) == 0
-                    and int(manifest.get("vk_icd_exports", 0)) >= 1
-                )
-                man_bid = str(manifest.get("libvulkan_lvp_build_id", ""))
-                bid_ok = bool(man_bid) and (man_bid in dso_bids)
-                if expected_bid and expected_bid != man_bid:
-                    bid_ok = False
-                if not pin_ok or not bid_ok:
-                    trans_verdict = VERIFIED_FAIL
-                    msg = f"patched Mesa provenance/Build ID mismatch: pin_ok={pin_ok} bid_ok={bid_ok} man_bid={man_bid}"
+                manifest = evidence.get("mesa_build_manifest")
+                if not isinstance(manifest, dict):
+                    trans_verdict = INSUFFICIENT_EVIDENCE
+                    msg = "corrected-mesa-strict-lsan lane requires mesa_build_manifest provenance"
                     failures_detected.append(msg)
                     reasons["transitive"].append(msg)
-                elif lsan_rc != 0 or lsan_bytes != 0 or orphaned_bytes != 0 or target_dso_live != 0:
+                else:
+                    pin_ok = (
+                        manifest.get("patch_sha256") == PINNED_PATCH_SHA256
+                        and manifest.get("orig_sha256") == PINNED_ORIG_SHA256
+                        and manifest.get("debian_sha256") == PINNED_DEBIAN_SHA256
+                        and int(manifest.get("stb_gnu_unique_count", -1)) == 0
+                        and int(manifest.get("vk_icd_exports", 0)) >= 1
+                    )
+                    man_bid = str(manifest.get("libvulkan_lvp_build_id", ""))
+                    bid_ok = bool(man_bid) and (man_bid in dso_bids)
+                    if expected_bid and expected_bid != man_bid:
+                        bid_ok = False
+                    if not pin_ok or not bid_ok:
+                        trans_verdict = VERIFIED_FAIL
+                        msg = f"patched Mesa provenance/Build ID mismatch: pin_ok={pin_ok} bid_ok={bid_ok} man_bid={man_bid}"
+                        failures_detected.append(msg)
+                        reasons["transitive"].append(msg)
+                    elif lsan_rc != 0 or lsan_bytes != 0 or orphaned_bytes != 0 or target_dso_live != 0:
+                        trans_verdict = VERIFIED_FAIL
+                        msg = (
+                            f"leak detected in corrected Mesa lane: lsan_rc={lsan_rc} lsan_bytes={lsan_bytes} "
+                            f"orphaned={orphaned_bytes} target_dso_live={target_dso_live}"
+                        )
+                        failures_detected.append(msg)
+                        reasons["transitive"].append(msg)
+                    elif missing_gates:
+                        trans_verdict = INSUFFICIENT_EVIDENCE
+                        reasons["transitive"].append("missing mandatory validation gates")
+                    else:
+                        trans_verdict = VERIFIED_PASS
+                        reasons["transitive"].append(
+                            f"patched Mesa BuildID={man_bid} unloaded cleanly (unmapped={unmapped_events}, final_mapped=0), "
+                            f"orphaned=0 B, target_dso_live=0 B, strict LSan=0 B"
+                        )
+        else:
+            # stock-ubuntu2404-compat lane
+            expected_bids = evidence.get("expected_stock_build_ids") or [PINNED_STOCK_NOBLE_LVP_BUILD_ID]
+            if expected_bid:
+                expected_bids = [str(expected_bid)]
+
+            if final_mapped != 0 or unmapped_events < 1:
+                pin_attr_ok, pin_attr_msg = verify_stock_unique_pin_provenance(evidence, audit, expected_bids)
+                if not pin_attr_ok:
                     trans_verdict = VERIFIED_FAIL
                     msg = (
-                        f"leak detected in corrected Mesa lane: lsan_rc={lsan_rc} lsan_bytes={lsan_bytes} "
-                        f"orphaned={orphaned_bytes} target_dso_live={target_dso_live}"
+                        f"target DSO retention without valid runtime STB_GNU_UNIQUE attribution: "
+                        f"final_target_mapped={final_mapped} unmapped_target_events={unmapped_events} ({pin_attr_msg})"
                     )
                     failures_detected.append(msg)
                     reasons["transitive"].append(msg)
@@ -354,18 +580,9 @@ def evaluate_dependency_aware_verdicts(evidence: Dict[str, Any]) -> Dict[str, An
                     trans_verdict = INSUFFICIENT_EVIDENCE
                     reasons["transitive"].append("missing mandatory validation gates")
                 else:
-                    trans_verdict = VERIFIED_PASS
-                    reasons["transitive"].append(
-                        f"patched Mesa BuildID={man_bid} unloaded cleanly (unmapped={unmapped_events}, final_mapped=0), "
-                        f"orphaned=0 B, target_dso_live=0 B, strict LSan=0 B"
-                    )
-        else:
-            # stock-ubuntu2404-compat lane
-            expected_bids = evidence.get("expected_stock_build_ids") or [PINNED_STOCK_NOBLE_LVP_BUILD_ID]
-            if expected_bid:
-                expected_bids = [str(expected_bid)]
-
-            if lsan_rc == 0 and lsan_bytes == 0 and orphaned_bytes == 0 and target_dso_live == 0:
+                    trans_verdict = UPSTREAM_DEPENDENCY_BLOCKED
+                    reasons["transitive"].append(pin_attr_msg)
+            elif lsan_rc == 0 and lsan_bytes == 0 and orphaned_bytes == 0 and target_dso_live == 0:
                 if evidence.get("cpu_is_zen") is True and PINNED_STOCK_NOBLE_LVP_BUILD_ID in dso_bids:
                     # On Zen CPU, unpatched 25.2.8-.5 Build ID without NODELETE MUST leak; 0 leak indicates silent bypass
                     trans_verdict = VERIFIED_FAIL
@@ -458,6 +675,11 @@ def evaluate_dependency_aware_verdicts(evidence: Dict[str, Any]) -> Dict[str, An
         "vulkan_api_lifecycle_correctness": vk_verdict,
         "transitive_dependency_memory_correctness": trans_verdict,
         "complete_execution_stack_correctness": stack_verdict,
+        "verifier_execution_success": True,
+        "attribution_verified": stack_verdict in (VERIFIED_PASS, UPSTREAM_DEPENDENCY_BLOCKED),
+        "dependency_status": trans_verdict,
+        "stack_fully_verified": stack_verdict == VERIFIED_PASS,
+        "certification_passed": stack_verdict == VERIFIED_PASS,
         "failures_detected": failures_detected,
         "reasons": reasons,
         "release_approved": stack_verdict == VERIFIED_PASS,
@@ -488,6 +710,18 @@ def verify_verdict_artifact(artifact: Dict[str, Any]) -> Tuple[bool, str]:
         return False, "invariant violation: complete_execution_stack_correctness=VERIFIED_PASS with non-PASS dependency axis"
     if artifact.get("release_approved") is True and stack != VERIFIED_PASS:
         return False, "invariant violation: release_approved=True when stack != VERIFIED_PASS"
+    if artifact.get("verifier_execution_success") is not True:
+        return False, "invariant violation: verifier_execution_success must be True"
+    if artifact.get("dependency_status") != artifact["transitive_dependency_memory_correctness"]:
+        return False, "invariant violation: dependency_status mismatch"
+    if artifact.get("attribution_verified") is not (stack in (VERIFIED_PASS, UPSTREAM_DEPENDENCY_BLOCKED)):
+        return False, "invariant violation: attribution_verified inconsistency"
+    if stack != VERIFIED_PASS and (
+        artifact.get("stack_fully_verified") is True or artifact.get("certification_passed") is True
+    ):
+        return False, "invariant violation: non-VERIFIED_PASS stack promoted to stack_fully_verified/certification_passed"
+    if artifact.get("stack_fully_verified") is not (stack == VERIFIED_PASS) or artifact.get("certification_passed") is not (stack == VERIFIED_PASS):
+        return False, "invariant violation: stack_fully_verified/certification_passed mismatch"
     return True, "ok"
 
 
