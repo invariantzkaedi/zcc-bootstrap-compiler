@@ -1,6 +1,12 @@
 {
   "schema_version": "track21b.invariant_registry.v1",
-  "contract_version": "1.1.0",
+  "contract_version": "1.2.0",
+  "supported_runtime_domains": [
+    "vulkan",
+    "cuda_ptx",
+    "cpu_native",
+    "wasm_future"
+  ],
   "predecessor_registry": "TRACK21A_INVARIANT_REGISTRY.json",
   "predecessor_tag": "track21a-v1.0.0-verified",
   "governing_rules": [
@@ -123,6 +129,78 @@
       "proposition": "Every Vulkan handle/allocation (ctx, dlopen lib, VkInstance, VkDebugUtilsMessengerEXT, VkDevice, VkDescriptorSetLayout, VkPipelineLayout, VkDescriptorPool, VkCommandPool, VkFence, staging buffers/memory/maps, VkShaderModule, VkPipeline) enforces R_live = R_acquired - R_released = 0, strict reverse DAG teardown order, pre-pipeline structural SPIR-V 1.0 GLCompute validation (OpCapability Shader + OpMemoryModel Logical + OpEntryPoint GLCompute \"main\" + balanced OpFunction..OpFunctionEnd), null-safe idempotent teardown, atomic staging-buffer replacement rollback, cached shader/pipeline fault rollback, 21-point boundary fault non-leak equivalence, and >=10x churn recovery.",
       "fail_closed_condition": "R_live != 0, teardown_seq_violations != 0, LSan leak detected under Lavapipe 25.2.8/26.0.8, entryless SPIR-V reaches vkCreateComputePipelines, or any fault boundary leaks or breaks subsequent recovery.",
       "verification_method": "tests/track21b/test_track21b_vulkan.c (test_vulkan_lifetime_and_fault_injection + Noble 25.2.8-.2/.5 + Host 26.0.8 + DZN) under UBSan, ASan+LSan, and O2."
+    },
+    {
+      "id": "ZIG-VK-TRANSITIVE-001",
+      "gate": "T21B-TRANSITIVE",
+      "domains": ["vulkan", "cuda_ptx", "cpu_native", "wasm_future"],
+      "title": "Transitive Dynamic Library Attribution & Unload Integrity",
+      "proposition": "Every dynamic heap allocation across malloc, calloc, realloc, reallocarray, posix_memalign, aligned_alloc, memalign, valloc, and free is tracked by exact ELF NT_GNU_BUILD_ID and callsite offset across module load/unload; zero heap allocations belonging to a transitive DSO may become orphaned upon dlclose.",
+      "fail_closed_condition": "orphaned_on_dlclose_bytes > 0 or unattributed unfreed transitive DSO allocation upon unload.",
+      "verification_method": "tests/track21b/transitive_alloc_auditor.c (LD_PRELOAD) + pre/post-dlclose Build ID audit."
+    },
+    {
+      "id": "ZIG-VK-TRANSITIVE-002",
+      "gate": "T21B-TRANSITIVE",
+      "domains": ["vulkan", "cuda_ptx", "cpu_native", "wasm_future"],
+      "title": "Strict Ownership Domain Separation (Zero Cross-Exoneration)",
+      "proposition": "Leaks originating in ZCC runtime/test modules or direct Vulkan API/validation-layer contracts ALWAYS fail release verification (VERIFIED_FAIL) regardless of size similarity to known upstream dependency bugs.",
+      "fail_closed_condition": "zcc_owned_live_bytes > 0 or vulkan_api_live_bytes > 0 is classified as UPSTREAM_DEPENDENCY_BLOCKED or PASS.",
+      "verification_method": "tests/track21b/transitive_mutation_controls.py (M_ZCC_HEAP_LEAK, M_VULKAN_RESOURCE_LEAK, M_SAME_SIZED_UNRELATED_ALLOC)."
+    },
+    {
+      "id": "ZIG-VK-TRANSITIVE-003",
+      "gate": "T21B-TRANSITIVE",
+      "domains": ["vulkan", "cuda_ptx", "cpu_native", "wasm_future"],
+      "title": "Genuine Module Unloading Without Accidental NODELETE Pinning",
+      "proposition": "Clean transitive dependency lanes verify genuine /proc/self/maps unmapping (final_target_mapped == 0, unmapped_target_events > 0) and zero STB_GNU_UNIQUE symbol pinning.",
+      "fail_closed_condition": "Target ICD DSO stays pinned (final_target_mapped != 0) or exposes STB_GNU_UNIQUE symbols triggering RTLD_NODELETE.",
+      "verification_method": "tests/track21b/build_clean_mesa_lvp.sh (readelf UNIQUE==0) + LD_DEBUG=files + zero_zcc_vulkan_repro."
+    },
+    {
+      "id": "ZIG-VK-TRANSITIVE-004",
+      "gate": "T21B-TRANSITIVE",
+      "domains": ["vulkan", "cuda_ptx", "cpu_native", "wasm_future"],
+      "title": "Allocator Edge-Case, Failed Realloc, and Pointer-Reuse Invariance",
+      "proposition": "Failed allocations and failed realloc(old, SIZE_MAX) preserve pre-existing live slots; freed pointers removed via backward-shift deletion maintain O(1) lookup and accurate tracking on address reuse.",
+      "fail_closed_condition": "OOM realloc untrack defect, false double-free/reuse collision, or tombstone saturation.",
+      "verification_method": "tests/track21b/transitive_alloc_auditor.c unit & full-suite edge probes."
+    },
+    {
+      "id": "ZIG-VK-TRANSITIVE-005",
+      "gate": "T21B-TRANSITIVE",
+      "domains": ["vulkan"],
+      "title": "Pinned Corrected Dependency Stack & Zero-Suppression Strict LSan",
+      "proposition": "Corrected Mesa 25.2.8-.5 Lavapipe build verifies pinned source tarball SHA-256, pinned patch SHA-256, matching binary SHA-256/Build ID, and strict unsuppressed ASAN_OPTIONS=detect_leaks=1 passing with 0 leaked bytes.",
+      "fail_closed_condition": "Any LSan suppression, detect_leaks=0, digest mismatch, or >0 leaked bytes under patched Lavapipe.",
+      "verification_method": "CI corrected-mesa-strict-lsan lane + tests/track21b/build_clean_mesa_lvp.sh."
+    },
+    {
+      "id": "ZIG-VK-TRANSITIVE-006",
+      "gate": "T21B-TRANSITIVE",
+      "domains": ["vulkan", "cuda_ptx", "cpu_native"],
+      "title": "Multi-Threaded & Overlapping Instance Teardown Isolation",
+      "proposition": "Multi-threaded concurrent dlopen/vkCreateInstance/vkDestroyInstance/dlclose execution with overlapping instance handles sustains 0 leaks, 0 data races, 0 UAFs, and genuine post-join unload.",
+      "fail_closed_condition": "Multi-threaded stress fails ASan+UBSan+LSan or orphans allocations.",
+      "verification_method": "tests/track21b/forensics/zero_zcc_vulkan_repro.c (--mode mt-stress) + ZCC persistent ctx MT checks."
+    },
+    {
+      "id": "ZIG-VK-TRANSITIVE-007",
+      "gate": "T21B-TRANSITIVE",
+      "domains": ["vulkan", "cuda_ptx", "cpu_native", "wasm_future"],
+      "title": "Four-Axis Dependency-Aware Fail-Closed Release Authority",
+      "proposition": "Release evaluation independently certifies zcc_owned_resource_correctness, vulkan_api_lifecycle_correctness, transitive_dependency_memory_correctness, and complete_execution_stack_correctness using {VERIFIED_PASS, VERIFIED_FAIL, UPSTREAM_DEPENDENCY_BLOCKED, INSUFFICIENT_EVIDENCE}.",
+      "fail_closed_condition": "UPSTREAM_DEPENDENCY_BLOCKED or INSUFFICIENT_EVIDENCE promotes complete_execution_stack_correctness to VERIFIED_PASS.",
+      "verification_method": "tools/verify_track21b_release.py dependency-aware verdict engine."
+    },
+    {
+      "id": "ZIG-VK-TRANSITIVE-008",
+      "gate": "T21B-TRANSITIVE",
+      "domains": ["vulkan", "cuda_ptx", "cpu_native", "wasm_future"],
+      "title": "Transitive Allocator & Verdict Authority Mutation Sensitivity (20 Controls)",
+      "proposition": "Verifier and auditor kill all 20 transitive fault classes (TMC_01..TMC_20: ZCC leak, Vulkan resource leak, unrelated 128B callsite leak, wrong Mesa Build ID, unexpected alloc count, nonlinear scaling growth, forged evidence, missing gate, strict NODELETE violation, static/explicit NODELETE, Build ID/SHA-256 mismatch, unique count without LD_DEBUG runtime proof, missing/truncated log, stale execution ID, unbalanced dlopen handles, unrelated pinned DSO, invalid provenance types/missing fields, stock evidence in Lane 2, hidden orphans, and probe non-zero exit).",
+      "fail_closed_condition": "Any of the 20 adversarial controls survives or returns VERIFIED_PASS.",
+      "verification_method": "tests/track21b/transitive_mutation_controls.py."
     }
   ]
 }

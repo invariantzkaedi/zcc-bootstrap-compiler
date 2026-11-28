@@ -443,7 +443,8 @@ src/Makefile
 # ─── Experimental / legacy dirs ───────────────────────
 experiments/
 legacy_levels/
-patches/
+patches/*
+!/patches/mesa-25.2.8-u_cpu_detect-l3-teardown.patch
 
 # ─── Preserve these ───────────────────────────────────
 # (explicit negation if anything above matched them by mistake)
@@ -720,6 +721,8 @@ docs/*
 !docs/zcc_svg_forge_ui.html
 !docs/TRACK21A_REPRODUCTION_AND_MIGRATION.md
 !docs/TRACK21B_REPRODUCTION_AND_MIGRATION.md
+!docs/track21b/
+!docs/track21b/**
 
 
 
@@ -752,6 +755,7 @@ yul_*.json
 !/TRACK21A_PERFORMANCE_REPORT.json
 !/TRACK21B_DIFFERENTIAL_REPORT.json
 !/TRACK21B_MUTATION_REPORT.json
+!/TRACK21B_TRANSITIVE_MUTATION_REPORT.json
 !/TRACK21B_PERFORMANCE_REPORT.json
 !/TRACK21B_HW_VULKAN_REPORT.json
 /*.jsonl

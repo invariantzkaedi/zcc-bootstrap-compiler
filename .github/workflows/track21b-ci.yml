@@ -2,65 +2,137 @@ name: ZCC Track 21B — SPIR-V & Vulkan Compute CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main, 'track21b/**']
+    paths:
+      - '.github/workflows/track21b-ci.yml'
+      - 'Makefile'
+      - 'TRACK21B_*'
+      - 'patches/**'
+      - 'docs/TRACK21B_REPRODUCTION_AND_MIGRATION.md'
+      - 'docs/track21b/**'
+      - 'include/zcc_spirv.h'
+      - 'include/zcc_vulkan_compute.h'
+      - 'src/part6_spirv.c'
+      - 'runtime/compute_vulkan.c'
+      - 'runtime/compute_dispatch_v2.c'
+      - 'sdk/zcc_vulkan_compute.*'
+      - 'tests/track21b/**'
+      - 'tools/zcc_spirv_cli.c'
+      - 'tools/verify_track21b_release.py'
+      - 'tools/track21b_transitive_verifier.py'
   pull_request:
-    branches: [ main ]
+    paths:
+      - '.github/workflows/track21b-ci.yml'
+      - 'Makefile'
+      - 'TRACK21B_*'
+      - 'patches/**'
+      - 'docs/TRACK21B_REPRODUCTION_AND_MIGRATION.md'
+      - 'docs/track21b/**'
+      - 'include/zcc_spirv.h'
+      - 'include/zcc_vulkan_compute.h'
+      - 'src/part6_spirv.c'
+      - 'runtime/compute_vulkan.c'
+      - 'runtime/compute_dispatch_v2.c'
+      - 'sdk/zcc_vulkan_compute.*'
+      - 'tests/track21b/**'
+      - 'tools/zcc_spirv_cli.c'
+      - 'tools/verify_track21b_release.py'
+      - 'tools/track21b_transitive_verifier.py'
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
-  track21b-cpu-oracle:
-    name: "SPIR-V spirv-val + Vulkan llvmpipe + UBSan/ASan/LSan + Mutation Observatory"
+  stock-ubuntu2404-compat:
+    name: Lane 1 — Stock Ubuntu 24.04 Compat & Upstream Attribution
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    defaults:
-      run:
-        shell: bash --noprofile --norc -euo pipefail {0}
-
+    timeout-minutes: 20
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4.2.2
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5.4.0
-        with:
-          python-version: '3.11'
-
-      - name: Install Build Toolchain, Khronos SPIR-V Tools & Mesa Vulkan (llvmpipe)
+      - name: Install stock Ubuntu 24.04 Vulkan + SPIR-V toolchain
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y \
-            build-essential gcc make binutils nodejs \
-            spirv-tools glslang-tools vulkan-validationlayers \
-            vulkan-tools libvulkan-dev mesa-vulkan-drivers
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential gcc g++ make python3 binutils nodejs \
+            libvulkan-dev vulkan-validationlayers mesa-vulkan-drivers vulkan-tools \
+            glslang-tools spirv-tools spirv-headers
 
-      - name: Inspect Independent External Oracles & Vulkan Device Identity
+      - name: Verify ZCC Self-Host, Runtime Build & Release Verifier Self-Test
         run: |
-          command -v spirv-val glslangValidator vulkaninfo node
-          vulkaninfo --summary
+          bash scripts/log_bootstrap_hash.sh --check
+          cmp zcc2.s zcc3.s
+          bash tests/track21b/build_runtime.sh
+          python3 tools/verify_track21b_release.py --self-test
 
-      - name: Run Full Track 21B Verification Suite
+      - name: Run Stock Ubuntu 24.04 Compatibility + Transitive Attribution Lane
         run: |
-          make track21b-verify
-          make track21b-spirv
-          PYTHONDONTWRITEBYTECODE=1 python3 tests/track21b/verify_hw_vulkan_dzn.py --check-only
+          bash tests/track21b/run_ci_lane.sh \
+            --lane stock-ubuntu2404-compat \
+            --out-dir /tmp/t21b_lane1_evidence
 
-      - name: Assert Verifier Purity on Core Compiler & Track 21A Freeze
-        run: |
-          git diff --exit-code -- \
-            part0_pp.c part1.c part2.c part3.c part4.c part5.c part6_ptx.c \
-            BOOTSTRAP_BASELINES.tsv TRACK21A_* include/zcc_compute.h
-
-      - name: Upload Track 21B Verification Artifacts
+      - name: Upload Lane 1 Stock Compat & Forensics Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: track21b-ci-evidence
+          name: track21b-lane1-stock-evidence
           path: |
+            /tmp/t21b_lane1_evidence/
             TRACK21B_DIFFERENTIAL_REPORT.json
             TRACK21B_MUTATION_REPORT.json
+            TRACK21B_TRANSITIVE_MUTATION_REPORT.json
             TRACK21B_PERFORMANCE_REPORT.json
             TRACK21B_RELEASE_EVIDENCE.json
-            TRACK21B_HW_VULKAN_REPORT.json
+
+  corrected-mesa-strict-lsan:
+    name: Lane 2 — Patched Mesa 25.2.8 Lavapipe Strict Zero-Suppression ASan+LSan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Mesa 25.2.8 Build Dependencies & Vulkan Oracles
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential gcc g++ make python3 binutils curl xz-utils patch nodejs pkg-config \
+            meson-1.7 ninja-build cmake bison flex \
+            llvm-20-dev spirv-tools spirv-headers glslang-tools \
+            libvulkan-dev vulkan-validationlayers mesa-vulkan-drivers vulkan-tools \
+            libdrm-dev libexpat1-dev libzstd-dev zlib1g-dev libelf-dev \
+            python3-mako python3-yaml python3-packaging
+
+      - name: Cache Patched Clean Mesa Lavapipe Build
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/zcc_clean_mesa_lvp
+            /tmp/zcc_mesa_src_cache
+          key: zcc-mesa-25.2.8-lvp-${{ hashFiles('patches/mesa-25.2.8-u_cpu_detect-l3-teardown.patch', 'tests/track21b/build_clean_mesa_lvp.sh') }}
+
+      - name: Verify ZCC Self-Host, Runtime Build & Release Verifier Self-Test
+        run: |
+          bash scripts/log_bootstrap_hash.sh --check
+          cmp zcc2.s zcc3.s
+          bash tests/track21b/build_runtime.sh
+          python3 tools/verify_track21b_release.py --self-test
+
+      - name: Build Patched Lavapipe & Run Strict Unsuppressed ASan+UBSan+LSan Full Stack Gate
+        run: |
+          bash tests/track21b/run_ci_lane.sh \
+            --lane corrected-mesa-strict-lsan \
+            --out-dir /tmp/t21b_lane2_evidence
+
+      - name: Upload Lane 2 Strict Certified Release Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: track21b-lane2-strict-evidence
+          path: |
+            /tmp/zcc_clean_mesa_lvp/build_manifest.json
+            /tmp/t21b_lane2_evidence/
+            TRACK21B_DIFFERENTIAL_REPORT.json
+            TRACK21B_MUTATION_REPORT.json
+            TRACK21B_TRANSITIVE_MUTATION_REPORT.json
+            TRACK21B_PERFORMANCE_REPORT.json
+            TRACK21B_RELEASE_EVIDENCE.json
